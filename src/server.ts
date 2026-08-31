@@ -27,6 +27,10 @@ app.use('/api/auth', authRouter);
 import profileRouter from './routes/profile/profile.js';
 app.use('/api/profile', profileRouter);
 
+import businessRouter from './routes/business/businessRouts.js';
+app.use('/api/business', businessRouter);
+
+
 
 // Server Configuration
 const PORT = process.env.PORT || 5000;
