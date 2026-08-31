@@ -13,6 +13,32 @@ datasource db {
   provider = "postgresql"
 }
 
+
+
+// ============================================
+// ENUM: User Roles
+// ============================================
+enum Role {
+  SUPER_ADMIN
+  BUSINESS_OWNER
+  MANAGER
+  RECEPTIONIST
+  VIEWER
+}
+
+// ============================================
+// ENUM: Business Status
+// ============================================
+enum BusinessStatus {
+  PENDING      // Waiting for approval (Default)
+  APPROVED     // Active and running
+  SUSPENDED    // Temporarily blocked
+  REFUSED      // Rejected by admin
+}
+
+// ============================================
+// TABLE 1: User (Authentication)
+// ============================================
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
@@ -21,5 +47,107 @@ model User {
   otp          String?
   otpExpiry    DateTime?
   refreshToken String?
+  
+  // Default Role: BUSINESS_OWNER
+  role         Role      @default(BUSINESS_OWNER)
+  
+  // Relations
+  businesses   Business[]      // As Owner
+  businessUsers BusinessUser[] // As Member
+  customers    Customer[]
+  
+  // Timestamps
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("users")
 }
 
+// ============================================
+// TABLE 2: Business (Tenant)
+// ============================================
+model Business {
+  id                    String      @id @default(uuid())
+  name                  String
+  whatsappPhoneNumberId String      @unique
+  whatsappAccessToken   String?
+  whatsappNumber        String?     // The actual phone number (e.g., "+8801700000000")
+
+  
+  // Default: PENDING
+  status                BusinessStatus @default(PENDING)
+  
+  // Status Management
+  statusReason          String?
+  approvedAt            DateTime?
+  suspendedAt           DateTime?
+  
+  // Owner (Business Owner)
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  businessUsers         BusinessUser[]
+  customers             Customer[]
+  
+  // Timestamps
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([whatsappPhoneNumberId])
+  @@index([status])
+  @@map("businesses")
+}
+
+// ============================================
+// TABLE 3: Business User (Members)
+// ============================================
+model BusinessUser {
+  id          String    @id @default(uuid())
+  
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  // Default: VIEWER (when added by Owner)
+  role        Role      @default(VIEWER)
+  
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, businessId])
+  @@index([userId])
+  @@index([businessId])
+  @@index([role])
+  @@map("business_users")
+}
+
+// ============================================
+// TABLE 4: Customer
+// ============================================
+model Customer {
+  id            String    @id @default(uuid())
+  phone         String
+  name          String?
+  currentStep   String    @default("WELCOME")
+  
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  userId        String?   // Who added this customer
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([phone, businessId])
+  @@index([businessId])
+  @@index([userId])
+  @@index([phone])
+  @@map("customers")
+}
