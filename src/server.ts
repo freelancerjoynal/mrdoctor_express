@@ -11,8 +11,9 @@ app.use(cookieParser());
 
 //Cors policy
 app.use(cors({
-  origin: 'http://localhost:3000', // Allows requests only from this specific origin
-  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed HTTP methods for the requests
+  // origin: 'http://localhost:3000', // Allows requests only from this specific origin
+  origin: '*', // Allows requests from any origin
+   methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed HTTP methods for the requests
   credentials: true // Set to true if you need to send cookies or authorization headers
 }));
 
@@ -29,6 +30,11 @@ app.use('/api/profile', profileRouter);
 
 import businessRouter from './routes/business/businessRouts.js';
 app.use('/api/business', businessRouter);
+
+
+// --- WhatsApp Webhook Routes ---
+import webHookWhatsAppRouter from './routes/webhook/whatsapp/whatsappRoutes.js';
+app.use('/api/webhook/whatsapp', webHookWhatsAppRouter);
 
 
 
