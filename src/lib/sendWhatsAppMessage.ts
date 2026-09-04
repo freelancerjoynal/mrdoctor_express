@@ -1,5 +1,5 @@
 import axios from "axios";
-import { env } from "../../../config/env.js";
+import { env } from "../config/env.js";
 
 export async function sendWhatsAppMessage(to: string, message: string) {
     try {
@@ -9,7 +9,9 @@ export async function sendWhatsAppMessage(to: string, message: string) {
                 messaging_product: "whatsapp",
                 to,
                 type: "text",
-                text: { body: message },
+                text: {
+                    body: message,
+                },
             },
             {
                 headers: {

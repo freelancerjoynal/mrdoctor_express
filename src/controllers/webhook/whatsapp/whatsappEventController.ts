@@ -1,14 +1,18 @@
-// src/controllers/whatsappWebhookController.ts
-import { Request, Response } from 'express';
-import { parseWhatsAppMessage } from '../../../lib/whatsappParser.js';
-// import { prisma } from '../../lib/prisma.js';
+import { Request, Response } from "express";
+import { parseWhatsAppMessage } from "../../../lib/whatsappParser.js";
+import { handleIncomingMessage } from "../../../services/whatsapp/whatsappService.js";
+
 
 export const receiveMessage = (req: Request, res: Response) => {
     const messages = parseWhatsAppMessage(req.body);
 
     messages.forEach(msg => {
-        console.log("📩", msg);
+        handleIncomingMessage(msg);
     });
 
     res.sendStatus(200);
 };
+
+// messages.forEach(msg => {
+//         console.log("📩", msg);
+//     });
