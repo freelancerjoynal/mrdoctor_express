@@ -1,0 +1,7 @@
+tunnel: 42709050-e802-4dd6-8846-38a6c55711bb
+credentials-file: /home/joynal/.cloudflared/42709050-e802-4dd6-8846-38a6c55711bb.json
+
+ingress:
+  - hostname: mrdoctor.mdjoynal.com
+    service: http://localhost:8000
+  - service: http_status:404

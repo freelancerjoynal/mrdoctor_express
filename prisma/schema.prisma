@@ -151,3 +151,23 @@ model Customer {
   @@index([phone])
   @@map("customers")
 }
+
+// ============================================
+// TABLE 5: Doctor (Independent Model)
+// ============================================
+model Doctor {
+  id           String   @id @default(uuid())
+  name         String
+  degree       String   // যেমন: MBBS, FCPS ইত্যাদি
+  speciality   String   // যেমন: Cardiology ইত্যাদি
+  workingPlace String   // কর্মক্ষেত্র বা চেম্বারের বিবরণ
+  phone        String?  // ডাক্তারের যোগাযোগ নম্বর (ঐচ্ছিক)
+  rating       Float    @default(0.0) // রেটিং (০.০ থেকে ৫.০ পর্যন্ত)
+  
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([speciality])
+  @@map("doctors")
+}

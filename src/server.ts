@@ -36,6 +36,10 @@ app.use('/api/business', businessRouter);
 import webHookWhatsAppRouter from './routes/webhook/whatsapp/whatsappRoutes.js';
 app.use('/api/webhook/whatsapp', webHookWhatsAppRouter);
 
+// --- Doctors Routes ---
+import doctorRouter from './routes/doctors/doctorsRoutes.js';
+app.use('/api/doctors', doctorRouter);
+
 
 
 // Server Configuration
