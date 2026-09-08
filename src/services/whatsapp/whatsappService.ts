@@ -1,5 +1,5 @@
 import { sendWhatsAppMessage, sendTypingIndicator, sendInteractiveButtons } from "../../lib/sendWhatsAppMessage.js";
-import { getLocationDetails } from "../location/locationService.js";
+import { getLocationTemplate } from "../../lib/locationTemplate.js";
 import { getOpenAIResponse } from "../AiService/deepseek.js";
 import { prisma } from "../../lib/prisma.js";
 
@@ -44,7 +44,6 @@ export async function handleIncomingMessage(msg: any) {
             userSessions.set(phoneNumber, { state: "ASK_LOCATION" });
             await sendTypingIndicator(phoneNumber);
 
-            // এখানে ডাইনামিক মেসেজ ও বাটন পাস করা হচ্ছে
             await sendInteractiveButtons(
                 phoneNumber,
                 "📍 আপনার লোকেশন দিতে নিচের বাটনে ক্লিক করুন",
@@ -86,32 +85,17 @@ export async function handleIncomingMessage(msg: any) {
                 const lat = msg.location.latitude;
                 const lng = msg.location.longitude;
 
-                const details = await getLocationDetails(lat, lng);
-
-                let locationText = `Lat:${lat},Lng:${lng}`;
-
-                if (details) {
-                    locationText = `
-📍 আপনার লোকেশন:
-
-🏠 গ্রাম: ${details.village || "N/A"}
-📮 পোস্ট কোড: ${details.post || "N/A"}
-🏢 উপজেলা: ${details.upazila || "N/A"}
-🌆 জেলা: ${details.district || "N/A"}
-🌍 দেশ: ${details.country || "N/A"}
-                    `;
-                }
-
-                const mapsLink = `https://www.google.com/maps?q=${lat},${lng}`;
+                // 🔥 lib থেকে লোকেশন টেমপ্লেট কল করা হচ্ছে
+                const template = await getLocationTemplate(lat, lng);
 
                 await sendWhatsAppMessage(
                     phoneNumber,
-                    `${locationText}\n\n🗺️ ম্যাপে দেখতে:\n${mapsLink}\n\n👉 ঠিক থাকলে লিখুন "yes"\n👉 ভুল হলে আবার লোকেশন পাঠান`
+                    `${template.locationText}\n\n🗺️ ম্যাপে দেখতে:\n${template.mapsLink}\n\n👉 ঠিক থাকলে লিখুন "yes"\n👉 ভুল হলে আবার লোকেশন পাঠান`
                 );
 
                 userSessions.set(phoneNumber, {
                     state: "CONFIRM_LOCATION",
-                    location: locationText,
+                    location: template.locationText,
                 });
 
                 return;
