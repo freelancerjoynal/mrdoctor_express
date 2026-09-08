@@ -5,6 +5,7 @@ type ParsedMessage = {
     messageId: string;
     timestamp: Date;
     type: string;
+    location?: { latitude: number; longitude: number };
 };
 
 export function parseWhatsAppMessage(body: any): ParsedMessage[] {
@@ -22,13 +23,32 @@ export function parseWhatsAppMessage(body: any): ParsedMessage[] {
                 value.messages.forEach((msg: any, index: number) => {
                     const contact = value.contacts?.[index];
 
+                    // টেক্সট, বাটন রিপ্লাই বা ইন্টারেক্টিভ বাটন থেকে টেক্সট বের করার লজিক
+                    let extractedText = msg.text?.body || "";
+                    
+                    if (msg.type === "button") {
+                        extractedText = msg.button?.text || "";
+                    } else if (msg.type === "interactive") {
+                        extractedText = msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || "";
+                    }
+
+                    // লোকেশন ডেটা ধরার লজিক
+                    let locationData = undefined;
+                    if (msg.type === "location" && msg.location) {
+                        locationData = {
+                            latitude: msg.location.latitude,
+                            longitude: msg.location.longitude
+                        };
+                    }
+
                     results.push({
                         name: contact?.profile?.name || "Unknown",
                         number: msg.from,
-                        text: msg.text?.body || "",
+                        text: extractedText,
                         messageId: msg.id,
                         timestamp: new Date(parseInt(msg.timestamp) * 1000),
-                        type: msg.type
+                        type: msg.type,
+                        location: locationData
                     });
                 });
             }

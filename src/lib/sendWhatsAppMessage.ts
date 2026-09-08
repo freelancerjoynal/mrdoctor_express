@@ -41,11 +41,9 @@ export async function sendTypingIndicator(to: string) {
             {
                 messaging_product: "whatsapp",
                 recipient_type: "individual",
-                to, // Now fully dynamic based on the active user's phone number
-                type: "typing_indicator",
-                typing_indicator: {
-                    type: "text"
-                }
+                to,
+                type: "typing_indicator"
+                // 'typing_indicator' অবজেক্টটি এখানে বাদ দিতে হবে কারণ মেটা শুধু type: "typing_indicator" চাচ্ছে
             },
             {
                 headers: {
