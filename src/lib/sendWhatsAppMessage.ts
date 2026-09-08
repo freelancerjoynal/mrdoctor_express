@@ -1,6 +1,9 @@
 import axios from "axios";
 import { env } from "../config/env.js";
 
+/**
+ * Sends a text message to a WhatsApp user using the Cloud API.
+ */
 export async function sendWhatsAppMessage(to: string, message: string) {
     try {
         const response = await axios.post(
@@ -18,12 +21,41 @@ export async function sendWhatsAppMessage(to: string, message: string) {
                     Authorization: `Bearer ${env.ACCESS_TOKEN}`,
                     "Content-Type": "application/json",
                 },
-                timeout: 10000, // ১০ সেকেন্ড টাইমআউট
+                timeout: 10000,
             }
         );
 
         console.log("📤 Sent:", response.data);
     } catch (error: any) {
         console.error("❌ Send Error:", error.response?.data || error.message);
+    }
+}
+
+/**
+ * Sends a typing indicator dynamically to the specific user.
+ */
+export async function sendTypingIndicator(to: string) {
+    try {
+        await axios.post(
+            `https://graph.facebook.com/v20.0/${env.PHONE_NUMBER_ID}/messages`,
+            {
+                messaging_product: "whatsapp",
+                recipient_type: "individual",
+                to, // Now fully dynamic based on the active user's phone number
+                type: "typing_indicator",
+                typing_indicator: {
+                    type: "text"
+                }
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${env.ACCESS_TOKEN}`,
+                    "Content-Type": "application/json",
+                },
+                timeout: 5000,
+            }
+        );
+    } catch (error: any) {
+        console.error("❌ Typing Indicator Error:", error.response?.data || error.message);
     }
 }

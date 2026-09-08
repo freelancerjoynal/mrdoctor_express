@@ -32,7 +32,7 @@ export async function handleIncomingMessage(msg: any) {
                 return;
             }
 
-            const doctorsListStr = allDoctors.map((doc) => 
+            const doctorsListStr = allDoctors.map((doc: any) => 
                 `ID: ${doc.id}, Name: ${doc.name}, Degree: ${doc.degree}, Speciality: ${doc.speciality}, Working Place: ${doc.workingPlace}, Phone: ${doc.phone || 'N/A'}, Rating: ${doc.rating}`
             ).join('\n');
 
