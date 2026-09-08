@@ -1,12 +1,12 @@
 import { sendWhatsAppMessage } from "../../lib/sendWhatsAppMessage.js";
 import { handleProblemStep } from "./steps/problemStep.js";
 import { handleLocationStep } from "./steps/locationStep.js";
-import { handleConfirmStep } from "./steps/confirmStep.js";
+import { aiDoctorSolutionStep } from "./steps/aiDoctorSolutionStep.js";
 
-// Session store
+// Session store (state, location, এবং problem সেভ রাখার জন্য)
 const userSessions = new Map<
     string,
-    { state: string; location?: string }
+    { state: string; location?: string; problem?: string }
 >();
 
 export async function handleIncomingMessage(msg: any) {
@@ -41,8 +41,11 @@ export async function handleIncomingMessage(msg: any) {
          * STEP 2: Problem → Ask Location
          */
         if (state === "ASK_PROBLEM") {
-            await handleProblemStep(phoneNumber, (newState) => {
-                userSessions.set(phoneNumber, { state: newState });
+            await handleProblemStep(phoneNumber, text, (newState, savedProblem) => {
+                userSessions.set(phoneNumber, { 
+                    state: newState, 
+                    problem: savedProblem 
+                });
             });
             return;
         }
@@ -52,19 +55,24 @@ export async function handleIncomingMessage(msg: any) {
          */
         if (state === "ASK_LOCATION") {
             await handleLocationStep(phoneNumber, text, msg, (newState, loc) => {
-                userSessions.set(phoneNumber, { state: newState, location: loc });
+                userSessions.set(phoneNumber, { 
+                    ...session, 
+                    state: newState, 
+                    location: loc 
+                });
             });
             return;
         }
 
         /**
-         * STEP 4: Confirm Location
+         * STEP 4: Confirm Location & AI Solution
          */
         if (state === "CONFIRM_LOCATION") {
-            await handleConfirmStep(
+            await aiDoctorSolutionStep(
                 phoneNumber,
                 text,
                 session.location || "Unknown",
+                session.problem || "",
                 () => userSessions.set(phoneNumber, { state: "WELCOME" }),
                 () => userSessions.set(phoneNumber, { state: "ASK_LOCATION" })
             );

@@ -2,7 +2,14 @@ import { sendWhatsAppMessage, sendTypingIndicator } from "../../../lib/sendWhats
 import { getOpenAIResponse } from "../../AiService/deepseek.js";
 import { prisma } from "../../../lib/prisma.js";
 
-export async function handleConfirmStep(phoneNumber: string, text: string, savedLocation: string, resetSession: () => void, setLocationState: () => void) {
+export async function aiDoctorSolutionStep(
+    phoneNumber: string, 
+    text: string, 
+    savedLocation: string, 
+    userProblem: string, 
+    resetSession: () => void, 
+    setLocationState: () => void
+) {
     if (["yes", "ok", "ঠিক"].includes(text)) {
         await sendTypingIndicator(phoneNumber);
 
@@ -24,6 +31,9 @@ export async function handleConfirmStep(phoneNumber: string, text: string, saved
             .join("\n");
 
         const prompt = `
+        Patient's Problem / Symptoms:
+        ${userProblem || "Not specified"}
+
         User Location:
         ${savedLocation}
 
@@ -31,8 +41,11 @@ export async function handleConfirmStep(phoneNumber: string, text: string, saved
         ${doctorList}
 
         Task:
+        - Analyze the patient's problem (${userProblem})
+        - Tell user what kind of doctor is needed and why based on the problem
+        - Find doctors matching or closely related to this specialty in/near the user's location
         - Select top 3 doctors
-        - Give 1 line reason in Bengali
+        - Give 1 line reason in Bengali for each
         - Format nicely
         `;
 
@@ -40,7 +53,7 @@ export async function handleConfirmStep(phoneNumber: string, text: string, saved
 
         await sendWhatsAppMessage(
             phoneNumber,
-            `🩺 আপনার জন্য সেরা ডাক্তার:\n\n${aiReply}`
+            `🩺 আপনার সমস্যার জন্য সেরা ডাক্তার:\n\n${aiReply}`
         );
 
         resetSession();
