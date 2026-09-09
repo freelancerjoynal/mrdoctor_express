@@ -1,6 +1,6 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "../../../../lib/sendWhatsAppMessage.js";
 
-export async function handleDoctorMenuFlow(
+export async function findDoctFlow(
     phoneNumber: string, 
     text: string, 
     msg: any, 
