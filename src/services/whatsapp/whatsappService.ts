@@ -2,6 +2,7 @@ import { sendWhatsAppMessage, sendInteractiveButtons } from "../../lib/sendWhats
 import { findDoctFlow } from "./flows/findDoctor/findDoctFlow.js";
 import { handleGetDoctorFlow } from "./flows/getDoctor/getDoctorFlow.js";
 import { handleGetHospitalFlow } from "./flows/getHospital/getHospitalFlow.js";
+import { userPendingDoctorMap } from "../../lib/doctorRedirectManager.js"; // ক্লিন লিংক পেন্ডিং ম্যাপ ইমপোর্ট
 
 interface SessionData {
     flow: string;
@@ -37,8 +38,28 @@ export async function handleIncomingMessage(msg: any) {
             data: {} 
         };
 
-        // 🚀 ফোর্সেড ডিপ লিঙ্কিং হ্যান্ডলার (Forceful Deep Link Handler)
-        // ইউজার আগে যে স্টেপেই থাকুক না কেন, টেক্সটে hospital_ বা doctor_ থাকলেই সেশন জোরপূর্বক ওভাররাইট হয়ে যাবে
+        // 🚀 ক্লিন শর্ট লিংক থেকে আসা পেন্ডিং 'Hi' বা ওয়েলকাম মেসেজ হ্যান্ডলার
+        if (text.includes("hi") || text.includes("hello") || text.includes("start")) {
+            const pendingDoctorId = userPendingDoctorMap.get(phoneNumber);
+
+            if (pendingDoctorId) {
+                // পেন্ডিং আইডি পাওয়া গেছে, সেশন সেট করে সরাসরি ডক্টর ফ্লোতে পাঠিয়ে দিন
+                const newSession: SessionData = { 
+                    flow: "GET_DOCTOR_FLOW", 
+                    step: "DIRECT_SEARCH", 
+                    data: { doctorId: pendingDoctorId } 
+                };
+                userSessions.set(phoneNumber, newSession);
+                
+                // কাজ শেষ, মেমোরি থেকে আইডি মুছে ফেলা হলো
+                userPendingDoctorMap.delete(phoneNumber);
+
+                await handleGetDoctorFlow(phoneNumber, `doctor_${pendingDoctorId}`, msg, newSession);
+                return;
+            }
+        }
+
+        // 🚀 ফোর্সেড ডিপ লিঙ্কিং হ্যান্ডলার (যদি কেউ সরাসরি টেক্সট পাঠায়)
         if (text.startsWith("hospital_")) {
             const newSession: SessionData = { flow: "GET_HOSPITAL_FLOW", step: "WELCOME", data: {} };
             userSessions.set(phoneNumber, newSession);
@@ -194,7 +215,7 @@ export async function handleIncomingMessage(msg: any) {
 
         // ডিফল্ট ফলব্যাক
         userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "WELCOME", data: {} });
-        await sendWhatsAppMessage(phoneNumber, "বট রিসেট করা হয়েছে। শুরু করতে 'Hi' বা 'Hello' লিখুন።");
+        await sendWhatsAppMessage(phoneNumber, "বট রিসেট করা হয়েছে। শুরু করতে 'Hi' বা 'Hello' লিখুন।");
 
     } catch (error: any) {
         console.error("❌ WhatsApp Service Error:", error);

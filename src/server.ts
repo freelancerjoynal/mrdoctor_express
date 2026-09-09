@@ -42,6 +42,21 @@ app.use('/api/doctors', doctorRouter);
 
 
 
+
+
+
+
+
+
+
+
+
+
+// --- Doctor Deep Link Redirection Route ---
+import doctorRedirectRouter from './lib/doctorRedirectManager.js';
+app.use('/d', doctorRedirectRouter);
+
+
 // Server Configuration
 const PORT = process.env.PORT || 5000;
 
