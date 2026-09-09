@@ -1,16 +1,24 @@
 import { sendWhatsAppMessage } from "../../lib/sendWhatsAppMessage.js";
-import { handleProblemStep } from "./steps/problemStep.js";
-import { handleLocationStep } from "./steps/locationStep.js";
-import { aiDoctorSolutionStep } from "./steps/aiDoctorSolutionStep.js";
+import { handleMainFlow } from "./flows/mainFlow.js";
+import { handleDoctorMenuFlow } from "./flows/doctor/doctorMenuFlow.js";
+import { handleAiDoctorFlow } from "./flows/doctor/aiDoctorStep.js";
 
-// Session store (state, location, এবং problem সেভ রাখার জন্য)
+// সেশন স্টোর: এখন প্রতিটি ইউজারের flow, step এবং প্রয়োজনীয় data ট্র্যাক করা হবে
 const userSessions = new Map<
     string,
-    { state: string; location?: string; problem?: string }
+    { 
+        flow: string;        // যেমন: 'MAIN_MENU', 'DOCTOR_MENU', 'AI_DOCTOR_FLOW'
+        step: string;        // নির্দিষ্ট ফ্লোর ভেতরের বর্তমান স্টেপ
+        data: {
+            problem?: string;
+            location?: string;
+            category?: string; // 'DOCTOR' বা 'HOSPITAL'
+        }
+    }
 >();
 
 export async function handleIncomingMessage(msg: any) {
-    console.log("📥 Incoming:", JSON.stringify(msg, null, 2));
+    console.log("📥 Incoming Message:", JSON.stringify(msg, null, 2));
 
     const text =
         (msg.text ||
@@ -25,67 +33,84 @@ export async function handleIncomingMessage(msg: any) {
     if (!text && !msg.location) return;
 
     try {
-        let session = userSessions.get(phoneNumber) || { state: "WELCOME" };
-        let state = session.state;
+        // ইউজারের সেশন ফেচ করা বা ডিফল্ট সেশন তৈরি করা
+        let session = userSessions.get(phoneNumber) || { 
+            flow: "MAIN_MENU", 
+            step: "WELCOME", 
+            data: {} 
+        };
 
         /**
-         * STEP 1: Welcome
+         * ১. মেইন ফ্লো (যেমন: ওয়েলকাম এবং ক্যাটাগরি চয়েস - ডাক্তার নাকি হসপিটাল)
          */
-        if (state === "WELCOME" || ["hi", "hello", "start", "reset"].includes(text)) {
-            userSessions.set(phoneNumber, { state: "ASK_PROBLEM" });
-            await sendWhatsAppMessage(phoneNumber, "রোগীর কী সমস্যা?");
-            return;
-        }
-
-        /**
-         * STEP 2: Problem → Ask Location
-         */
-        if (state === "ASK_PROBLEM") {
-            await handleProblemStep(phoneNumber, text, (newState, savedProblem) => {
-                userSessions.set(phoneNumber, { 
-                    state: newState, 
-                    problem: savedProblem 
-                });
-            });
-            return;
-        }
-
-        /**
-         * STEP 3: Handle Location
-         */
-        if (state === "ASK_LOCATION") {
-            await handleLocationStep(phoneNumber, text, msg, (newState, loc) => {
-                userSessions.set(phoneNumber, { 
-                    ...session, 
-                    state: newState, 
-                    location: loc 
-                });
-            });
-            return;
-        }
-
-        /**
-         * STEP 4: Confirm Location & AI Solution
-         */
-        if (state === "CONFIRM_LOCATION") {
-            await aiDoctorSolutionStep(
-                phoneNumber,
-                text,
-                session.location || "Unknown",
-                session.problem || "",
-                () => userSessions.set(phoneNumber, { state: "WELCOME" }),
-                () => userSessions.set(phoneNumber, { state: "ASK_LOCATION" })
+        if (session.flow === "MAIN_MENU") {
+            await handleMainFlow(
+                phoneNumber, 
+                text, 
+                session, 
+                (newFlow, newStep, updatedData) => {
+                    userSessions.set(phoneNumber, { 
+                        flow: newFlow, 
+                        step: newStep, 
+                        data: updatedData 
+                    });
+                }
             );
             return;
         }
 
         /**
-         * Default
+         * ২. ডাক্তার সাব-মেনু ফ্লো (এআই সার্চ নাকি এলাকা ভিত্তিক সার্চ)
          */
-        userSessions.set(phoneNumber, { state: "ASK_PROBLEM" });
-        await sendWhatsAppMessage(phoneNumber, "রোগীর কী সমস্যা?");
+        if (session.flow === "DOCTOR_MENU") {
+            await handleDoctorMenuFlow(
+                phoneNumber, 
+                text, 
+                session, 
+                (newFlow, newStep, updatedData) => {
+                    userSessions.set(phoneNumber, { 
+                        flow: newFlow, 
+                        step: newStep, 
+                        data: updatedData 
+                    });
+                }
+            );
+            return;
+        }
+
+        /**
+         * ৩. এআই ডাক্তার ও লোকেশন প্রসেসিং ফ্লো
+         */
+        if (session.flow === "AI_DOCTOR_FLOW") {
+            await handleAiDoctorFlow(
+                phoneNumber, 
+                text, 
+                msg, 
+                session, 
+                () => {
+                    // কাজ শেষ হলে বা রিসেট করতে চাইলে আবার মেইন মেনুতে ফিরিয়ে নেওয়া
+                    userSessions.set(phoneNumber, { 
+                        flow: "MAIN_MENU", 
+                        step: "WELCOME", 
+                        data: {} 
+                    });
+                }
+            );
+            return;
+        }
+
+        /**
+         * ডিফল্ট ফলব্যাক
+         */
+        userSessions.set(phoneNumber, { 
+            flow: "MAIN_MENU", 
+            step: "WELCOME", 
+            data: {} 
+        });
+        await sendWhatsAppMessage(phoneNumber, "বট রিসেট করা হয়েছে। শুরু করতে 'Hi' বা 'Hello' লিখুন।");
+
     } catch (error) {
-        console.error("❌ ERROR:", error);
-        await sendWhatsAppMessage(phoneNumber, "❌ কিছু সমস্যা হয়েছে, আবার চেষ্টা করুন");
+        console.error("❌ WhatsApp Service Error:", error);
+        await sendWhatsAppMessage(phoneNumber, "❌ কিছু সমস্যা হয়েছে, আবার চেষ্টা করুন।");
     }
 }
