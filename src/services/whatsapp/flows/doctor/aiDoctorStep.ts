@@ -2,7 +2,6 @@ import { sendWhatsAppMessage, sendTypingIndicator } from "../../../../lib/sendWh
 import { getLocationTemplate } from "../../../../lib/locationTemplate.js";
 import { getOpenAIResponse } from "../../../AiService/deepseek.js";
 import { prisma } from "../../../../lib/prisma.js";
-import { buildDynamicPrompt } from "../../builders/promptBuilder.js";
 
 export async function handleAiDoctorFlow(
     phoneNumber: string, 
@@ -28,12 +27,12 @@ export async function handleAiDoctorFlow(
 
             await sendWhatsAppMessage(
                 phoneNumber,
-                `${template.locationText}\n\n👉 এআই দিয়ে ডাক্তার খুঁজতে ঠিক থাকলে "yes" লিখুন।`
+                `${template.locationText}\n\n👉 এআই দিয়ে ডাক্তার খুঁজতে ঠিক থাকলে "yes" লিখুন।`
             );
         } else {
             data.location = text;
             session.step = "CONFIRM_AI_SEARCH";
-            await sendWhatsAppMessage(phoneNumber, `লোকেশন: ${text}\n\n👉 এআই দিয়ে ডাক্তার খুঁজতে ঠিক থাকলে "yes" লিখুন।`);
+            await sendWhatsAppMessage(phoneNumber, `লোকেশন: ${text}\n\n👉 এআই দিয়ে ডাক্তার খুঁজতে ঠিক থাকলে "yes" লিখুন।`);
         }
         return;
     }
@@ -41,7 +40,7 @@ export async function handleAiDoctorFlow(
     if (session.step === "CONFIRM_AI_SEARCH" && ["yes", "ok", "ঠিক"].includes(text)) {
         await sendTypingIndicator(phoneNumber);
 
-        // অপ্টিমাইজেশন: ডাটাবেজ থেকে লক্ষাধিক না এনে শুধু শীর্ষ ১৫ জন টপ রেটেড ডাক্তার লোকালি কুয়েরি করা হলো
+        // ১. এই ফ্লোর নিজস্ব ডাটাবেজ কুয়েরি (অপ্টিমাইজড লিমিট)
         const doctors = await prisma.doctor.findMany({
             orderBy: { rating: "desc" },
             take: 15,
@@ -53,21 +52,34 @@ export async function handleAiDoctorFlow(
             return;
         }
 
-        const customTasks = [
-            `Analyze the patient's problem: "${data.problem}"`,
-            "Tell the user what kind of medical specialty is needed and why.",
-            "Select top 3 doctors from the list matching the specialty.",
-            "Give a 1-line reason in Bengali for each choice."
-        ];
+        // ২. ডাক্তার লিস্ট ফরম্যাট করা
+        const doctorList = doctors
+            .map(
+                (d: any) =>
+                    `ID:${d.id}, Name:${d.name}, Degree:${d.degree || "N/A"}, Speciality:${d.speciality}, Place:${d.workingPlace}, Rating:${d.rating}`
+            )
+            .join("\n");
 
-        const prompt = buildDynamicPrompt({
-            title: "AI Symptom Checker & Doctor Recommendation",
-            problem: data.problem,
-            location: data.location,
-            doctors: doctors,
-            tasks: customTasks
-        });
+        // ৩. এই ফ্লোর নিজস্ব সুনির্দিষ্ট টাস্ক ও প্রম্পট স্ট্রাকচার
+        const prompt = `
+Context: AI Symptom Checker & Doctor Recommendation
+Patient's Problem / Symptoms:
+${data.problem}
 
+User Location / Area:
+${data.location}
+
+Available Doctors:
+${doctorList}
+
+Task / Instructions:
+1. Analyze the patient's problem.
+2. Tell the user what kind of medical specialty is needed and why in Bengali.
+3. Select top 3 doctors from the list matching the specialty.
+4. Give a 1-line reason in Bengali for each choice along with their chamber address.
+        `.trim();
+
+        // ৪. সরাসরি এআই সার্ভিস কল করা
         const aiReply = await getOpenAIResponse(prompt);
 
         await sendWhatsAppMessage(phoneNumber, `🩺 আপনার সমস্যার জন্য সেরা ডাক্তার:\n\n${aiReply}`);
