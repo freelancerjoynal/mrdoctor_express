@@ -1,21 +1,18 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "../../lib/sendWhatsAppMessage.js";
 import { handleDoctorMenuFlow } from "./flows/doctor/doctorMenuFlow.js";
-import { handleAiDoctorFlow } from "./flows/doctor/aiDoctorStep.js";
-// ভবিষ্যতে নতুন ফ্লো বানালে এখানে ইম্পোর্ট করবেন
-// import { handleHospitalFlow } from "./flows/hospital/hospitalFlow.js";
 
-const userSessions = new Map<
-    string,
-    { 
-        flow: string;        // যেমন: 'MAIN_MENU', 'DOCTOR_MENU', 'AI_DOCTOR_FLOW', 'HOSPITAL_FLOW'
-        step: string;        // নির্দিষ্ট ফ্লোর ভেতরের বর্তমান স্টেপ
-        data: {
-            problem?: string;
-            location?: string;
-            category?: string; 
-        }
-    }
->();
+// সেশনের সঠিক টাইপ ইন্টারফেস ডিফাইন করা হলো
+interface SessionData {
+    flow: string;
+    step: string;
+    data: {
+        problem?: string;
+        location?: string;
+        category?: string;
+    };
+}
+
+const userSessions = new Map<string, SessionData>();
 
 export async function handleIncomingMessage(msg: any) {
     console.log("📥 Incoming Message:", JSON.stringify(msg, null, 2));
@@ -33,7 +30,7 @@ export async function handleIncomingMessage(msg: any) {
     if (!text && !msg.location) return;
 
     try {
-        let session = userSessions.get(phoneNumber) || { 
+        let session: SessionData = userSessions.get(phoneNumber) || { 
             flow: "MAIN_MENU", 
             step: "WELCOME", 
             data: {} 
@@ -88,53 +85,45 @@ export async function handleIncomingMessage(msg: any) {
 
             if (session.step === "ASK_CATEGORY") {
                 if (text.includes("ডাক্তার") || text.includes("doc")) {
-                    // সেশন আপডেট করে সরাসরি ডাক্তার ফ্লোতে সেট করা
-                    const newSessionData = { flow: "DOCTOR_MENU", step: "ASK_DOCTOR_TYPE", data: { category: "DOCTOR" } };
+                    const newSessionData: SessionData = { flow: "DOCTOR_MENU", step: "ASK_DOCTOR_TYPE", data: { category: "DOCTOR" } };
                     userSessions.set(phoneNumber, newSessionData);
                     
-                    // সরাসরি ডাক্তার ফ্লো ফাইলের হ্যান্ডলারে কল করে দেওয়া যাতে প্রথম সাব-মেনু বাটন সাথে সাথে চলে যায়
                     await handleDoctorMenuFlow(
                         phoneNumber, 
                         text, 
+                        msg,
                         newSessionData, 
-                        (newFlow, newStep, updatedData) => {
+                        (newFlow: string, newStep: string, updatedData: any) => {
                             userSessions.set(phoneNumber, { flow: newFlow, step: newStep, data: updatedData });
+                        },
+                        () => {
+                            userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "WELCOME", data: {} });
                         }
                     );
                 } else if (text.includes("হসপিটাল") || text.includes("hosp")) {
                     await sendWhatsAppMessage(phoneNumber, "🏥 হসপিটাল খোঁজার ফিচারটি খুব শীঘ্রই আসছে!");
                     userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "WELCOME", data: {} });
                 } else {
-                    await sendWhatsAppMessage(phoneNumber, "দয়া করে নিচের বাটন থেকে একটি অপশন সিলেক্ট করুন।");
+                    await sendWhatsAppMessage(phoneNumber, "দয়া করে নিচের বাটন থেকে একটি অপশন সিলেক্ট করুন।");
                 }
                 return;
             }
         }
 
-        // ২. ডাক্তার মেনু ফ্লোর কাছে রিকোয়েস্ট পাস করা
+        // ২. ডাক্তার মেনু ফ্লোর কাছে রিকোয়েস্ট পাস করা
         if (session.flow === "DOCTOR_MENU") {
             await handleDoctorMenuFlow(
                 phoneNumber, 
                 text, 
+                msg,
                 session, 
-                (newFlow, newStep, updatedData) => {
+                (newFlow: string, newStep: string, updatedData: any) => {
                     userSessions.set(phoneNumber, { 
                         flow: newFlow, 
                         step: newStep, 
                         data: updatedData 
                     });
-                }
-            );
-            return;
-        }
-
-        // ৩. এআই ডাক্তার ফ্লোর কাছে রিকোয়েস্ট পাস করা
-        if (session.flow === "AI_DOCTOR_FLOW") {
-            await handleAiDoctorFlow(
-                phoneNumber, 
-                text, 
-                msg, 
-                session, 
+                },
                 () => {
                     userSessions.set(phoneNumber, { 
                         flow: "MAIN_MENU", 
@@ -152,10 +141,10 @@ export async function handleIncomingMessage(msg: any) {
             step: "WELCOME", 
             data: {} 
         });
-        await sendWhatsAppMessage(phoneNumber, "বট রিসেট করা হয়েছে। শুরু করতে 'Hi' বা 'Hello' লিখুন।");
+        await sendWhatsAppMessage(phoneNumber, "বট রিসেট করা হয়েছে। শুরু করতে 'Hi' বা 'Hello' লিখুন।");
 
     } catch (error: any) {
         console.error("❌ WhatsApp Service Error:", error);
-        await sendWhatsAppMessage(phoneNumber, "❌ কিছু সমস্যা হয়েছে, আবার চেষ্টা করুন।");
+        await sendWhatsAppMessage(phoneNumber, "❌ কিছু সমস্যা হয়েছে, আবার চেষ্টা করুন।");
     }
 }

@@ -1,55 +1,15 @@
-import { sendWhatsAppMessage, sendTypingIndicator } from "../../../../lib/sendWhatsAppMessage.js";
-import { getLocationTemplate } from "../../../../lib/locationTemplate.js";
 import { getOpenAIResponse } from "../../../AiService/deepseek.js";
 import { prisma } from "../../../../lib/prisma.js";
-
-export async function handleAiDoctorFlow(
-    phoneNumber: string, 
-    text: string, 
-    msg: any, 
-    session: any, 
-    resetSession: () => void
-) {
-    let data = session.data;
-
-    if (session.step === "ASK_PROBLEM") {
-        data.problem = text;
-        session.step = "ASK_LOCATION";
-        await sendWhatsAppMessage(phoneNumber, "📍 আপনার লোকেশন বা জিপিএস পিন পাঠান (অথবা এলাকার নাম লিখুন):");
-        return;
-    }
-
-    if (session.step === "ASK_LOCATION") {
-        if (msg.location) {
-            const template = await getLocationTemplate(msg.location.latitude, msg.location.longitude);
-            data.location = template.locationText;
-            session.step = "CONFIRM_AI_SEARCH";
-
-            await sendWhatsAppMessage(
-                phoneNumber,
-                `${template.locationText}\n\n👉 এআই দিয়ে ডাক্তার খুঁজতে ঠিক থাকলে "yes" লিখুন।`
-            );
-        } else {
-            data.location = text;
-            session.step = "CONFIRM_AI_SEARCH";
-            await sendWhatsAppMessage(phoneNumber, `লোকেশন: ${text}\n\n👉 এআই দিয়ে ডাক্তার খুঁজতে ঠিক থাকলে "yes" লিখুন।`);
-        }
-        return;
-    }
-
-    if (session.step === "CONFIRM_AI_SEARCH" && ["yes", "ok", "ঠিক"].includes(text)) {
-        await sendTypingIndicator(phoneNumber);
-
-        // ১. এই ফ্লোর নিজস্ব ডাটাবেজ কুয়েরি (অপ্টিমাইজড লিমিট)
+export async function processAiDoctorRecommendation(problem: string, location: string) {
+    try {
+        // ১. ডাটাবেজ থেকে ডাক্তার কুয়েরি করা
         const doctors = await prisma.doctor.findMany({
             orderBy: { rating: "desc" },
             take: 15,
         });
 
         if (!doctors.length) {
-            await sendWhatsAppMessage(phoneNumber, "❌ কোনো ডাক্তার পাওয়া যায়নি।");
-            resetSession();
-            return;
+            return "❌ দুঃখিত, বর্তমানে সিস্টেমে কোনো ডাক্তার পাওয়া যায়নি।";
         }
 
         // ২. ডাক্তার লিস্ট ফরম্যাট করা
@@ -60,14 +20,14 @@ export async function handleAiDoctorFlow(
             )
             .join("\n");
 
-        // ৩. এই ফ্লোর নিজস্ব সুনির্দিষ্ট টাস্ক ও প্রম্পট স্ট্রাকচার
+        // ৩. আপনার পছন্দমতো সুনির্দিষ্ট প্রম্পট ও টাস্ক স্ট্রাকচার
         const prompt = `
 Context: AI Symptom Checker & Doctor Recommendation
 Patient's Problem / Symptoms:
-${data.problem}
+${problem}
 
 User Location / Area:
-${data.location}
+${location}
 
 Available Doctors:
 ${doctorList}
@@ -79,13 +39,12 @@ Task / Instructions:
 4. Give a 1-line reason in Bengali for each choice along with their chamber address.
         `.trim();
 
-        // ৪. সরাসরি এআই সার্ভিস কল করা
+        // ৪. এআই সার্ভিস কল করে রপ্লাই রিটার্ন করা
         const aiReply = await getOpenAIResponse(prompt);
+        return aiReply;
 
-        await sendWhatsAppMessage(phoneNumber, `🩺 আপনার সমস্যার জন্য সেরা ডাক্তার:\n\n${aiReply}`);
-        resetSession();
-    } else if (session.step === "CONFIRM_AI_SEARCH") {
-        session.step = "ASK_LOCATION";
-        await sendWhatsAppMessage(phoneNumber, "❌ আবার লোকেশন পাঠান বা এলাকার নাম লিখুন:");
+    } catch (error) {
+        console.error("❌ AI Doctor Step Error:", error);
+        return "❌ এআই প্রসেসিংয়ে সমস্যা হয়েছে, অনুগ্রহ করে আবার চেষ্টা করুন।";
     }
 }

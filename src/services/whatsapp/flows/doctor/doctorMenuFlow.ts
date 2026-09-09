@@ -3,8 +3,10 @@ import { sendWhatsAppMessage, sendInteractiveButtons } from "../../../../lib/sen
 export async function handleDoctorMenuFlow(
     phoneNumber: string, 
     text: string, 
+    msg: any, 
     session: any, 
-    updateSession: (flow: string, step: string, data: any) => void
+    updateSession: (flow: string, step: string, data: any) => void,
+    resetSession: () => void
 ) {
     if (session.step === "ASK_DOCTOR_TYPE") {
         
@@ -29,7 +31,7 @@ export async function handleDoctorMenuFlow(
             return;
         }
         
-        // ৩. ইউজার যদি এলাকার ডাক্তার অপশন সিলেক্ট করে, তবে নোটিশ দিয়ে আগের মেনু বা অপশনগুলো আবার দেখিয়ে দেওয়া হবে
+        // ৩. ইউজার যদি এলাকার ডাক্তার অপশন সিলেক্ট করে
         if (text.includes("এলাকা") || text.includes("area") || text.includes("area_search")) {
             await sendInteractiveButtons(
                 phoneNumber,
