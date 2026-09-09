@@ -38,20 +38,36 @@ export async function handleIncomingMessage(msg: any) {
             data: {} 
         };
 
-        // 🚀 ক্লিন শর্ট লিংক থেকে আসা পেন্ডিং 'Hi' বা ওয়েলকাম মেসেজ হ্যান্ডলার
+        // 🚀 ১. ফোর্সেড ডিপ লিঙ্কিং বা টেক্সটে doctor_ থাকলে RegEx দিয়ে নিখুঁতভাবে আইডি এক্সট্রাক্ট করা হবে
+        if (text.includes("doctor_")) {
+            // RegEx দিয়ে doctor_ এর পরের যেকোনো আইডি বা UUID (হাইফেন সহ) ক্যাপচার করা হলো
+            const match = text.match(/doctor_([a-zA-Z0-9\-]+)/i);
+            const doctorParam = match ? match[1].trim() : "";
+            
+            if (doctorParam) {
+                const newSession: SessionData = { 
+                    flow: "GET_DOCTOR_FLOW", 
+                    step: "DIRECT_SEARCH", 
+                    data: { doctorId: doctorParam } 
+                };
+                userSessions.set(phoneNumber, newSession);
+                
+                await handleGetDoctorFlow(phoneNumber, `doctor_${doctorParam}`, msg, newSession);
+                return;
+            }
+        }
+
+        // 🚀 ২. ক্লিন শর্ট লিংক থেকে আসা পেন্ডিং 'Hi' বা ওয়েলকাম মেসেজ হ্যান্ডলার
         if (text.includes("hi") || text.includes("hello") || text.includes("start")) {
             const pendingDoctorId = userPendingDoctorMap.get(phoneNumber);
 
             if (pendingDoctorId) {
-                // পেন্ডিং আইডি পাওয়া গেছে, সেশন সেট করে সরাসরি ডক্টর ফ্লোতে পাঠিয়ে দিন
                 const newSession: SessionData = { 
                     flow: "GET_DOCTOR_FLOW", 
                     step: "DIRECT_SEARCH", 
                     data: { doctorId: pendingDoctorId } 
                 };
                 userSessions.set(phoneNumber, newSession);
-                
-                // কাজ শেষ, মেমোরি থেকে আইডি মুছে ফেলা হলো
                 userPendingDoctorMap.delete(phoneNumber);
 
                 await handleGetDoctorFlow(phoneNumber, `doctor_${pendingDoctorId}`, msg, newSession);
@@ -59,7 +75,7 @@ export async function handleIncomingMessage(msg: any) {
             }
         }
 
-        // 🚀 ফোর্সেড ডিপ লিঙ্কিং হ্যান্ডলার (যদি কেউ সরাসরি টেক্সট পাঠায়)
+        // হসপিটাল ডিপ লিঙ্কিং হ্যান্ডলার
         if (text.startsWith("hospital_")) {
             const newSession: SessionData = { flow: "GET_HOSPITAL_FLOW", step: "WELCOME", data: {} };
             userSessions.set(phoneNumber, newSession);
@@ -76,19 +92,6 @@ export async function handleIncomingMessage(msg: any) {
                     userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "WELCOME", data: {} });
                 }
             );
-            return;
-        }
-
-        if (text.startsWith("doctor_")) {
-            const doctorParam = text.replace("doctor_", "").trim();
-            const newSession: SessionData = { 
-                flow: "GET_DOCTOR_FLOW", 
-                step: "DIRECT_SEARCH", 
-                data: { doctorId: doctorParam } 
-            };
-            userSessions.set(phoneNumber, newSession);
-            
-            await handleGetDoctorFlow(phoneNumber, rawText, msg, newSession);
             return;
         }
 
