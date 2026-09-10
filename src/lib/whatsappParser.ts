@@ -2,6 +2,7 @@ type ParsedMessage = {
     name: string;
     number: string;
     text: string;
+    buttonId?: string;
     messageId: string;
     timestamp: Date;
     type: string;
@@ -25,11 +26,15 @@ export function parseWhatsAppMessage(body: any): ParsedMessage[] {
 
                     // টেক্সট, বাটন রিপ্লাই বা ইন্টারেক্টিভ বাটন থেকে টেক্সট বের করার লজিক
                     let extractedText = msg.text?.body || "";
-                    
+                    let extractedButtonId = "";
+
                     if (msg.type === "button") {
                         extractedText = msg.button?.text || "";
+                        extractedButtonId = msg.button?.payload || "";
                     } else if (msg.type === "interactive") {
                         extractedText = msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || "";
+                        extractedButtonId =
+                            msg.interactive?.button_reply?.id || msg.interactive?.list_reply?.id || "";
                     }
 
                     // লোকেশন ডেটা ধরার লজিক
@@ -45,6 +50,7 @@ export function parseWhatsAppMessage(body: any): ParsedMessage[] {
                         name: contact?.profile?.name || "Unknown",
                         number: msg.from,
                         text: extractedText,
+                        buttonId: extractedButtonId || undefined,
                         messageId: msg.id,
                         timestamp: new Date(parseInt(msg.timestamp) * 1000),
                         type: msg.type,

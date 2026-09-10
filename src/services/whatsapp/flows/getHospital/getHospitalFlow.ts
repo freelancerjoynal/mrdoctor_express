@@ -1,31 +1,26 @@
-import { sendWhatsAppMessage } from "../../../../lib/sendWhatsAppMessage.js";
+import { findHospitalFlow } from "../findHospital/findHospitalFlow.js";
 
+// Legacy direct-hospital entry (e.g. hospital_xxx deep links).
+// Delegates to the full FIND_HOSPITAL_FLOW so tracking + confirmation stay consistent.
+// Kept as a separate file so existing imports (whatsappService recovery) don't break.
 export async function handleGetHospitalFlow(
-    phoneNumber: string, 
-    text: string, 
-    msg: any, 
+    phoneNumber: string,
+    text: string,
+    msg: any,
     session: any,
     updateSession: (flow: string, step: string, data: any) => void,
     resetSession: () => void
 ) {
-    // ইউজার যদি হসপিটাল অপশন বা হসপিটাল ডিপ লিংকে আসে (যেমন: hospital_dmc)
-    if (session.step === "WELCOME" || text.startsWith("hospital_") || text.includes("হসপিটাল") || text.includes("hosp")) {
-        
-        await sendWhatsAppMessage(
-            phoneNumber,
-            "🏥 *হসপিটাল সেবা*\n\nহসপিটাল বা ক্লিনিক খোঁজার এই ফিচারটি খুব শীঘ্রই আসছে! আমরা কাজ করছি। খুব শীঘ্রই আপনারা এই সেবাটি ব্যবহার করতে পারবেন ইনশাআল্লাহ। ✨"
-        );
+    const step = session?.step || "WELCOME";
 
-        // ইউজারকে চাইলে আবার মূল মেনুতে ফেরত পাঠাতে পারেন অথবা সেশন রিসেট করতে পারেন
-        resetSession();
-        
-        await sendWhatsAppMessage(
-            phoneNumber,
-            "মূল মেনুতে ফিরে যেতে যেকোনো সময় 'menu' বা 'home' লিখুন।"
-        );
-        return;
-    }
+    // Normalize legacy GET_HOSPITAL_FLOW session into FIND_HOSPITAL_FLOW,
+    // then run the shared location-first flow (location -> type -> service -> confirm).
+    const normalizedSession = {
+        ...session,
+        flow: "FIND_HOSPITAL_FLOW",
+        step: step === "WELCOME" ? "ASK_LOCATION" : step,
+        data: { ...(session?.data || {}), category: "HOSPITAL" },
+    };
 
-    resetSession();
-    await sendWhatsAppMessage(phoneNumber, "বট রিস্টার্ট করা হয়েছে। শুরু করতে 'Hi' বা 'Hello' লিখুন।");
+    await findHospitalFlow(phoneNumber, text, msg, normalizedSession, updateSession, resetSession);
 }

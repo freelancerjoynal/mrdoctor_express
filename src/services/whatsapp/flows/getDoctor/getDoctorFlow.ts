@@ -33,7 +33,7 @@ export async function handleGetDoctorFlow(
                 name: doctor.name,
                 username: doctor.username,
                 degree: doctor.degree || "",
-                specialty: doctor.specialty || "",
+                specialty: (doctor as any).speciality || (doctor as any).specialty || "",
                 workingPlace: doctor.workingPlace,
                 phone: doctor.phone || ""
             };
@@ -52,7 +52,7 @@ export async function handleGetDoctorFlow(
 
 নাম: ড. ${doctor.name}
 🎓 ডিগ্রি: ${doctor.degree || "এমবিবিএস, এফসিপিএস"}
-⭐ বিশেষজ্ঞতা: ${doctor.specialty || "মেডিসিন বিশেষজ্ঞ"}
+⭐ বিশেষজ্ঞতা: ${(doctor as any).speciality || (doctor as any).specialty || "মেডিসিন বিশেষজ্ঞ"}
 🏥 চেম্বার: ${doctor.workingPlace || "নির্ধারিত নেই"}
 
 আপনাকে কীভাবে সাহায্য করতে পারি নিচে থেকে বেছে নিন:`;
