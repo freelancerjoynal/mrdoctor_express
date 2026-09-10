@@ -158,6 +158,9 @@ model Customer {
 model Doctor {
   id           String   @id @default(uuid())
   name         String
+  username     String   @unique
+  email        String   @unique
+  password     String
   degree       String   // যেমন: MBBS, FCPS ইত্যাদি
   speciality   String   // যেমন: Cardiology ইত্যাদি
   workingPlace String   // কর্মক্ষেত্র বা চেম্বারের বিবরণ

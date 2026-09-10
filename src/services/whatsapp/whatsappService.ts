@@ -2,7 +2,8 @@ import { sendWhatsAppMessage, sendInteractiveButtons } from "../../lib/sendWhats
 import { findDoctFlow } from "./flows/findDoctor/findDoctFlow.js";
 import { handleGetDoctorFlow } from "./flows/getDoctor/getDoctorFlow.js";
 import { handleGetHospitalFlow } from "./flows/getHospital/getHospitalFlow.js";
-import { userPendingDoctorMap } from "../../lib/doctorRedirectManager.js"; // ক্লিন লিংক পেন্ডিং ম্যাপ ইমপোর্ট
+import { userPendingDoctorMap } from "../../lib/doctorRedirectManager.js";
+import { prisma } from "../../lib/prisma.js";
 
 interface SessionData {
     flow: string;
@@ -38,44 +39,54 @@ export async function handleIncomingMessage(msg: any) {
             data: {} 
         };
 
-        // 🚀 ১. ফোর্সেড ডিপ লিঙ্কিং বা টেক্সটে doctor_ থাকলে RegEx দিয়ে নিখুঁতভাবে আইডি এক্সট্রাক্ট করা হবে
-        if (text.includes("doctor_")) {
-            // RegEx দিয়ে doctor_ এর পরের যেকোনো আইডি বা UUID (হাইফেন সহ) ক্যাপচার করা হলো
-            const match = text.match(/doctor_([a-zA-Z0-9\-]+)/i);
-            const doctorParam = match ? match[1].trim() : "";
+        // 🚀 ১. টেক্সটে যদি 'dr-' থাকে তবে সরাসরি ইউজারনেম ধরে ডাটাবেজে খোঁজা হবে
+        if (text.includes("dr-")) {
+            const match = text.match(/(dr-[a-zA-Z0-9\-]+)/i);
+            const usernameParam = match ? match[1].trim() : "";
             
-            if (doctorParam) {
-                const newSession: SessionData = { 
-                    flow: "GET_DOCTOR_FLOW", 
-                    step: "DIRECT_SEARCH", 
-                    data: { doctorId: doctorParam } 
-                };
-                userSessions.set(phoneNumber, newSession);
-                
-                await handleGetDoctorFlow(phoneNumber, `doctor_${doctorParam}`, msg, newSession);
-                return;
+            if (usernameParam) {
+                const doctor = await prisma.doctor.findUnique({
+                    where: { username: usernameParam }
+                });
+
+                if (doctor) {
+                    const newSession: SessionData = { 
+                        flow: "GET_DOCTOR_FLOW", 
+                        step: "DIRECT_SEARCH", 
+                        data: { doctorId: doctor.id } 
+                    };
+                    userSessions.set(phoneNumber, newSession);
+                    
+                    await handleGetDoctorFlow(phoneNumber, usernameParam, msg, newSession);
+                    return;
+                }
             }
         }
 
-        // 🚀 ২. ক্লিন শর্ট লিংক থেকে আসা পেন্ডিং 'Hi' বা ওয়েলকাম মেসেজ হ্যান্ডলার
+        // 🚀 ২. ক্লিন শর্ট লিংক থেকে আসা পেন্ডিং 'Hi' বা ওয়েলকাম মেসেজ হ্যান্ডলার
         if (text.includes("hi") || text.includes("hello") || text.includes("start")) {
             const pendingDoctorId = userPendingDoctorMap.get(phoneNumber);
 
             if (pendingDoctorId) {
-                const newSession: SessionData = { 
-                    flow: "GET_DOCTOR_FLOW", 
-                    step: "DIRECT_SEARCH", 
-                    data: { doctorId: pendingDoctorId } 
-                };
-                userSessions.set(phoneNumber, newSession);
-                userPendingDoctorMap.delete(phoneNumber);
+                const doctor = await prisma.doctor.findUnique({
+                    where: { id: pendingDoctorId }
+                });
 
-                await handleGetDoctorFlow(phoneNumber, `doctor_${pendingDoctorId}`, msg, newSession);
-                return;
+                if (doctor) {
+                    const newSession: SessionData = { 
+                        flow: "GET_DOCTOR_FLOW", 
+                        step: "DIRECT_SEARCH", 
+                        data: { doctorId: doctor.id } 
+                    };
+                    userSessions.set(phoneNumber, newSession);
+                    userPendingDoctorMap.delete(phoneNumber);
+
+                    await handleGetDoctorFlow(phoneNumber, doctor.username, msg, newSession);
+                    return;
+                }
             }
         }
 
-        // হসপিটাল ডিপ লিঙ্কিং হ্যান্ডলার
         if (text.startsWith("hospital_")) {
             const newSession: SessionData = { flow: "GET_HOSPITAL_FLOW", step: "WELCOME", data: {} };
             userSessions.set(phoneNumber, newSession);
@@ -95,7 +106,6 @@ export async function handleIncomingMessage(msg: any) {
             return;
         }
 
-        // গ্লোবাল হোম বা মূল মেনুতে ফিরে যাওয়ার চেক
         if (text.includes("home") || text.includes("মূল মেনু") || text.includes("মেনু") || text.includes("menu")) {
             userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "ASK_CATEGORY", data: {} });
             
@@ -115,7 +125,6 @@ export async function handleIncomingMessage(msg: any) {
             return;
         }
 
-        // ১. মেইন মেনু হ্যান্ডেলিং
         if (session.flow === "MAIN_MENU") {
             if (session.step === "WELCOME" || ["hi", "hello", "start", "reset"].includes(text)) {
                 userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "ASK_CATEGORY", data: {} });
@@ -176,7 +185,6 @@ export async function handleIncomingMessage(msg: any) {
             }
         }
 
-        // ২. ফাইন্ড ডক্টর ফ্লো (ডাক্তার খোঁজার ক্যাটাগরি ও এআই সার্চ)
         if (session.flow === "FIND_DOCTOR_FLOW") {
             await findDoctFlow(
                 phoneNumber, 
@@ -193,13 +201,11 @@ export async function handleIncomingMessage(msg: any) {
             return;
         }
 
-        // ৩. গেট ডক্টর ফ্লো (ডিপ লিংক বা স্পেসিফিক ডাক্তার ডিটেইলস)
         if (session.flow === "GET_DOCTOR_FLOW") {
             await handleGetDoctorFlow(phoneNumber, rawText, msg, session);
             return;
         }
 
-        // ৪. গেট হসপিটাল ফ্লো (হসপিটাল সম্পর্কিত তথ্য ও নোটিশ)
         if (session.flow === "GET_HOSPITAL_FLOW") {
             await handleGetHospitalFlow(
                 phoneNumber, 
@@ -216,7 +222,6 @@ export async function handleIncomingMessage(msg: any) {
             return;
         }
 
-        // ডিফল্ট ফলব্যাক
         userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "WELCOME", data: {} });
         await sendWhatsAppMessage(phoneNumber, "বট রিসেট করা হয়েছে। শুরু করতে 'Hi' বা 'Hello' লিখুন।");
 
