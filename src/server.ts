@@ -28,17 +28,13 @@ app.use('/api/auth', authRouter);
 import profileRouter from './routes/profile/profile.js';
 app.use('/api/profile', profileRouter);
 
-import businessRouter from './routes/business/businessRouts.js';
-app.use('/api/business', businessRouter);
-
 
 // --- WhatsApp Webhook Routes ---
 import webHookWhatsAppRouter from './routes/webhook/whatsapp/whatsappRoutes.js';
 app.use('/api/webhook/whatsapp', webHookWhatsAppRouter);
 
 // --- Doctors Routes ---
-import doctorRouter from './routes/doctors/doctorsRoutes.js';
-app.use('/api/doctors', doctorRouter);
+
 
 
 // --- Data seeding
