@@ -19,37 +19,36 @@
 // ----------------------------------------------------------------------------
 // SECTION 1: flow prompts (used by findHospitalFlow.ts — do not rename keys)
 // ----------------------------------------------------------------------------
-
 export const HOSPITAL_TEXTS = {
     // Q: flow asks — which area? User can share device GPS or type the name.
     ASK_AREA:
-        "📍 আপনি কোন এলাকায় হসপিটাল খুঁজছেন?\n\n👇 সবচেয়ে ভালো উপায় — মোবাইলের লোকেশন পাঠান:\n1️⃣ চ্যাটে 📎 (Attach / ➕) বাটনে চাপ দিন\n2️⃣ Location বেছে নিন\n3️⃣ Send your current location পাঠান\n→ তাহলে আপনার কাছের এলাকা (যেমন: জলঢাকা, ডোমার, নীলফামারী) সাজেস্ট করবো।\n\nঅথবা এলাকার নাম লিখুন (যেমন: নীলফামারী, সৈয়দপুর, রংপুর, ঢাকা)।",
+        "আপনি কোন এলাকার হসপিটাল খুঁজছেন?\n\nআর যদি আপনি চান আমি সাজেস্ট করি, তাহলে আপনার মোবাইলের attach (📎) এ ক্লিক করে লোকেশন পাঠিয়ে দিন।\n\nঅথবা সরাসরি এলাকার নাম লিখে দিন (যেমন: জলঢাকা, ডোমার, নীলফামারী, রংপুর)।",
 
     // A: shown while searching the DB.
-    PROCESSING: "⏳ আপনার এলাকায় সেরা হসপিটাল খোঁজা হচ্ছে… একটু অপেক্ষা করুন।",
+    PROCESSING: "⏳ একটু অপেক্ষা করুন, আপনার এলাকার হসপিটাল খোঁজা হচ্ছে...",
 
     // A: shown when the area text is not usable.
     INVALID_LOCATION:
-        "দয়া করে এলাকার নামটি লিখুন (যেমন: সৈয়দপুর) অথবা লোকেশন শেয়ার করুন।",
+        "দয়া করে ঠিকভাবে এলাকার নামটি লিখুন অথবা লোকেশন শেয়ার করুন।",
 
     // A: header above the GPS-based nearby-area suggestion buttons.
     NEARBY_HEADER: (detected: string) =>
-        `📍 আপনার অবস্থান পেয়েছি! সবচেয়ে কাছের এলাকা: *${detected}*\n\nনিচে থেকে আপনার এলাকা বেছে নিন 👇\n(অথবা এলাকার নাম লিখে পাঠান)`,
+        `📍 আপনার লোকেশন পেয়েছি! আপনার সবচেয়ে কাছের এলাকা: *${detected}*\n\nনিচে থেকে আপনার এলাকাটি বেছে নিন 👇`,
 
     // A: shown when no hospital is found for the area.
     NO_HOSPITAL: (location: string) =>
-        `❌ দুঃখিত, "${location}" এলাকায় কোনো হসপিটাল পাওয়া যায়নি।\n\nঅন্য এলাকার নাম লিখুন অথবা নিচের 🏠 মূল মেনু বাটনে চাপ দিন।`,
+        `❌ দুঃখিত, "${location}" এলাকায় কোনো হসপিটাল পাওয়া যায়নি।\n\nঅন্য কোনো এলাকার নাম লিখে পাঠান অথবা মূল মেনুতে যান।`,
 
     // A: header above the 5 hospital cards.
     HOSPITAL_LIST_HEADER: (location: string) =>
-        `✅ "${location}" এলাকায় পাওয়া ৫টি হসপিটাল:\n\nনিচে থেকে যেকোনো হসপিটালের *Select* বাটনে চাপ দিন 👇`,
+        `✅ "${location}" এলাকার সেরা হসপিটালগুলো:\n\nপছন্দের হসপিটালের *Select* বাটনে চাপ দিন 👇`,
 
     // Q: flow asks — which department of this hospital?
     ASK_DEPT: (hospitalName: string) =>
-        `🏥 *${hospitalName}*\n\nনিচে থেকে বিভাগ বেছে নিন — সেই বিভাগের ডাক্তার দেখানো হবে:`,
+        `🏥 *${hospitalName}*\n\nকোন বিভাগের ডাক্তার দেখাতে চান, নিচে থেকে বেছে নিন:`,
 
     // A: shown when the chosen hospital has no departments.
-    NO_DEPT: "❌ এই হসপিটালে কোনো বিভাগ পাওয়া যায়নি। অন্য হসপিটাল বেছে নিন।",
+    NO_DEPT: "❌ এই হসপিটালে কোনো বিভাগ পাওয়া যায়নি। অন্য হসপিটাল বেছে নিন।",
 
     // A: header above the doctors of one department.
     DEPT_DOCTORS_HEADER: (hospitalName: string, dept: string) =>
@@ -57,14 +56,15 @@ export const HOSPITAL_TEXTS = {
 
     // Q: flow asks — press Connect on a doctor.
     SELECT_DOCTOR_PROMPT:
-        "───────────────────\n👆 উপরের ডাক্তারদের থেকে *Connect* বাটনে চাপ দিন — সরাসরি সেই ডাক্তারের সাথে যুক্ত হয়ে যাবেন।\n\nঅথবা নিচের 🏠 মূল মেনু বাটনে চাপ দিন।",
+        "───────────────────\n👆 ডাক্তারের সাথে কথা বলতে চাইলে *Connect* বাটনে চাপ দিন।",
 
     // A: shown after Connect is pressed.
-    CONNECTED: (doctorName: string) => `✅ *${doctorName}*-এর সাথে যুক্ত করা হচ্ছে…`,
+    CONNECTED: (doctorName: string) => `✅ *${doctorName}*-এর সাথে যুক্ত করা হচ্ছে...`,
 
     // A: shown when input matches nothing.
-    FALLBACK: "দুঃখিত, বুঝতে পারিনি। দয়া করে নিচের বাটন থেকে বেছে নিন।",
+    FALLBACK: "দুঃখিত, বিষয়টি বুঝতে পারিনি। নিচের বাটন থেকে একটি বেছে নিন।",
 };
+
 
 // ----------------------------------------------------------------------------
 // SECTION 2: free-text FAQ — ONE QUESTION = ONE BLOCK.
