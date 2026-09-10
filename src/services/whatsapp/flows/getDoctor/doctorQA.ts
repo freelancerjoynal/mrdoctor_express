@@ -3,12 +3,12 @@
 // To add a new Q&A, just add a new `case` below.
 
 export const DOCTOR_TEXTS = {
-    WAITING_TEXT: "⏳ দয়া করে অপেক্ষা করুন, ডাক্তার সাহেদ আপনার সাথে সংযুক্ত হচ্ছেন… ⏳",
+    WAITING_TEXT: "⏳ দয়া করে অপেক্ষা করুন, ডাক্তার সাহেব আপনার সাথে সংযুক্ত হচ্ছেন… ⏳",
     NOT_FOUND: "❌ দুঃখিত, এই ডাক্তারের কোনো তথ্য পাওয়া যায়নি। মূল মেনুতে যেতে 'menu' লিখুন।",
     SESSION_RESET: "সেশন রিসেট হয়ে গেছে। দয়া করে আবার লিংক থেকে প্রবেশ করুন অথবা 'menu' লিখুন।",
     DB_ERROR: "❌ তথ্য লোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।",
 
-    welcomeMessage: (doctorName: string) => `Hi, ami ${doctorName} bolchi, apnake kivabe help korte pari?`,
+    welcomeMessage: (doctorName: string) => `Hi, ami ${doctorName} বলছি`,
     chamberLocation: (workingPlace: string) => `আমার চেম্বারের ঠিকানা: ${workingPlace || "চেম্বার নির্ধারিত নেই"}`,
     mobileNumber: (phone: string | null) =>
         phone ? `আমার মোবাইল নম্বর: ${phone}` : "দুঃখিত, এই মুহূর্তে মোবাইল নম্বর দেওয়া নেই।",

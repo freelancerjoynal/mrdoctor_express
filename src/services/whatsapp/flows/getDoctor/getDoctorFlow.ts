@@ -32,6 +32,8 @@ export async function handleGetDoctorFlow(
                 doctorId: doctor.id,
                 name: doctor.name,
                 username: doctor.username,
+                degree: doctor.degree || "",
+                specialty: doctor.specialty || "",
                 workingPlace: doctor.workingPlace,
                 phone: doctor.phone || ""
             };
@@ -41,9 +43,23 @@ export async function handleGetDoctorFlow(
             session.data = sessionData;
             if (updateSession) updateSession("GET_DOCTOR_FLOW", "ACTIVE_CHAT", sessionData);
 
+            // ১. আপনার দেওয়া প্রথম মেসেজটি যেমন ছিল তেমনই পাঠানো হচ্ছে
+            await sendWhatsAppMessage(phoneNumber, DOCTOR_TEXTS.welcomeMessage(doctor.name));
+
+            // ২. ঠিক এর পরেই সুন্দর স্পেসিং ও বিজনেস কার্ড ফরম্যাটে দ্বিতীয় মেসেজ ও বাটন পাঠানো হচ্ছে
+            const businessCardText = 
+`🩺 *ডাক্তারের তথ্য ও বিবরণী*
+
+নাম: ড. ${doctor.name}
+🎓 ডিগ্রি: ${doctor.degree || "এমবিবিএস, এফসিপিএস"}
+⭐ বিশেষজ্ঞতা: ${doctor.specialty || "মেডিসিন বিশেষজ্ঞ"}
+🏥 চেম্বার: ${doctor.workingPlace || "নির্ধারিত নেই"}
+
+আপনাকে কীভাবে সাহায্য করতে পারি নিচে থেকে বেছে নিন:`;
+
             await sendInteractiveButtons(
                 phoneNumber,
-                DOCTOR_TEXTS.welcomeMessage(doctor.name),
+                businessCardText,
                 [{ id: `location_${doctor.id}`, title: "হ্যাঁ, লোকেশন জানতে চাই" }]
             );
 

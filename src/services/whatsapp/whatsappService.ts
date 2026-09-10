@@ -27,11 +27,11 @@ const userSessions = new Map<string, SessionData>();
 
 // গ্লোবাল ফাংশন: চ্যাট সেশন ডাটাবেজে সেভ বা আপডেট করার জন্য
 async function saveGlobalChatSession(
-    phoneNumber: string, 
-    targetType: "DOCTOR" | "HOSPITAL", 
-    targetId: string, 
-    targetName: string, 
-    lastFlow: string, 
+    phoneNumber: string,
+    targetType: "DOCTOR" | "HOSPITAL",
+    targetId: string,
+    targetName: string,
+    lastFlow: string,
     lastStep: string
 ) {
     try {
@@ -74,17 +74,17 @@ export async function handleIncomingMessage(msg: any) {
     if (!text && !msg.location) return;
 
     try {
-        let session: SessionData = userSessions.get(phoneNumber) || { 
-            flow: "MAIN_MENU", 
-            step: "WELCOME", 
-            data: {} 
+        let session: SessionData = userSessions.get(phoneNumber) || {
+            flow: "MAIN_MENU",
+            step: "WELCOME",
+            data: {}
         };
 
         // ১. রিকভারি বাটনে ক্লিক করলে আগের সেশনে ফিরিয়ে নিয়ে যাওয়া
         if (
-            text.includes("হ্যাঁ, যুক্ত হতে চাই") || 
-            text.includes("yes_restore") || 
-            text.includes("পুনরায় যুক্ত") || 
+            text.includes("হ্যাঁ, যুক্ত হতে চাই") ||
+            text.includes("yes_restore") ||
+            text.includes("পুনরায় যুক্ত") ||
             text.includes("reconnect")
         ) {
             let savedSession = pendingRecoveryMap.get(phoneNumber);
@@ -95,10 +95,10 @@ export async function handleIncomingMessage(msg: any) {
 
                 if (savedSession.flow === "GET_DOCTOR_FLOW" && savedSession.data.username) {
                     await handleGetDoctorFlow(
-                        phoneNumber, 
-                        `dr-${savedSession.data.username}`, 
-                        msg, 
-                        savedSession, 
+                        phoneNumber,
+                        `dr-${savedSession.data.username}`,
+                        msg,
+                        savedSession,
                         (f, s, d) => {
                             userSessions.set(phoneNumber, { flow: f, step: s, data: d });
                         }
@@ -106,14 +106,14 @@ export async function handleIncomingMessage(msg: any) {
                     return;
                 } else if (savedSession.flow === "GET_HOSPITAL_FLOW") {
                     await handleGetHospitalFlow(
-                        phoneNumber, 
-                        "hospital_reload", 
-                        msg, 
-                        savedSession, 
+                        phoneNumber,
+                        "hospital_reload",
+                        msg,
+                        savedSession,
                         (f, s, d) => {
                             userSessions.set(phoneNumber, { flow: f, step: s, data: d });
-                        }, 
-                        () => {}
+                        },
+                        () => { }
                     );
                     return;
                 }
@@ -135,10 +135,10 @@ export async function handleIncomingMessage(msg: any) {
                         userSessions.set(phoneNumber, restoredSession);
 
                         await handleGetDoctorFlow(
-                            phoneNumber, 
-                            `dr-${doc.username}`, 
-                            msg, 
-                            restoredSession, 
+                            phoneNumber,
+                            `dr-${doc.username}`,
+                            msg,
+                            restoredSession,
                             (f, s, d) => {
                                 userSessions.set(phoneNumber, { flow: f, step: s, data: d });
                             }
@@ -153,20 +153,20 @@ export async function handleIncomingMessage(msg: any) {
         if (text.includes("dr-")) {
             const match = text.match(/(dr-[a-zA-Z0-9\-]+)/i);
             const usernameParam = match ? match[1].trim() : "";
-            
+
             if (usernameParam) {
                 const doctor = await prisma.doctor.findUnique({
                     where: { username: usernameParam }
                 });
 
                 if (doctor) {
-                    const newSession: SessionData = { 
-                        flow: "GET_DOCTOR_FLOW", 
-                        step: "ACTIVE_CHAT", 
-                        data: { doctorId: doctor.id, username: doctor.username, name: doctor.name, workingPlace: doctor.workingPlace, phone: doctor.phone } 
+                    const newSession: SessionData = {
+                        flow: "GET_DOCTOR_FLOW",
+                        step: "ACTIVE_CHAT",
+                        data: { doctorId: doctor.id, username: doctor.username, name: doctor.name, workingPlace: doctor.workingPlace, phone: doctor.phone }
                     };
                     userSessions.set(phoneNumber, newSession);
-                    
+
                     await saveGlobalChatSession(phoneNumber, "DOCTOR", doctor.id, doctor.name, "GET_DOCTOR_FLOW", "ACTIVE_CHAT");
 
                     await handleGetDoctorFlow(phoneNumber, usernameParam, msg, newSession, (f, s, d) => {
@@ -190,10 +190,10 @@ export async function handleIncomingMessage(msg: any) {
                 });
 
                 if (doctor) {
-                    const newSession: SessionData = { 
-                        flow: "GET_DOCTOR_FLOW", 
-                        step: "ACTIVE_CHAT", 
-                        data: { doctorId: doctor.id, username: doctor.username, name: doctor.name, workingPlace: doctor.workingPlace, phone: doctor.phone } 
+                    const newSession: SessionData = {
+                        flow: "GET_DOCTOR_FLOW",
+                        step: "ACTIVE_CHAT",
+                        data: { doctorId: doctor.id, username: doctor.username, name: doctor.name, workingPlace: doctor.workingPlace, phone: doctor.phone }
                     };
                     userSessions.set(phoneNumber, newSession);
                     userPendingDoctorMap.delete(phoneNumber);
@@ -228,12 +228,19 @@ export async function handleIncomingMessage(msg: any) {
                     step: dbSession.lastStep || "WELCOME",
                     data: extraData
                 };
-                
-                pendingRecoveryMap.set(phoneNumber, restoredSession);
 
+                pendingRecoveryMap.set(phoneNumber, restoredSession);
+                
                 await sendInteractiveButtons(
                     phoneNumber,
-                    `👋 হ্যালো! এর আগে আপনি ${dbSession.targetName}-এর সাথে কথা বলছিলেন। আপনি কি উনার সাথেই পুনরায় যুক্ত হতে চান?`,
+                    `👋 আসসালামু আলাইকুম / নমস্কার! 
+
+🌟 **মিস্টার ডক্টর (Mr. Doctor)**-এর পক্ষ থেকে আপনাকে জানাচ্ছি আন্তরিক শুভেচ্ছা ও স্বাগতম। 🩺✨
+
+───────────────────
+💬 এর আগে আপনি **${dbSession.targetName}**-এর সাথে কথা বলছিলেন। 
+
+❓ আপনি কি উনার সাথেই পুনরায় যুক্ত হতে চান?`,
                     [
                         { id: "yes_restore", title: "হ্যাঁ, যুক্ত হতে চাই" },
                         { id: "menu_btn", title: "না, মূল মেনুতে যাই" }
@@ -246,12 +253,12 @@ export async function handleIncomingMessage(msg: any) {
         if (text.startsWith("hospital_")) {
             const newSession: SessionData = { flow: "GET_HOSPITAL_FLOW", step: "WELCOME", data: {} };
             userSessions.set(phoneNumber, newSession);
-            
+
             await handleGetHospitalFlow(
-                phoneNumber, 
-                text, 
-                msg, 
-                newSession, 
+                phoneNumber,
+                text,
+                msg,
+                newSession,
                 (newFlow, newStep, updatedData) => {
                     userSessions.set(phoneNumber, { flow: newFlow, step: newStep, data: updatedData });
                     if (updatedData.hospitalId && updatedData.name) {
@@ -268,10 +275,10 @@ export async function handleIncomingMessage(msg: any) {
         // যদি ইউজার মেনুতে ফিরে যেতে চায়
         if (text.includes("home") || text.includes("মূল মেনু") || text.includes("মেনু") || text.includes("menu") || text.includes("না, মূল মেনুতে যাই")) {
             // মেনুতে গেলে ডাটাবেজ থেকে সেশন ডিলিট করে দেওয়া ভালো যাতে পরবর্তীতে আর আগের ডাক্তারের প্রম্পট না আসে (অথবা রাখতে চাইলে রাখতে পারেন)
-            await prisma.chatSession.delete({ where: { phoneNumber } }).catch(() => {});
+            await prisma.chatSession.delete({ where: { phoneNumber } }).catch(() => { });
 
             userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "ASK_CATEGORY", data: {} });
-            
+
             await sendWhatsAppMessage(
                 phoneNumber,
                 "👋 আসসালামু আলাইকুম/নমস্কার!\n\nমিস্টার ডক্টর (Mr. Doctor)-এর পক্ষ থেকে আপনাকে স্বাগতম।"
@@ -291,7 +298,7 @@ export async function handleIncomingMessage(msg: any) {
         if (session.flow === "MAIN_MENU") {
             if (session.step === "WELCOME" || ["hi", "hello", "start", "reset"].includes(text)) {
                 userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "ASK_CATEGORY", data: {} });
-                
+
                 await sendWhatsAppMessage(
                     phoneNumber,
                     "👋 আসসালামু আলাইকুম/নমস্কার!\n\nমিস্টার ডক্টর (Mr. Doctor)-এর পক্ষ থেকে আপনাকে জানাচ্ছি আন্তরিক শুভেচ্ছা ও স্বাগতম। 🩺✨"
@@ -312,11 +319,11 @@ export async function handleIncomingMessage(msg: any) {
                 if (text.includes("ডাক্তার") || text.includes("doc")) {
                     const newSessionData: SessionData = { flow: "FIND_DOCTOR_FLOW", step: "ASK_DOCTOR_TYPE", data: { category: "DOCTOR" } };
                     userSessions.set(phoneNumber, newSessionData);
-                    
+
                     await findDoctFlow(
-                        phoneNumber, 
-                        rawText, 
-                        msg, 
+                        phoneNumber,
+                        rawText,
+                        msg,
                         newSessionData,
                         (newFlow, newStep, updatedData) => {
                             userSessions.set(phoneNumber, { flow: newFlow, step: newStep, data: updatedData });
@@ -328,12 +335,12 @@ export async function handleIncomingMessage(msg: any) {
                 } else if (text.includes("হসপিটাল") || text.includes("hosp")) {
                     const newSessionData: SessionData = { flow: "GET_HOSPITAL_FLOW", step: "WELCOME", data: { category: "HOSPITAL" } };
                     userSessions.set(phoneNumber, newSessionData);
-                    
+
                     await handleGetHospitalFlow(
-                        phoneNumber, 
-                        text, 
-                        msg, 
-                        newSessionData, 
+                        phoneNumber,
+                        text,
+                        msg,
+                        newSessionData,
                         (newFlow, newStep, updatedData) => {
                             userSessions.set(phoneNumber, { flow: newFlow, step: newStep, data: updatedData });
                             if (updatedData.hospitalId && updatedData.name) {
@@ -353,9 +360,9 @@ export async function handleIncomingMessage(msg: any) {
 
         if (session.flow === "FIND_DOCTOR_FLOW") {
             await findDoctFlow(
-                phoneNumber, 
-                rawText, 
-                msg, 
+                phoneNumber,
+                rawText,
+                msg,
                 session,
                 (newFlow, newStep, updatedData) => {
                     userSessions.set(phoneNumber, { flow: newFlow, step: newStep, data: updatedData });
@@ -382,10 +389,10 @@ export async function handleIncomingMessage(msg: any) {
 
         if (session.flow === "GET_HOSPITAL_FLOW") {
             await handleGetHospitalFlow(
-                phoneNumber, 
-                text, 
-                msg, 
-                session, 
+                phoneNumber,
+                text,
+                msg,
+                session,
                 (newFlow, newStep, updatedData) => {
                     userSessions.set(phoneNumber, { flow: newFlow, step: newStep, data: updatedData });
                     if (updatedData.hospitalId && updatedData.name) {
