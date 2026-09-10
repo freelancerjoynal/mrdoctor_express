@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -13,11 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-
-
-// ============================================
-// ENUM: User Roles
-// ============================================
 enum Role {
   SUPER_ADMIN
   BUSINESS_OWNER
@@ -26,19 +15,30 @@ enum Role {
   VIEWER
 }
 
-// ============================================
-// ENUM: Business Status
-// ============================================
-enum BusinessStatus {
-  PENDING      // Waiting for approval (Default)
-  APPROVED     // Active and running
-  SUSPENDED    // Temporarily blocked
-  REFUSED      // Rejected by admin
+enum DoctorStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+  REFUSED
 }
 
-// ============================================
-// TABLE 1: User (Authentication)
-// ============================================
+enum HospitalStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+  REFUSED
+}
+
+enum DayOfWeek {
+  SATURDAY
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
@@ -48,14 +48,6 @@ model User {
   otpExpiry    DateTime?
   refreshToken String?
   
-  // Default Role: BUSINESS_OWNER
-  role         Role      @default(BUSINESS_OWNER)
-  
-  // Relations
-  businesses   Business[]      // As Owner
-  businessUsers BusinessUser[] // As Member
-  customers    Customer[]
-  
   // Timestamps
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -63,126 +55,102 @@ model User {
   @@map("users")
 }
 
-// ============================================
-// TABLE 2: Business (Tenant)
-// ============================================
-model Business {
-  id                    String      @id @default(uuid())
-  name                  String
-  whatsappPhoneNumberId String      @unique
-  whatsappAccessToken   String?
-  whatsappNumber        String?     // The actual phone number (e.g., "+8801700000000")
-
-  
-  // Default: PENDING
-  status                BusinessStatus @default(PENDING)
-  
-  // Status Management
-  statusReason          String?
-  approvedAt            DateTime?
-  suspendedAt           DateTime?
-  
-  // Owner (Business Owner)
-  userId                String
-  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Relations
-  businessUsers         BusinessUser[]
-  customers             Customer[]
-  
-  // Timestamps
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
-
-  @@index([userId])
-  @@index([whatsappPhoneNumberId])
-  @@index([status])
-  @@map("businesses")
-}
-
-// ============================================
-// TABLE 3: Business User (Members)
-// ============================================
-model BusinessUser {
-  id          String    @id @default(uuid())
-  
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  businessId  String
-  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  
-  // Default: VIEWER (when added by Owner)
-  role        Role      @default(VIEWER)
-  
-  // Timestamps
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@unique([userId, businessId])
-  @@index([userId])
-  @@index([businessId])
-  @@index([role])
-  @@map("business_users")
-}
-
-// ============================================
-// TABLE 4: Customer
-// ============================================
-model Customer {
-  id            String    @id @default(uuid())
-  phone         String
-  name          String?
-  currentStep   String    @default("WELCOME")
-  
-  businessId    String
-  business      Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  
-  userId        String?   // Who added this customer
-  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
-  // Timestamps
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@unique([phone, businessId])
-  @@index([businessId])
-  @@index([userId])
-  @@index([phone])
-  @@map("customers")
-}
-
-// ============================================
-// TABLE 5: Doctor (Independent Model)
-// ============================================
-model Doctor {
-  id           String   @id @default(uuid())
-  name         String
-  username     String   @unique
-  email        String   @unique
-  password     String
-  degree       String   // যেমন: MBBS, FCPS ইত্যাদি
-  speciality   String   // যেমন: Cardiology ইত্যাদি
-  workingPlace String   // কর্মক্ষেত্র বা চেম্বারের বিবরণ
-  phone        String?  // ডাক্তারের যোগাযোগ নম্বর (ঐচ্ছিক)
-  rating       Float    @default(0.0) // রেটিং (০.০ থেকে ৫.০ পর্যন্ত)
-  
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@index([speciality])
-  @@map("doctors")
-}
-
-
 model ChatSession {
   id           String   @id @default(uuid())
-  phoneNumber  String   @unique // ইউজারের হোয়াটসঅ্যাপ নম্বর
-  targetType   String?  // যেমন: "DOCTOR" অথবা "HOSPITAL"
-  targetId     String?  // নির্দিষ্ট ডক্টর বা হসপিটালের আইডি
-  targetName   String?  // ইউজারের সুবিধার জন্য নামটা সেভ রাখতে পারেন (যেমন: "Dr. Moniruzzaman")
-  lastFlow     String?  // যেমন: "GET_DOCTOR_FLOW"
-  lastStep     String?  // যেমন: "ACTIVE_CHAT"
-  updatedAt    DateTime @updatedAt // কবে লাস্ট আপডেট হয়েছে
+  phoneNumber  String   @unique
+  targetType   String?
+  targetId     String?
+  targetName   String?
+  lastFlow     String?
+  lastStep     String?
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}
+
+model Doctor {
+  id                  String         @id @default(uuid())
+  name                String
+  degree              String
+  speciality          String
+  tagline             String?
+  bio                 String?
+  phone               String
+  whatsappNumber      String?
+  whatsappAccessToken String?
+  whatsappId          String?
+  email               String?        @unique
+  username            String         @unique
+  templateName        String         @default("template_a")
+  startedYear         Int?
+  status              DoctorStatus   @default(PENDING)
+  
+  chambers            Chamber[]
+  schedules           DoctorSchedule[]
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+}
+
+model Hospital {
+  id                  String         @id @default(uuid())
+  name                String
+  slug                String         @unique
+  templateName        String         @default("template_a")
+  address             String?
+  phone               String?
+  establishedYear     Int?
+  status              HospitalStatus @default(PENDING)
+
+  chambers            Chamber[]
+  schedules           DoctorSchedule[]
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+}
+
+model Chamber {
+  id           String    @id @default(uuid())
+  doctorId     String?
+  doctor       Doctor?   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  
+  hospitalId   String?
+  hospital     Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  chamberName  String?
+  addressLine  String
+  thana        String
+  district     String
+  division     String
+  
+  latitude     Float?
+  longitude    Float?
+
+  // চেম্বার ভেদে নতুন ও পুরনো রোগীর ভিজিট ফি
+  newPatientFee     Float    @default(0) // নতুন রোগীর ফি (যেমন: ৭০০)
+  oldPatientFee     Float    @default(0) // পুরনো/রিভিজিট রোগীর ফি (যেমন: ৬০০)
+
+  // Relations
+  schedules    DoctorSchedule[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model DoctorSchedule {
+  id         String    @id @default(uuid())
+  doctorId   String
+  doctor     Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  
+  hospitalId String?
+  hospital   Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  chamberId  String?
+  chamber    Chamber?  @relation(fields: [chamberId], references: [id], onDelete: SetNull)
+  
+  dayOfWeek  DayOfWeek
+  startTime  String
+  endTime    String
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }

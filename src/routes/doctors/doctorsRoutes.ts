@@ -6,6 +6,6 @@ import { seedDoctors } from '../../controllers/doctors/DoctorsController.js';
 
 const doctorRouter = express.Router();
 
-doctorRouter.get('/seed', protect, seedDoctors );
+doctorRouter.get('/doctor', protect, seedDoctors );
 
 export default doctorRouter;

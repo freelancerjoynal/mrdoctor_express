@@ -1,7 +1,6 @@
 // src/routes/webhookRoutes.ts
 import express from 'express';
-import {  receiveMessage } from '../../../controllers/webhook/whatsapp/whatsappEventController.js';
-import { verifyWebhook } from   '../../../controllers/webhook/whatsapp/verifyWebhook.js';
+import { receiveMessage, verifyWebhook } from '../../../chatbot/index.js';
 
 const webHookWhatsAppRouter = express.Router();
 

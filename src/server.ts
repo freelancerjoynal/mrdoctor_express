@@ -41,19 +41,17 @@ import doctorRouter from './routes/doctors/doctorsRoutes.js';
 app.use('/api/doctors', doctorRouter);
 
 
+// --- Data seeding
+import seederRouter from './routes/seeders/seederRouter.js';
+app.use('/api/seeders', seederRouter);
 
 
 
 
 
 
-
-
-
-
-
-// --- Doctor Deep Link Redirection Route ---
-import doctorRedirectRouter from './lib/doctorRedirectManager.js';
+// --- Doctor Deep Link Redirection Route (chatbot setup) ---
+import { doctorRedirectRouter } from './chatbot/index.js';
 app.use('/d', doctorRedirectRouter);
 
 
