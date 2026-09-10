@@ -1,5 +1,5 @@
 import express from 'express';
-import { createBusiness } from '../../controllers/business/businessController.js';
+import { createBusiness } from '../../controllers.../business/businessController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
 
