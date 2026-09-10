@@ -174,3 +174,15 @@ model Doctor {
   @@index([speciality])
   @@map("doctors")
 }
+
+
+model ChatSession {
+  id           String   @id @default(uuid())
+  phoneNumber  String   @unique // ইউজারের হোয়াটসঅ্যাপ নম্বর
+  targetType   String?  // যেমন: "DOCTOR" অথবা "HOSPITAL"
+  targetId     String?  // নির্দিষ্ট ডক্টর বা হসপিটালের আইডি
+  targetName   String?  // ইউজারের সুবিধার জন্য নামটা সেভ রাখতে পারেন (যেমন: "Dr. Moniruzzaman")
+  lastFlow     String?  // যেমন: "GET_DOCTOR_FLOW"
+  lastStep     String?  // যেমন: "ACTIVE_CHAT"
+  updatedAt    DateTime @updatedAt // কবে লাস্ট আপডেট হয়েছে
+}
