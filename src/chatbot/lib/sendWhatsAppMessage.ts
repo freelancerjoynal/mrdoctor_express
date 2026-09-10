@@ -6,8 +6,10 @@ export interface ButtonItem {
     title: string;
 }
 
-/** Plain text message */
-export async function sendWhatsAppMessage(to: string, message: string) {
+/** Plain text message (shows typing first, like normal chat). */
+export async function sendWhatsAppMessage(to: string, message: string, messageId?: string) {
+    // Fire-and-forget: typing shows while the real message is on its way.
+    void sendTypingIndicator(to, messageId);
     try {
         await axios.post(
             `https://graph.facebook.com/v20.0/${env.PHONE_NUMBER_ID}/messages`,
@@ -30,16 +32,24 @@ export async function sendWhatsAppMessage(to: string, message: string) {
     }
 }
 
-/** Typing indicator */
-export async function sendTypingIndicator(to: string) {
+/**
+ * Typing indicator (correct Cloud API form).
+ * Marks the inbound message read AND shows "typing…" — dismissed when we
+ * respond or after ~25s. Needs the inbound wamid; skipped without one.
+ * Uses a newer Graph version because v20.0 has no typing support.
+ */
+const TYPING_API_VERSION = "v22.0";
+
+export async function sendTypingIndicator(_to: string, messageId?: string) {
+    if (!messageId) return;
     try {
         await axios.post(
-            `https://graph.facebook.com/v20.0/${env.PHONE_NUMBER_ID}/messages`,
+            `https://graph.facebook.com/${TYPING_API_VERSION}/${env.PHONE_NUMBER_ID}/messages`,
             {
-                recipient_type: "individual",
                 messaging_product: "whatsapp",
-                to,
-                type: "typing_indicator",
+                status: "read",
+                message_id: messageId,
+                typing_indicator: { type: "text" },
             },
             {
                 headers: {
@@ -58,7 +68,9 @@ export async function sendTypingIndicator(to: string) {
  * Interactive reply-buttons (WhatsApp allows max 3 per message).
  * Longer lists are chunked into multiple messages by sendButtonsChunked.
  */
-export async function sendInteractiveButtons(to: string, bodyText: string, buttons: ButtonItem[]) {
+export async function sendInteractiveButtons(to: string, bodyText: string, buttons: ButtonItem[], messageId?: string) {
+    // Fire-and-forget: typing shows while the real message is on its way.
+    void sendTypingIndicator(to, messageId);
     try {
         const formattedButtons = buttons.slice(0, 3).map((btn) => ({
             type: "reply",

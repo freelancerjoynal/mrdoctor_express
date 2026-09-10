@@ -3,6 +3,7 @@ import {
     sendWhatsAppMessage,
     sendInteractiveButtons,
     sendButtonsChunked,
+    sendTypingIndicator,
 } from "../../lib/sendWhatsAppMessage.js";
 import { trackFlowStep } from "../../lib/chatSession.js";
 import {
@@ -18,7 +19,7 @@ import {
     type ResetFn,
 } from "../../lib/session.js";
 import { findNearestAreas, findNearestByName } from "../../services/nearbyAreas.js";
-import { withNav } from "../../lib/navButtons.js";
+import { BACK_HINT, withNav } from "../../lib/navButtons.js";
 import {
     findHospitalsByArea,
     getHospitalById,
@@ -28,8 +29,6 @@ import {
 import { buildDoctorCard, type DoctorWithChambers } from "../../services/doctorSearch.js";
 import { handleGetDoctorFlow } from "../getDoctor/getDoctorFlow.js";
 import { HOSPITAL_TEXTS, buildTrackingSummary } from "./hospitalQA.js";
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function track(phoneNumber: string, step: string, data: any) {
     await trackFlowStep(
@@ -97,7 +96,7 @@ async function connectDoctor(
     if (!clean) return false;
     const doctor = await prisma.doctor.findUnique({ where: { username: clean } });
     if (!doctor) {
-        await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.FALLBACK, withNav([]));
+        await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.FALLBACK + BACK_HINT);
         return false;
     }
     await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.CONNECTED(doctor.name));
@@ -129,11 +128,11 @@ async function showDepartments(
     await track(phoneNumber, "SELECT_DEPT", next);
 
     if (!departments.length) {
-        await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.NO_DEPT, withNav([]));
+        await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.NO_DEPT + BACK_HINT);
         return;
     }
 
-    const buttons = withNav(departments.map((d, i) => ({ id: deptButtonId(i), title: shortTitle(d) })));
+    const buttons = departments.map((d, i) => ({ id: deptButtonId(i), title: shortTitle(d) }));
     await sendButtonsChunked(
         phoneNumber,
         HOSPITAL_TEXTS.ASK_DEPT(hospital.name) +
@@ -191,10 +190,8 @@ async function showDeptDoctors(
         await sendInteractiveButtons(phoneNumber, buildDoctorCard(i, c), [
             { id: connectButtonId(c.username), title: "Connect করুন" },
         ]);
-        // One doctor every 5 seconds, as requested.
-        if (i < cards.slice(0, 5).length - 1) await sleep(5000);
     }
-    await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.SELECT_DOCTOR_PROMPT, withNav([]));
+    await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.SELECT_DOCTOR_PROMPT + BACK_HINT);
 }
 
 export async function findHospitalFlow(
@@ -222,7 +219,7 @@ export async function findHospitalFlow(
             const next = { ...data, category: "HOSPITAL" };
             updateSession("FIND_HOSPITAL_FLOW", "ASK_AREA", next);
             await track(phoneNumber, "ASK_AREA", next);
-            await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.ASK_AREA, withNav([]));
+            await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.ASK_AREA + BACK_HINT);
             return;
         }
 
@@ -244,7 +241,7 @@ export async function findHospitalFlow(
                 };
                 updateSession("FIND_HOSPITAL_FLOW", "ASK_AREA", next);
                 await track(phoneNumber, "ASK_AREA", next);
-                const buttons = withNav(nearest.map((n, i) => ({ id: `area_${i}`, title: shortTitle(n) })));
+                const buttons = nearest.map((n, i) => ({ id: `area_${i}`, title: shortTitle(n) }));
                 await sendButtonsChunked(phoneNumber, HOSPITAL_TEXTS.NEARBY_HEADER(nearest[0]!), buttons);
                 return;
             }
@@ -253,11 +250,12 @@ export async function findHospitalFlow(
         let locationText = getLocationText(rawText, msg);
         if (areaIdx >= 0 && areaSug[areaIdx]) locationText = areaSug[areaIdx]!;
         if (!msg?.location && !isValidLocation(locationText)) {
-            await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.INVALID_LOCATION, withNav([]));
+            await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.INVALID_LOCATION + BACK_HINT);
             return;
         }
 
         await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.PROCESSING);
+        void sendTypingIndicator(phoneNumber, msg?.messageId);
 
         const areaForSearch = locationText;
 
@@ -274,14 +272,14 @@ export async function findHospitalFlow(
             updateSession("FIND_HOSPITAL_FLOW", "ASK_AREA", next);
             await track(phoneNumber, "ASK_AREA", next);
             if (suggestions.length) {
-                const buttons = withNav(suggestions.map((n, i) => ({ id: `area_${i}`, title: shortTitle(n) })));
+                const buttons = suggestions.map((n, i) => ({ id: `area_${i}`, title: shortTitle(n) }));
                 await sendButtonsChunked(
                     phoneNumber,
                     HOSPITAL_TEXTS.NO_HOSPITAL(locationText) + "\n\n📍 কাছের এলাকা থেকে বেছে নিন 👇",
                     buttons
                 );
             } else {
-                await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.NO_HOSPITAL(locationText), withNav([]));
+                await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.NO_HOSPITAL(locationText) + BACK_HINT);
             }
             return;
         }
@@ -302,7 +300,6 @@ export async function findHospitalFlow(
             await sendInteractiveButtons(phoneNumber, buildHospitalCard(i, h), [
                 { id: hospButtonId(h), title: "Select করুন" },
             ]);
-            if (i < hospitals.length - 1) await sleep(500);
         }
         return;
     }
@@ -342,7 +339,7 @@ export async function findHospitalFlow(
                 }
             }
         }
-        await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.FALLBACK, withNav([]));
+        await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.FALLBACK + BACK_HINT);
         return;
     }
 
@@ -351,7 +348,7 @@ export async function findHospitalFlow(
         const departments: string[] = Array.isArray(data.departments) ? data.departments : [];
         const hospital = data.hospitalId ? await getHospitalById(data.hospitalId) : null;
         if (!hospital) {
-            await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.FALLBACK, withNav([]));
+            await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.FALLBACK + BACK_HINT);
             return;
         }
 
@@ -374,7 +371,7 @@ export async function findHospitalFlow(
             await showDeptDoctors(phoneNumber, hospital, hit, data, updateSession);
             return;
         }
-        await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.FALLBACK, withNav([]));
+        await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.FALLBACK + BACK_HINT);
         return;
     }
 
@@ -386,7 +383,7 @@ export async function findHospitalFlow(
             await track(phoneNumber, "CONFIRMED", done);
             const ok = await connectDoctor(phoneNumber, msg, username, updateSession);
             if (ok) return;
-            await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.SELECT_DOCTOR_PROMPT, withNav([]));
+            await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.SELECT_DOCTOR_PROMPT + BACK_HINT);
             return;
         }
         const m = rawText.match(/(dr-[a-zA-Z0-9-]+)/i);
@@ -405,7 +402,7 @@ export async function findHospitalFlow(
             const ok = await connectDoctor(phoneNumber, msg, hit, updateSession);
             if (ok) return;
         }
-        await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.SELECT_DOCTOR_PROMPT, withNav([]));
+        await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.SELECT_DOCTOR_PROMPT + BACK_HINT);
         return;
     }
 
@@ -417,5 +414,5 @@ export async function findHospitalFlow(
     const next = { ...data, category: "HOSPITAL" };
     updateSession("FIND_HOSPITAL_FLOW", "ASK_AREA", next);
     await track(phoneNumber, "ASK_AREA", next);
-    await sendInteractiveButtons(phoneNumber, HOSPITAL_TEXTS.ASK_AREA, withNav([]));
+    await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.ASK_AREA + BACK_HINT);
 }

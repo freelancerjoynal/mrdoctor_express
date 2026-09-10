@@ -1,8 +1,9 @@
 import {
     sendWhatsAppMessage,
     sendInteractiveButtons,
+    sendTypingIndicator,
 } from "../lib/sendWhatsAppMessage.js";
-import { MENU_BUTTON, isBackClick, resendStepPrompt } from "../lib/navButtons.js";
+import { BACK_HINT, isBackClick, resendStepPrompt } from "../lib/navButtons.js";
 import { isAreaClick } from "../lib/session.js";
 import { findDoctorFlow } from "../flows/findDoctor/findDoctorFlow.js";
 import { handleGetDoctorFlow } from "../flows/getDoctor/getDoctorFlow.js";
@@ -94,6 +95,9 @@ export async function handleIncomingMessage(msg: any) {
     const phoneNumber = msg.number;
 
     if (!text && !buttonIdNorm && !msg.location) return;
+
+    // Show typing while we process (dismissed when we respond or after ~25s).
+    void sendTypingIndicator(phoneNumber, msg.messageId);
 
     try {
         let session: ChatbotSession = userSessions.get(phoneNumber) || {
@@ -466,7 +470,7 @@ export async function handleIncomingMessage(msg: any) {
             return;
         }
 
-        await sendInteractiveButtons(phoneNumber, "দুঃখিত, বিষয়টি বুঝতে পারিনি। নিচে থেকে বেছে নিন:", [MENU_BUTTON]);
+        await sendWhatsAppMessage(phoneNumber, "দুঃখিত, বিষয়টি বুঝতে পারিনি। আবার লিখুন।" + BACK_HINT);
     } catch (error: any) {
         console.error("❌ WhatsApp Service Error:", error);
         await sendWhatsAppMessage(phoneNumber, "❌ কিছু সমস্যা হয়েছে, আবার চেষ্টা করুন।");
