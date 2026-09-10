@@ -1,28 +1,129 @@
-// QA texts for FIND-DOCTOR flow (new schema).
+// ============================================================================
+// findDoctorQA.ts — texts for the FIND-DOCTOR flow
 // Flow: problem -> AI suggests department + why -> ask area ->
-// DB Chamber search by area -> random 5 doctors -> Connect -> direct doctor bot.
+// DB Chamber search by area -> random 5 doctors -> Connect -> doctor bot.
+// ============================================================================
+//
+// THIS FILE HAS 2 SECTIONS:
+//   SECTION 1 — FLOW_PROMPTS: fixed step-by-step messages the flow sends
+//               (ASK_PROBLEM, ASK_AREA, ...). One prompt = one field.
+//   SECTION 2 — FIND_DOCTOR_FAQ: free-text questions the user might type
+//               mid-flow ("ফি কত?", "সিরিয়াল কিভাবে?"). One question = one block.
+//               Copy-paste a block to add Q&A #1001.
+//
+// Q&A MATCHING = first keyword hit wins (same as a switch statement, top to
+// bottom). Put specific entries ABOVE general ones.
+//
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// SECTION 1: flow prompts (used by findDoctorFlow.ts — do not rename keys)
+// ----------------------------------------------------------------------------
 
 export const FIND_DOCTOR_TEXTS = {
+    // Q: flow asks — what is the patient's problem?
     ASK_PROBLEM: "রোগীর কী সমস্যা বা কী লক্ষণ দেখা যাচ্ছে বিস্তারিত লিখুন:",
+
+    // Q: flow asks — which area? (after AI suggests a department)
     ASK_AREA: (department: string, why: string) =>
-        `🩺 *সম্ভাব্য বিভাগ: ${department}*\n${why}\n\n───────────────────\n📍 *আপনি কোন এলাকায় ডাক্তার খুঁজছেন?*\n\nএলাকার নাম লিখুন (যেমন: নীলফামারী সদর, সৈয়দপুর, ডোমার) অথবা লোকেশন শেয়ার করুন:`,
+        `🩺 *সম্ভাব্য বিভাগ: ${department}*\n${why}\n\n───────────────────\n📍 *আপনি কোন এলাকায় ডাক্তার খুঁজছেন?*\n\n👇 সবচেয়ে ভালো উপায় — মোবাইলের লোকেশন পাঠান:\n1️⃣ চ্যাটে 📎 (Attach / ➕) বাটনে চাপ দিন\n2️⃣ Location বেছে নিন\n3️⃣ Send your current location পাঠান\n→ তাহলে আপনার কাছের এলাকা (যেমন: জলঢাকা, ডোমার, নীলফামারী) সাজেস্ট করবো।\n\nঅথবা এলাকার নাম লিখুন (যেমন: নীলফামারী সদর, সৈয়দপুর, ডোমার)।`,
+
+    // Q: flow re-asks the area (user sent something unusable).
     ASK_AREA_RETRY:
-        "📍 আপনি কোন এলাকায় ডাক্তার খুঁজছেন?\n\nএলাকার নাম লিখুন (যেমন: নীলফামারী সদর, সৈয়দপুর, ডোমার) অথবা লোকেশন শেয়ার করুন:",
+        "📍 আপনি কোন এলাকায় ডাক্তার খুঁজছেন?\n\nমোবাইলের 📎 → Location থেকে লোকেশন পাঠান, অথবা এলাকার নাম লিখুন (যেমন: নীলফামারী সদর, সৈয়দপুর, ডোমার)।",
+
+    // A: shown while searching the DB.
     PROCESSING: "⏳ আপনার তথ্য প্রসেস করা হচ্ছে, সেরা ডাক্তার খোঁজা হচ্ছে… একটু অপেক্ষা করুন।",
+
+    // A: shown while AI analyzes the problem.
     ANALYZING: "⏳ আপনার সমস্যা বিশ্লেষণ করা হচ্ছে… একটু অপেক্ষা করুন।",
+
+    // A: shown when the problem text is too short.
     INVALID_PROBLEM:
         "দয়া করে রোগীর সমস্যাটি একটু বিস্তারিত লিখুন (কমপক্ষে ৩ অক্ষর)। যেমন: ৩ দিন ধরে জ্বর ও কাশি।",
+
+    // A: shown when the area text is not usable.
     INVALID_LOCATION:
         "দয়া করে এলাকার নামটি লিখুন (যেমন: সৈয়দপুর) অথবা লোকেশন শেয়ার করুন।",
+
+    // A: header above the GPS-based nearby-area suggestion buttons.
+    NEARBY_HEADER: (detected: string) =>
+        `📍 আপনার অবস্থান পেয়েছি! সবচেয়ে কাছের এলাকা: *${detected}*\n\nনিচে থেকে আপনার এলাকা বেছে নিন 👇\n(অথবা এলাকার নাম লিখে পাঠান)`,
+
+    // A: shown when no doctor is found for the area.
     NO_AREA_DOCTOR: (location: string) =>
-        `❌ দুঃখিত, "${location}" এলাকায় কোনো ডাক্তার পাওয়া যায়নি।\n\nঅন্য এলাকার নাম লিখুন অথবা 'menu' লিখে মূল মেনুতে যান।`,
+        `❌ দুঃখিত, "${location}" এলাকায় কোনো ডাক্তার পাওয়া যায়নি।\n\nঅন্য এলাকার নাম লিখুন অথবা নিচের 🏠 মূল মেনু বাটনে চাপ দিন।`,
+
+    // A: header above the 5 doctor cards.
     AREA_RESULT_HEADER: (location: string, department: string) =>
         `✅ "${location}" এলাকায় *${department}* বিভাগের জন্য বাছাইকৃত ৫ জন ডাক্তার:\n`,
+
+    // Q: flow asks — press Connect on a doctor.
     SELECT_PROMPT:
-        "───────────────────\n👆 উপরের ৫ জন থেকে যেকোনো ডাক্তারের *Connect* বাটনে চাপ দিন — সরাসরি সেই ডাক্তারের সাথে যুক্ত হয়ে যাবেন।\n\nঅন্য কিছু লিখলে আবার খুঁজতে হবে, অথবা 'menu' লিখে মূল মেনুতে যান।",
+        "───────────────────\n👆 উপরের ৫ জন থেকে যেকোনো ডাক্তারের *Connect* বাটনে চাপ দিন — সরাসরি সেই ডাক্তারের সাথে যুক্ত হয়ে যাবেন।\n\nঅন্য কিছু লিখলে আবার খুঁজতে হবে, অথবা নিচের 🏠 মূল মেনু বাটনে চাপ দিন।",
+
+    // A: shown after Connect is pressed.
     CONNECTED: (doctorName: string) => `✅ *${doctorName}*-এর সাথে যুক্ত করা হচ্ছে…`,
-    FALLBACK: "দুঃখিত, বুঝতে পারিনি। দয়া করে Connect বাটনে চাপ দিন অথবা 'menu' লিখুন।",
+
+    // A: shown when input matches nothing.
+    FALLBACK: "দুঃখিত, বুঝতে পারিনি। দয়া করে Connect বাটনে চাপ দিন।",
 };
+
+// ----------------------------------------------------------------------------
+// SECTION 2: free-text FAQ — ONE QUESTION = ONE BLOCK.
+// To add a new Q&A: copy any block, paste before the marker line, edit it.
+// Use in the flow's fallback branch like:
+//   const faq = getFindDoctorFaqAnswer(rawText);
+//   if (faq) { await sendWhatsAppMessage(phoneNumber, faq); return; }
+// ----------------------------------------------------------------------------
+
+export interface FindDoctorFaqItem {
+    /** Short label, e.g. "fee". Only for you to read — never shown to users. */
+    id: string;
+    /** If the user text contains ANY of these (case-insensitive), this answer wins. */
+    keywords: string[];
+    /** The answer. Keep it generic (no single-doctor data available here). */
+    answer: string;
+}
+
+export const FIND_DOCTOR_FAQ: FindDoctorFaqItem[] = [
+    // Q: What is the visiting fee?
+    {
+        id: "fee",
+        keywords: ["fee", "ভিজিট", "ফি", "টাকা", "খরচ"],
+        answer: "ভিজিট ফি ডাক্তারভেদে আলাদা। এলাকার নাম লিখুন — প্রতিটি ডাক্তারের কার্ডে ফি দেখানো হবে।",
+    },
+
+    // Q: How to take a serial / appointment?
+    {
+        id: "serial",
+        keywords: ["serial", "appointment", "সিরিয়াল", "অ্যাপয়েন্টমেন্ট"],
+        answer: "সিরিয়াল নিতে: পছন্দের ডাক্তারের Connect বাটনে চাপ দিন, তারপর ডাক্তারকে সিরিয়ালের কথা লিখুন — চেম্বারের নম্বর দেওয়া হবে।",
+    },
+
+    // Q: How does the search work?
+    {
+        id: "how-it-works",
+        keywords: ["কিভাবে কাজ", "how does", "কীভাবে খুঁজব", "কিভাবে খুঁজব"],
+        answer: "প্রথমে আপনার সমস্যাটি লিখুন, তারপর এলাকার নাম লিখুন — আপনার এলাকার ৫ জন ডাক্তার দেখানো হবে। Connect চাপলেই ডাক্তারের সাথে যুক্ত হবেন।",
+    },
+
+    // ---- ADD NEW Q&A ABOVE THIS LINE (copy any block above) ----
+];
+
+/** Free-text lookup. Returns the answer or null. First keyword hit wins. */
+export function getFindDoctorFaqAnswer(normText: string): string | null {
+    const text = (normText || "").toLowerCase().trim();
+    if (!text) return null;
+
+    // This loop IS the switch statement: each FIND_DOCTOR_FAQ entry = one `case`.
+    for (const faq of FIND_DOCTOR_FAQ) {
+        if (faq.keywords.some((k) => text.includes(k.toLowerCase()))) {
+            return faq.answer;
+        }
+    }
+    return null;
+}
 
 export const CONNECT_BUTTON_TITLE = "Connect করুন";
 

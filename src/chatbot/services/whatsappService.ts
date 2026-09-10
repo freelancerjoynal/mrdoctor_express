@@ -2,6 +2,8 @@ import {
     sendWhatsAppMessage,
     sendInteractiveButtons,
 } from "../lib/sendWhatsAppMessage.js";
+import { MENU_BUTTON, isBackClick, resendStepPrompt } from "../lib/navButtons.js";
+import { isAreaClick } from "../lib/session.js";
 import { findDoctorFlow } from "../flows/findDoctor/findDoctorFlow.js";
 import { handleGetDoctorFlow } from "../flows/getDoctor/getDoctorFlow.js";
 import { handleGetHospitalFlow } from "../flows/getHospital/getHospitalFlow.js";
@@ -31,7 +33,45 @@ async function saveFindTracking(phoneNumber: string, flow: string, step: string,
 }
 
 function setSession(phoneNumber: string, flow: string, step: string, data: any) {
-    userSessions.set(phoneNumber, { flow, step, data });
+    const prev = userSessions.get(phoneNumber);
+    const d = data || {};
+    if (flow === "MAIN_MENU") {
+        // Main menu is a fresh start — Back from here repeats the menu.
+        d._hist = [];
+        userSessions.set(phoneNumber, { flow, step, data: d });
+        return;
+    }
+    if (prev && (prev.flow !== flow || prev.step !== step)) {
+        // New step -> remember where we came from so Back can return + resend.
+        const hist = Array.isArray(d._hist)
+            ? [...d._hist]
+            : Array.isArray(prev.data?._hist)
+              ? [...prev.data._hist]
+              : [];
+        const last = hist[hist.length - 1];
+        if (!last || last.flow !== prev.flow || last.step !== prev.step) {
+            hist.push({ flow: prev.flow, step: prev.step });
+        }
+        d._hist = hist.slice(-10);
+    } else if (prev && !d._hist && Array.isArray(prev.data?._hist)) {
+        d._hist = prev.data._hist;
+    }
+    userSessions.set(phoneNumber, { flow, step, data: d });
+}
+
+/** Back button: pop history, restore the previous step, send its message again. */
+async function handleBackButton(phoneNumber: string, session: ChatbotSession) {
+    const hist = Array.isArray(session.data?._hist) ? session.data._hist : [];
+    const prev = hist[hist.length - 1];
+    if (!prev) {
+        // Nowhere to go back to -> repeat the current step's message.
+        await resendStepPrompt(phoneNumber, session);
+        return;
+    }
+    const nextData = { ...(session.data || {}), _hist: hist.slice(0, -1) };
+    // Direct set: going back must NOT push the current step onto history.
+    userSessions.set(phoneNumber, { flow: prev.flow, step: prev.step, data: nextData });
+    await resendStepPrompt(phoneNumber, { flow: prev.flow, step: prev.step, data: nextData });
 }
 
 export async function handleIncomingMessage(msg: any) {
@@ -72,7 +112,7 @@ export async function handleIncomingMessage(msg: any) {
             const savedSession = pendingRecoveryMap.get(phoneNumber);
 
             if (savedSession) {
-                userSessions.set(phoneNumber, savedSession);
+                setSession(phoneNumber, savedSession.flow, savedSession.step, savedSession.data);
                 pendingRecoveryMap.delete(phoneNumber);
 
                 const cb = (f: string, s: string, d: any) => {
@@ -112,7 +152,8 @@ export async function handleIncomingMessage(msg: any) {
                             step: "ACTIVE_CHAT",
                             data: { doctorId: doc.id, username: doc.username, name: doc.name, phone: doc.phone },
                         };
-                        userSessions.set(phoneNumber, restored);
+                        setSession(phoneNumber, restored.flow, restored.step, restored.data);
+                        await saveConnectSession(phoneNumber, "DOCTOR", doc.id, doc.name, "GET_DOCTOR_FLOW", "ACTIVE_CHAT");
                         await handleGetDoctorFlow(phoneNumber, `dr-${doc.username}`, msg, restored, (f, s, d) => {
                             setSession(phoneNumber, f, s, d);
                         });
@@ -127,7 +168,7 @@ export async function handleIncomingMessage(msg: any) {
                     step: dbSession.lastStep || (dbSession.lastFlow === "FIND_HOSPITAL_FLOW" ? "ASK_AREA" : "ASK_PROBLEM"),
                     data: {},
                 };
-                userSessions.set(phoneNumber, restored);
+                setSession(phoneNumber, restored.flow, restored.step, restored.data);
                 pendingRecoveryMap.delete(phoneNumber);
 
                 const cb = (f: string, s: string, d: any) => {
@@ -162,7 +203,7 @@ export async function handleIncomingMessage(msg: any) {
                         step: "ACTIVE_CHAT",
                         data: { doctorId: doctor.id, username: doctor.username, name: doctor.name, phone: doctor.phone },
                     };
-                    userSessions.set(phoneNumber, newSession);
+                    setSession(phoneNumber, newSession.flow, newSession.step, newSession.data);
                     await saveConnectSession(phoneNumber, "DOCTOR", doctor.id, doctor.name, "GET_DOCTOR_FLOW", "ACTIVE_CHAT");
                     await handleGetDoctorFlow(phoneNumber, doctor.username, msg, newSession, (f, s, d) => {
                         setSession(phoneNumber, f, s, d);
@@ -184,7 +225,7 @@ export async function handleIncomingMessage(msg: any) {
         ) {
             if (session.flow !== "FIND_HOSPITAL_FLOW") {
                 session = { flow: "FIND_HOSPITAL_FLOW", step: "SELECT_HOSPITAL", data: { ...(session.data || {}), category: "HOSPITAL" } };
-                userSessions.set(phoneNumber, session);
+                setSession(phoneNumber, session.flow, session.step, session.data);
             }
             await findHospitalFlow(phoneNumber, rawText, msg, session,
                 (f, s, d) => { setSession(phoneNumber, f, s, d); saveFindTracking(phoneNumber, f, s, d); },
@@ -196,7 +237,7 @@ export async function handleIncomingMessage(msg: any) {
         if (buttonIdNorm.startsWith("hdept_") || text.startsWith("hdept_")) {
             if (session.flow !== "FIND_HOSPITAL_FLOW") {
                 session = { flow: "FIND_HOSPITAL_FLOW", step: "SELECT_DEPT", data: session.data || {} };
-                userSessions.set(phoneNumber, session);
+                setSession(phoneNumber, session.flow, session.step, session.data);
             }
             await findHospitalFlow(phoneNumber, rawText, msg, session,
                 (f, s, d) => { setSession(phoneNumber, f, s, d); saveFindTracking(phoneNumber, f, s, d); },
@@ -217,7 +258,7 @@ export async function handleIncomingMessage(msg: any) {
                         step: "ACTIVE_CHAT",
                         data: { doctorId: doctor.id, username: doctor.username, name: doctor.name, phone: doctor.phone },
                     };
-                    userSessions.set(phoneNumber, newSession);
+                    setSession(phoneNumber, newSession.flow, newSession.step, newSession.data);
                     await saveConnectSession(phoneNumber, "DOCTOR", doctor.id, doctor.name, "GET_DOCTOR_FLOW", "ACTIVE_CHAT");
                     await handleGetDoctorFlow(phoneNumber, usernameParam, msg, newSession, (f, s, d) => {
                         setSession(phoneNumber, f, s, d);
@@ -242,7 +283,7 @@ export async function handleIncomingMessage(msg: any) {
                         step: "ACTIVE_CHAT",
                         data: { doctorId: doctor.id, username: doctor.username, name: doctor.name, phone: doctor.phone },
                     };
-                    userSessions.set(phoneNumber, newSession);
+                    setSession(phoneNumber, newSession.flow, newSession.step, newSession.data);
                     userPendingDoctorMap.delete(phoneNumber);
                     await saveConnectSession(phoneNumber, "DOCTOR", doctor.id, doctor.name, "GET_DOCTOR_FLOW", "ACTIVE_CHAT");
                     await handleGetDoctorFlow(phoneNumber, doctor.username, msg, newSession, (f, s, d) => {
@@ -288,7 +329,7 @@ export async function handleIncomingMessage(msg: any) {
 
         if (text.startsWith("hospital_") || buttonIdNorm.startsWith("hospital_")) {
             const newSession: ChatbotSession = { flow: "FIND_HOSPITAL_FLOW", step: "ASK_AREA", data: { category: "HOSPITAL" } };
-            userSessions.set(phoneNumber, newSession);
+            setSession(phoneNumber, newSession.flow, newSession.step, newSession.data);
             await saveFindTracking(phoneNumber, "FIND_HOSPITAL_FLOW", "ASK_AREA", newSession.data);
             await findHospitalFlow(phoneNumber, "hospital", msg, newSession,
                 (f, s, d) => { setSession(phoneNumber, f, s, d); saveFindTracking(phoneNumber, f, s, d); },
@@ -299,7 +340,7 @@ export async function handleIncomingMessage(msg: any) {
         // ---------- Main menu ----------
         if (buttonIdNorm === "home_btn" || buttonIdNorm === "menu_btn" || text.includes("home") || text.includes("মূল মেনু") || text.includes("মেনু") || text.includes("menu") || text.includes("না, মূল মেনুতে যাই")) {
             await clearChatSession(phoneNumber);
-            userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "ASK_CATEGORY", data: {} });
+            setSession(phoneNumber, "MAIN_MENU", "ASK_CATEGORY", {});
 
             await sendWhatsAppMessage(
                 phoneNumber,
@@ -317,10 +358,37 @@ export async function handleIncomingMessage(msg: any) {
             return;
         }
 
+        // ---------- Global Back button (every step) ----------
+        // Pops step history and sends the previous step's message again.
+        if (isBackClick(rawText, buttonId)) {
+            await handleBackButton(phoneNumber, session);
+            return;
+        }
+
+        // ---------- Global nearby-area buttons (area_0, area_1, ...) ----------
+        // Tapped from GPS suggestions or no-result recovery — route into the
+        // active find flow's ASK_AREA step; the flow resolves the name.
+        if (isAreaClick(rawText, buttonId)) {
+            if (session.flow === "FIND_HOSPITAL_FLOW") {
+                const s = { ...session, step: "ASK_AREA" };
+                await findHospitalFlow(phoneNumber, rawText, msg, s,
+                    (f, st, d) => { setSession(phoneNumber, f, st, d); saveFindTracking(phoneNumber, f, st, d); },
+                    () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
+                return;
+            }
+            if (session.flow === "FIND_DOCTOR_FLOW" || session.flow === "AI_DOCTOR_FLOW") {
+                const s = { ...session, step: "ASK_AREA" };
+                await findDoctorFlow(phoneNumber, rawText, msg, s,
+                    (f, st, d) => { setSession(phoneNumber, f, st, d); saveFindTracking(phoneNumber, f, st, d); },
+                    () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
+                return;
+            }
+        }
+
         // ---------- Running sessions ----------
         if (session.flow === "MAIN_MENU") {
             if (session.step === "WELCOME") {
-                userSessions.set(phoneNumber, { flow: "MAIN_MENU", step: "ASK_CATEGORY", data: {} });
+                setSession(phoneNumber, "MAIN_MENU", "ASK_CATEGORY", {});
 
                 await sendWhatsAppMessage(
                     phoneNumber,
@@ -341,7 +409,7 @@ export async function handleIncomingMessage(msg: any) {
             if (session.step === "ASK_CATEGORY") {
                 if (text.includes("ডাক্তার") || text.includes("doc") || buttonIdNorm === "doc_btn") {
                     const next: ChatbotSession = { flow: "FIND_DOCTOR_FLOW", step: "ASK_PROBLEM", data: { category: "DOCTOR" } };
-                    userSessions.set(phoneNumber, next);
+                    setSession(phoneNumber, next.flow, next.step, next.data);
                     await saveFindTracking(phoneNumber, "FIND_DOCTOR_FLOW", "ASK_PROBLEM", next.data);
                     await findDoctorFlow(phoneNumber, rawText, msg, next,
                         (f, s, d) => { setSession(phoneNumber, f, s, d); saveFindTracking(phoneNumber, f, s, d); },
@@ -349,7 +417,7 @@ export async function handleIncomingMessage(msg: any) {
                     return;
                 } else if (text.includes("হসপিটাল") || text.includes("hosp") || buttonIdNorm === "hosp_btn") {
                     const next: ChatbotSession = { flow: "FIND_HOSPITAL_FLOW", step: "ASK_AREA", data: { category: "HOSPITAL" } };
-                    userSessions.set(phoneNumber, next);
+                    setSession(phoneNumber, next.flow, next.step, next.data);
                     await saveFindTracking(phoneNumber, "FIND_HOSPITAL_FLOW", "ASK_AREA", next.data);
                     await findHospitalFlow(phoneNumber, "hospital", msg, next,
                         (f, s, d) => { setSession(phoneNumber, f, s, d); saveFindTracking(phoneNumber, f, s, d); },
@@ -398,7 +466,7 @@ export async function handleIncomingMessage(msg: any) {
             return;
         }
 
-        await sendWhatsAppMessage(phoneNumber, "দুঃখিত, বিষয়টি বুঝতে পারিনি। মূল মেনুতে যেতে 'menu' লিখুন।");
+        await sendInteractiveButtons(phoneNumber, "দুঃখিত, বিষয়টি বুঝতে পারিনি। নিচে থেকে বেছে নিন:", [MENU_BUTTON]);
     } catch (error: any) {
         console.error("❌ WhatsApp Service Error:", error);
         await sendWhatsAppMessage(phoneNumber, "❌ কিছু সমস্যা হয়েছে, আবার চেষ্টা করুন।");

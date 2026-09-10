@@ -2,18 +2,24 @@ import { prisma } from "../../../lib/prisma.js";
 import {
     sendWhatsAppMessage,
     sendInteractiveButtons,
+    sendButtonsChunked,
 } from "../../lib/sendWhatsAppMessage.js";
 import { trackFlowStep } from "../../lib/chatSession.js";
 import {
     getButtonId,
     getLocationText,
+    extractGps,
+    isAreaClick,
+    extractAreaIdx,
     isEntryWord,
-    isGpsLocation,
     isValidLocation,
     isValidProblem,
+    shortTitle,
     type UpdateFn,
     type ResetFn,
 } from "../../lib/session.js";
+import { findNearestAreas, findNearestByName } from "../../services/nearbyAreas.js";
+import { withNav } from "../../lib/navButtons.js";
 import { suggestDepartment } from "../../services/aiService.js";
 import { findDoctorsByArea, buildDoctorCard } from "../../services/doctorSearch.js";
 import { handleGetDoctorFlow } from "../getDoctor/getDoctorFlow.js";
@@ -55,7 +61,7 @@ async function connectDoctorDirectly(
 
     const doctor = await prisma.doctor.findUnique({ where: { username: clean } });
     if (!doctor) {
-        await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.FALLBACK);
+        await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.FALLBACK, withNav([]));
         return false;
     }
 
@@ -89,18 +95,18 @@ export async function findDoctorFlow(
         const next = { ...data, category: "DOCTOR" };
         updateSession("FIND_DOCTOR_FLOW", "ASK_PROBLEM", next);
         await track(phoneNumber, "ASK_PROBLEM", next);
-        await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.ASK_PROBLEM);
+        await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.ASK_PROBLEM, withNav([]));
         return;
     }
 
     // ---------- STEP 1: problem -> AI suggests department + why -> ask area ----------
     if (step === "ASK_PROBLEM") {
         if (isEntryWord(rawText) && !data.problem) {
-            await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.ASK_PROBLEM);
+            await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.ASK_PROBLEM, withNav([]));
             return;
         }
         if (!isValidProblem(rawText)) {
-            await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.INVALID_PROBLEM);
+            await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.INVALID_PROBLEM, withNav([]));
             return;
         }
 
@@ -110,36 +116,51 @@ export async function findDoctorFlow(
         const next = { ...data, problem: rawText, department, departmentWhy: why, category: "DOCTOR" };
         updateSession("FIND_DOCTOR_FLOW", "ASK_AREA", next);
         await track(phoneNumber, "ASK_AREA", next);
-        await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.ASK_AREA(department, why));
+        await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.ASK_AREA(department, why), withNav([]));
         return;
     }
 
     // ---------- STEP 2: area -> DB chamber search -> random 5 doctors ----------
     if (step === "ASK_AREA") {
-        const locationText = getLocationText(rawText, msg);
+        // Suggested nearby-area button tapped (area_0, area_1, ...) -> resolve name.
+        const areaIdx = isAreaClick(rawText, buttonId) ? extractAreaIdx(rawText, buttonId) : -1;
+        const areaSug: string[] = Array.isArray(data.areaSuggestions) ? data.areaSuggestions : [];
+
+        // GPS shared from device -> suggest the 3 nearest Bengali areas as buttons.
+        // (No auto-search: the user confirms with one tap, fixing any wrong guess.)
+        const gps = extractGps(msg);
+        if (gps && areaIdx < 0) {
+            const nearest = findNearestAreas(gps.lat, gps.lng, 3);
+            if (nearest.length) {
+                const next = {
+                    ...data,
+                    areaSuggestions: nearest,
+                    detectedArea: nearest[0],
+                    category: "DOCTOR",
+                };
+                updateSession("FIND_DOCTOR_FLOW", "ASK_AREA", next);
+                await track(phoneNumber, "ASK_AREA", next);
+                const buttons = withNav(nearest.map((n, i) => ({ id: `area_${i}`, title: shortTitle(n) })));
+                await sendButtonsChunked(phoneNumber, FIND_DOCTOR_TEXTS.NEARBY_HEADER(nearest[0]!), buttons);
+                return;
+            }
+        }
+
+        let locationText = getLocationText(rawText, msg);
+        if (areaIdx >= 0 && areaSug[areaIdx]) locationText = areaSug[areaIdx]!;
 
         if (!msg?.location && !isValidLocation(locationText)) {
-            await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.INVALID_LOCATION);
+            await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.INVALID_LOCATION, withNav([]));
             return;
         }
         if (!msg?.location && isEntryWord(locationText) && !data.location) {
-            await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.ASK_AREA_RETRY);
+            await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.ASK_AREA_RETRY, withNav([]));
             return;
         }
 
         await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.PROCESSING);
 
-        let areaForSearch = locationText;
-        // GPS share -> keep raw; DB match will likely miss, then we fall back to district-less random.
-        // Try reverse-geocode district for better hit (best-effort, non-blocking failure).
-        if (msg?.location && isGpsLocation(locationText)) {
-            try {
-                const { getLocationDetails } = await import("../../services/locationService.js");
-                const det = await getLocationDetails(msg.location.latitude, msg.location.longitude);
-                const guess = det?.district || det?.upazila || "";
-                if (guess) areaForSearch = guess;
-            } catch { /* keep raw */ }
-        }
+        const areaForSearch = locationText;
 
         const { doctors, totalInArea } = await findDoctorsByArea(
             areaForSearch,
@@ -148,10 +169,26 @@ export async function findDoctorFlow(
         );
 
         if (!doctors.length) {
-            const next = { ...data, location: locationText, category: "DOCTOR" };
+            // Nothing found -> offer nearby areas (from earlier GPS or by typed name).
+            const suggestions = areaSug.length ? areaSug : findNearestByName(locationText, 3);
+            const next = {
+                ...data,
+                location: locationText,
+                areaSuggestions: suggestions.length ? suggestions : areaSug,
+                category: "DOCTOR",
+            };
             updateSession("FIND_DOCTOR_FLOW", "ASK_AREA", next);
             await track(phoneNumber, "ASK_AREA", next);
-            await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.NO_AREA_DOCTOR(locationText));
+            if (suggestions.length) {
+                const buttons = withNav(suggestions.map((n, i) => ({ id: `area_${i}`, title: shortTitle(n) })));
+                await sendButtonsChunked(
+                    phoneNumber,
+                    FIND_DOCTOR_TEXTS.NO_AREA_DOCTOR(locationText) + "\n\n📍 কাছের এলাকা থেকে বেছে নিন 👇",
+                    buttons
+                );
+            } else {
+                await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.NO_AREA_DOCTOR(locationText), withNav([]));
+            }
             return;
         }
 
@@ -178,7 +215,7 @@ export async function findDoctorFlow(
         };
         updateSession("FIND_DOCTOR_FLOW", "SELECT_DOCTOR", withCandidates);
         await track(phoneNumber, "SELECT_DOCTOR", withCandidates);
-        await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.SELECT_PROMPT);
+        await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.SELECT_PROMPT, withNav([]));
         return;
     }
 
@@ -192,7 +229,7 @@ export async function findDoctorFlow(
             await track(phoneNumber, "CONFIRMED", done);
             const ok = await connectDoctorDirectly(phoneNumber, msg, username, updateSession);
             if (ok) return;
-            await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.SELECT_PROMPT);
+            await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.SELECT_PROMPT, withNav([]));
             return;
         }
 
@@ -234,17 +271,17 @@ export async function findDoctorFlow(
             }
         }
 
-        await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.SELECT_PROMPT);
+        await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.SELECT_PROMPT, withNav([]));
         return;
     }
 
     if (step === "CONFIRMED") {
-        await sendWhatsAppMessage(phoneNumber, "মূল মেনুতে যেতে 'menu' লিখুন।");
+        await sendInteractiveButtons(phoneNumber, "✅ ধন্যবাদ! আর কিছু করতে চাইলে নিচে থেকে বেছে নিন:", withNav([]));
         return;
     }
 
     const restart = { ...data, category: "DOCTOR" };
     updateSession("FIND_DOCTOR_FLOW", "ASK_PROBLEM", restart);
     await track(phoneNumber, "ASK_PROBLEM", restart);
-    await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.ASK_PROBLEM);
+    await sendInteractiveButtons(phoneNumber, FIND_DOCTOR_TEXTS.ASK_PROBLEM, withNav([]));
 }

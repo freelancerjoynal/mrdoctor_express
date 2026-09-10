@@ -1,7 +1,9 @@
 import {
     sendWhatsAppMessage,
     sendInteractiveButtons,
+    sendButtonsChunked,
 } from "../../lib/sendWhatsAppMessage.js";
+import { MENU_BUTTON, withNav } from "../../lib/navButtons.js";
 import { saveConnectSession } from "../../lib/chatSession.js";
 import { prisma } from "../../../lib/prisma.js";
 import { DOCTOR_TEXTS, getDoctorAnswer } from "./doctorQA.js";
@@ -44,7 +46,7 @@ export async function handleGetDoctorFlow(
             });
 
             if (!doctor) {
-                await sendWhatsAppMessage(phoneNumber, DOCTOR_TEXTS.NOT_FOUND);
+                await sendInteractiveButtons(phoneNumber, DOCTOR_TEXTS.NOT_FOUND, [MENU_BUTTON]);
                 return;
             }
 
@@ -116,6 +118,7 @@ export async function handleGetDoctorFlow(
 
             await sendInteractiveButtons(phoneNumber, businessCardText, [
                 { id: `location_${doctor.id}`, title: "লোকেশন জানতে চাই" },
+                MENU_BUTTON,
             ]);
         } catch (error) {
             console.error("❌ DB Error:", error);
@@ -128,15 +131,17 @@ export async function handleGetDoctorFlow(
     const doctorId = doctorData.doctorId;
 
     if (!doctorId) {
-        await sendWhatsAppMessage(phoneNumber, DOCTOR_TEXTS.SESSION_RESET);
+        await sendInteractiveButtons(phoneNumber, DOCTOR_TEXTS.SESSION_RESET, [MENU_BUTTON]);
         return;
     }
 
     const answer = getDoctorAnswer(norm, doctorData);
 
-    if (answer.buttons?.length) {
-        await sendInteractiveButtons(phoneNumber, answer.message, answer.buttons);
+    // Every answer carries Back + Menu (chunked when >3 buttons).
+    const buttons = withNav(answer.buttons ?? []);
+    if (buttons.length <= 3) {
+        await sendInteractiveButtons(phoneNumber, answer.message, buttons);
     } else {
-        await sendWhatsAppMessage(phoneNumber, answer.message);
+        await sendButtonsChunked(phoneNumber, answer.message, buttons);
     }
 }

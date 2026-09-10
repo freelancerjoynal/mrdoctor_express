@@ -18,6 +18,12 @@ export interface ChatbotSessionData {
     hospitalSlug?: string;
     name?: string;
     username?: string;
+    /** GPS nearest-area suggestions (Bengali names) offered as area_ buttons. */
+    areaSuggestions?: string[];
+    /** Closest detected area name (first of areaSuggestions). */
+    detectedArea?: string;
+    /** Step history for the Back button: {flow, step} pairs, oldest first. */
+    _hist?: { flow: string; step: string }[];
     [key: string]: any;
 }
 
@@ -45,6 +51,30 @@ export function getLocationText(text: string, msg: any): string {
         return `Lat:${msg.location.latitude},Lng:${msg.location.longitude}`;
     }
     return (text || "").trim();
+}
+
+/** Raw GPS coords from a shared device location (null when not shared). */
+export function extractGps(msg: any): { lat: number; lng: number } | null {
+    const lat = Number(msg?.location?.latitude);
+    const lng = Number(msg?.location?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+}
+
+/** Tapped one of the suggested nearby-area buttons (area_0, area_1, ...). */
+export function isAreaClick(raw: string, buttonId: string): boolean {
+    const id = (buttonId || "").toLowerCase().trim();
+    if (/^area_\d+$/.test(id)) return true;
+    return /^area_\d+$/.test((raw || "").toLowerCase().trim());
+}
+
+/** Index of the tapped area button (-1 when invalid). */
+export function extractAreaIdx(raw: string, buttonId: string): number {
+    const src = (buttonId || raw || "").trim();
+    const m = src.match(/area_(\d+)/i);
+    if (!m) return -1;
+    const n = parseInt(m[1]!, 10);
+    return Number.isNaN(n) ? -1 : n;
 }
 
 export function isGpsLocation(location: string): boolean {
