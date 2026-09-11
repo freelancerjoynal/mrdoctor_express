@@ -3,56 +3,40 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import cors from 'cors';
 
+import authRouter from './routes/auth/auth.js';
+import profileRouter from './routes/profile/profile.js';
+import seederRouter from './routes/seeders/seederRouter.js';
+import { whatsappRouter, doctorRedirectRouter } from './whatsappChatbot/routes/index.js';
+import websiteRouter from './publicWebsite/routes/index.js';
+
 dotenv.config();
+
 const app = express();
-// Middlewares
+
+// Global middlewares
 app.use(express.json());
 app.use(cookieParser());
+app.use(
+  cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
+  }),
+);
 
-//Cors policy
-app.use(cors({
-  // origin: 'http://localhost:3000', // Allows requests only from this specific origin
-  origin: '*', // Allows requests from any origin
-   methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed HTTP methods for the requests
-  credentials: true // Set to true if you need to send cookies or authorization headers
-}));
-
-// --- Authentication Routes ---
-import authRouter from './routes/auth/auth.js';
+// Module routes (each module owns its routing inside its own folder)
 app.use('/api/auth', authRouter);
-
-// Public routes
-
-
-// --- Protected Routes ---
-import profileRouter from './routes/profile/profile.js';
 app.use('/api/profile', profileRouter);
-
-
-// --- WhatsApp Webhook Routes ---
-import webHookWhatsAppRouter from './routes/webhook/whatsapp/whatsappRoutes.js';
-app.use('/api/webhook/whatsapp', webHookWhatsAppRouter);
-
-// --- Doctors Routes ---
-
-
-
-// --- Data seeding
-import seederRouter from './routes/seeders/seederRouter.js';
 app.use('/api/seeders', seederRouter);
-
-
-
-
-
-
-// --- Doctor Deep Link Redirection Route (chatbot setup) ---
-import { doctorRedirectRouter } from './chatbot/index.js';
+app.use('/api/webhook/whatsapp', whatsappRouter);
 app.use('/d', doctorRedirectRouter);
 
 
-// Server Configuration
-const PORT = process.env.PORT || 5000;
+// Public website routes
+app.use('/api/website', websiteRouter);
+
+// Server configuration
+const PORT = 8000;
 
 app.listen(PORT, () => {
   console.log(`TS Server is running in ${process.env.NODE_ENV} mode on port ${PORT}`);
