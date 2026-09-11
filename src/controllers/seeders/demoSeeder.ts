@@ -1,5 +1,6 @@
 // src/controllers/seeders/demoSeeder.ts
 import type { Response } from 'express';
+import bcrypt from 'bcrypt';
 import { prisma } from '../../lib/prisma.js';
 import { AuthRequest } from '../../middleware/authMiddleware.js';
 
@@ -7,16 +8,16 @@ import { AuthRequest } from '../../middleware/authMiddleware.js';
 // 10 HOSPITALS
 // ================================================================
 const HOSPITALS = [
-  { slug: 'nilphamari-sadar-hospital',       name: 'নীলফামারী সদর হাসপাতাল (২৫০ শয্যা)',  address: 'সদর, নীলফামারী',          phone: '0551-61333',  establishedYear: 1982, thana: 'নীলফামারী সদর' },
+  { slug: 'nilphamari-sadar-hospital',       name: 'নীলফামারী সদর হাসপাতাল (২৫০ শয্যা)',  address: 'সদর, নীলফামারী',         phone: '0551-61333',  establishedYear: 1982, thana: 'নীলফামারী সদর' },
   { slug: 'nilphamari-medical-college',       name: 'নীলফামারী মেডিকেল কলেজ ও হাসপাতাল',   address: 'নীলফামারী সদর, নীলফামারী', phone: '0551-61888',  establishedYear: 2018, thana: 'নীলফামারী সদর' },
   { slug: 'ar-general-hospital',              name: 'এ আর জেনারেল হাসপাতাল',              address: 'স্টেশন রোড, নীলফামারী সদর', phone: '01733077000', establishedYear: 2005, thana: 'নীলফামারী সদর' },
-  { slug: 'saidpur-100-bed-hospital',         name: 'সৈয়দপুর ১০০ শয্যা বিশিষ্ট হাসপাতাল',  address: 'সৈয়দপুর, নীলফামারী',      phone: '05526-72222', establishedYear: 1975, thana: 'সৈয়দপুর' },
-  { slug: 'saidpur-modern-hospital',          name: 'সৈয়দপুর আধুনিক হাসপাতাল',            address: 'সৈয়দপুর, নীলফামারী',      phone: '01717000004', establishedYear: 2010, thana: 'সৈয়দপুর' },
-  { slug: 'shahid-dr-shamsul-haque-hospital', name: 'শহীদ ডাক্তার শামসুল হক হসপিটাল',       address: 'সৈয়দপুর, নীলফামারী',      phone: '01717000001', establishedYear: 2008, thana: 'সৈয়দপুর' },
-  { slug: 'domar-health-complex',             name: 'ডোমার উপজেলা স্বাস্থ্য কমপ্লেক্স',      address: 'ডোমার, নীলফামারী',        phone: '05524-56022', establishedYear: 1995, thana: 'ডোমার' },
+  { slug: 'saidpur-100-bed-hospital',         name: 'সৈয়দপুর ১০০ শয্যা বিশিষ্ট হাসপাতাল',  address: 'সৈয়দপুর, নীলফামারী',     phone: '05526-72222', establishedYear: 1975, thana: 'সৈয়দপুর' },
+  { slug: 'saidpur-modern-hospital',          name: 'সৈয়দপুর আধুনিক হাসপাতাল',             address: 'সৈয়দপুর, নীলফামারী',     phone: '01717000004', establishedYear: 2010, thana: 'সৈয়দপুর' },
+  { slug: 'shahid-dr-shamsul-haque-hospital', name: 'শহীদ ডাক্তার শামসুল হক হসপিটাল',       address: 'সৈয়দপুর, নীলফামারী',     phone: '01717000001', establishedYear: 2008, thana: 'সৈয়দপুর' },
+  { slug: 'domar-health-complex',             name: 'ডোমার উপজেলা স্বাস্থ্য কমপ্লেক্স',      address: 'ডোমার, নীলফামারী',         phone: '05524-56022', establishedYear: 1995, thana: 'ডোমার' },
   { slug: 'jaldhaka-health-complex',          name: 'জলঢাকা উপজেলা স্বাস্থ্য কমপ্লেক্স',     address: 'জলঢাকা, নীলফামারী',       phone: '05523-56033', establishedYear: 1990, thana: 'জলঢাকা' },
   { slug: 'kishoreganj-health-complex',       name: 'কিশোরগঞ্জ উপজেলা স্বাস্থ্য কমপ্লেক্স',  address: 'কিশোরগঞ্জ, নীলফামারী',    phone: '05522-56044', establishedYear: 1992, thana: 'কিশোরগঞ্জ' },
-  { slug: 'dimla-health-complex',             name: 'ডিমলা উপজেলা স্বাস্থ্য কমপ্লেক্স',      address: 'ডিমলা, নীলফামারী',        phone: '05525-56055', establishedYear: 1998, thana: 'ডিমলা' },
+  { slug: 'dimla-health-complex',             name: 'ডিমলা উপজেলা স্বাস্থ্য কমপ্লেক্স',      address: 'ডিমলা, নীলফামারী',         phone: '05525-56055', establishedYear: 1998, thana: 'ডিমলা' },
 ];
 
 // ================================================================
@@ -72,9 +73,9 @@ const DEGREES = [
 ];
 
 const SPECIALITY_FEES: Record<string, [number, number]> = {
-  'মেডিসিন বিশেষজ্ঞ':                    [700,  600],
-  'হৃদরোগ বিশেষজ্ঞ':                     [1000, 800],
-  'জেনারেল ও ল্যাপারোস্কোপিক সার্জন':    [800,  700],
+  'মেডিসিন বিশেষজ্ঞ':                     [700,  600],
+  'হৃদরোগ বিশেষজ্ঞ':                      [1000, 800],
+  'জেনারেল ও ল্যাপারোস্কোপিক সার্জন':     [800,  700],
   'অর্থোপেডিক ও ট্রমা সার্জন':           [800,  700],
   'স্ত্রী রোগ ও প্রসূতিবিদ্যা বিশেষজ্ঞ': [800,  700],
   'শিশু রোগ বিশেষজ্ঞ':                   [600,  500],
@@ -104,18 +105,11 @@ const DAY_SETS = [
   ['SATURDAY', 'WEDNESDAY'],
 ];
 
-// Chamber fee tier:
-//   primary  → base
-//   second   → base + 100
-//   third    → base + 200
 function feeForChamber(base: [number, number], ci: number): [number, number] {
   const bump = ci * 100;
   return [base[0] + bump, base[1] + bump];
 }
 
-// ================================================================
-// DOCTOR SEED SHAPE
-// ================================================================
 interface DoctorSeed {
   name: string;
   username: string;
@@ -214,8 +208,10 @@ export const seedAll = async (req: AuthRequest, res: Response) => {
       chatSessions: 0,
     };
 
+    const defaultPassword = await bcrypt.hash('12345678', 10);
+
     // ----------------------------------------------------------
-    // 1. HOSPITALS
+    // 1. HOSPITALS (Linked with User)
     // ----------------------------------------------------------
     console.log('🏥 Seeding hospitals...');
     const hospitalMap = new Map<
@@ -224,10 +220,30 @@ export const seedAll = async (req: AuthRequest, res: Response) => {
     >();
 
     for (const h of HOSPITALS) {
-      const created = await prisma.hospital.upsert({
-        where: { slug: h.slug },
+      const hospitalEmail = `${h.slug}@hospital.com`;
+
+      const hospitalUser = await prisma.user.upsert({
+        where: { email: hospitalEmail },
         update: {},
         create: {
+          email: hospitalEmail,
+          password: defaultPassword,
+          role: 'HOSPITAL',
+          isVerified: true,
+        },
+      });
+
+      const created = await prisma.hospital.upsert({
+        where: { slug: h.slug },
+        update: {
+          userId: hospitalUser.id,
+          name: h.name,
+          address: h.address,
+          phone: h.phone,
+          establishedYear: h.establishedYear,
+        },
+        create: {
+          userId: hospitalUser.id,
           name: h.name,
           slug: h.slug,
           address: h.address,
@@ -237,6 +253,7 @@ export const seedAll = async (req: AuthRequest, res: Response) => {
           templateName: 'template_a',
         },
       });
+
       hospitalMap.set(h.slug, {
         id: created.id,
         name: created.name,
@@ -247,7 +264,7 @@ export const seedAll = async (req: AuthRequest, res: Response) => {
     console.log(`   ✅ ${summary.hospitals} hospitals ready`);
 
     // ----------------------------------------------------------
-    // 2. DOCTORS
+    // 2. DOCTORS (Linked with User)
     // ----------------------------------------------------------
     console.log('👨‍⚕️  Seeding doctors...');
     const doctorSeeds = buildDoctors();
@@ -257,10 +274,34 @@ export const seedAll = async (req: AuthRequest, res: Response) => {
     >();
 
     for (const d of doctorSeeds) {
-      const created = await prisma.doctor.upsert({
-        where: { username: d.username },
+      const doctorUser = await prisma.user.upsert({
+        where: { email: d.email },
         update: {},
         create: {
+          email: d.email,
+          password: defaultPassword,
+          role: 'DOCTOR',
+          isVerified: true,
+        },
+      });
+
+      const created = await prisma.doctor.upsert({
+        where: { username: d.username },
+        update: {
+          userId: doctorUser.id,
+          name: d.name,
+          degree: d.degree,
+          speciality: d.speciality,
+          tagline: d.tagline,
+          bio: d.bio,
+          phone: d.phone,
+          whatsappNumber: d.whatsappNumber,
+          whatsappId: d.whatsappId,
+          startedYear: d.startedYear,
+          status: d.status,
+        },
+        create: {
+          userId: doctorUser.id,
           name: d.name,
           username: d.username,
           email: d.email,
@@ -276,6 +317,7 @@ export const seedAll = async (req: AuthRequest, res: Response) => {
           templateName: 'template_a',
         },
       });
+
       doctorMap.set(d.username, {
         id: created.id,
         baseFee: d.baseFee,
@@ -286,7 +328,7 @@ export const seedAll = async (req: AuthRequest, res: Response) => {
     console.log(`   ✅ ${summary.doctors} doctors ready`);
 
     // ----------------------------------------------------------
-    // 3. CHAMBERS (fee lives here per-chamber)
+    // 3. CHAMBERS
     // ----------------------------------------------------------
     console.log('🚪 Seeding chambers with fees...');
     const chamberMap = new Map<string, string>();
@@ -420,7 +462,7 @@ export const seedAll = async (req: AuthRequest, res: Response) => {
     return res.status(201).json({
       success: true,
       message:
-        'নীলফামারী জেলার ১০ হাসপাতাল, ১০০ ডাক্তার, চেম্বার (per-chamber ফি সহ) ও সিডিউল সফলভাবে সিড করা হয়েছে!',
+        'নীলফামারী জেলার ১০ হাসপাতাল, ১০০ ডাক্তার, চেম্বার (per-chamber ফি সহ) ও সিডিউল সফলভাবে সিড করা হয়েছে এবং ইউজার অ্যাকাউন্টের সাথে যুক্ত করা হয়েছে!',
       summary,
     });
   } catch (error: any) {

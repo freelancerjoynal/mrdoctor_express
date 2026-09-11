@@ -7,12 +7,14 @@ datasource db {
   provider = "postgresql"
 }
 
+
 enum Role {
   SUPER_ADMIN
   DOCTOR
   DOCTOR_STAFF
   BUSINESS_OWNER
   HOSPITAL_STAFF
+  HOSPITAL
 }
 
 enum DoctorStatus {
@@ -53,23 +55,50 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  // রোলের উপর ভিত্তি করে সংশ্লিষ্ট প্রোফাইলগুলোর সাথে অপশনাল ওয়ান-টু-ওয়ান রিলেশন
+  doctorProfile     Doctor?
+  hospitalProfile   Hospital?
+  superAdminProfile SuperAdminProfile?
+
   @@map("users")
 }
 
+// সুপার এডমিন প্রোফাইল টেবিল (মেইন User টেবিলের সাথে কানেক্টেড)
+model SuperAdminProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name        String?
+  permissions String[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("super_admin_profiles")
+}
+
 model ChatSession {
-  id           String   @id @default(uuid())
-  phoneNumber  String   @unique
-  targetType   String?
-  targetId     String?
-  targetName   String?
-  lastFlow     String?
-  lastStep     String?
-  updatedAt    DateTime @updatedAt
-  createdAt    DateTime @default(now())
+  id          String   @id @default(uuid())
+  phoneNumber String   @unique
+  targetType  String?
+  targetId    String?
+  targetName  String?
+  lastFlow    String?
+  lastStep    String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@map("chat_sessions")
 }
 
 model Doctor {
   id                  String         @id @default(uuid())
+  
+  // মেইন User টেবিলের সাথে লিংক করার জন্য userId (অপশনাল রাখা হয়েছে যাতে প্রয়োজনে স্বাধীনভাবে এন্ট্রি হতে পারে)
+  userId              String?        @unique
+  user                User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   name                String
   degree              String
   speciality          String
@@ -91,10 +120,17 @@ model Doctor {
 
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
+
+  @@map("doctors")
 }
 
 model Hospital {
   id              String         @id @default(uuid())
+  
+  // মেইন User টেবিলের সাথে লিংক করার জন্য userId
+  userId          String?        @unique
+  user            User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   name            String
   slug            String         @unique
   templateName    String         @default("template_a")
@@ -108,6 +144,8 @@ model Hospital {
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+
+  @@map("hospitals")
 }
 
 model Chamber {
@@ -128,14 +166,16 @@ model Chamber {
   longitude    Float?
 
   // চেম্বার ভেদে নতুন ও পুরনো রোগীর ভিজিট ফি
-  newPatientFee     Float    @default(0) // নতুন রোগীর ফি
-  oldPatientFee     Float    @default(0) // পুরনো/রিভিজিট রোগীর ফি
+  newPatientFee Float    @default(0)
+  oldPatientFee Float    @default(0)
 
   // Relations
   schedules    DoctorSchedule[]
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  @@map("chambers")
 }
 
 model DoctorSchedule {
@@ -155,32 +195,34 @@ model DoctorSchedule {
 
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+
+  @@map("doctor_schedules")
 }
 
 model PendingAppointment {
-  id              String    @id @default(uuid())
-  phoneNumber     String    // sender WhatsApp number (session owner)
+  id              String   @id @default(uuid())
+  phoneNumber     String   // sender WhatsApp number (session owner)
   doctorId        String
-  doctor          Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctor          Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   doctorName      String?
 
-  problem         String    // 'আপনার সমস্যা কী?' — saved to memory
-  appointmentDate DateTime  // today or tomorrow (running day only)
-  dayLabel        String?   // e.g. "আজকে — বৃহস্পতিবার, 11 Sep"
+  problem         String   // 'আপনার সমস্যা কী?' — saved to memory
+  appointmentDate DateTime // today or tomorrow (running day only)
+  dayLabel        String?  // e.g. "আজকে — বৃহস্পতিবার, 11 Sep"
 
-  chamberId       String?   // selected chamber
+  chamberId       String?  // selected chamber
   chamberName     String?
 
   patientName     String
   patientAge      Int?
   patientWeight   Float?
-  patientArea     String?   // user's area
-  contactPhone    String    // typed number or sender number via button
+  patientArea     String?  // user's area
+  contactPhone    String   // typed number or sender number via button
 
-  status          String    @default("PENDING")
+  status          String   @default("PENDING")
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@map("pending_appointments")
 }
