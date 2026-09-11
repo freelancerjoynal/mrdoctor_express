@@ -6,6 +6,6 @@ import { seedAll } from '../../controllers/seeders/demoSeeder.js';
 
 const seederRouter = express.Router();
 
-seederRouter.get('/seed-all', protectedRoute('SUPER_ADMIN'), seedAll );
+seederRouter.get('/seed-all', protectedRoute('DOCTOR'), seedAll );
 
 export default seederRouter;
