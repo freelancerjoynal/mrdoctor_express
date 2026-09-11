@@ -1,19 +1,40 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-export interface AuthRequest extends Request {
-  user?: any;
+export interface AuthenticatedRequest extends Request {
+  user?: {
+    userId: string;
+    role: string;
+  };
 }
 
-export const protect = (req: AuthRequest, res: Response, next: NextFunction) => {
-  const token = req.cookies.accessToken;
-  if (!token) return res.status(401).json({ error: 'No token, access denied' });
+export type UserRole = 'SUPER_ADMIN' | 'DOCTOR' | 'BUSINESS_OWNER' | 'HOSPITAL_STAFF' | 'DOCTOR_STAFF';
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET!);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: 'Token is not valid' });
-  }
+// এখানে [UserRole, ...UserRole[]] ব্যবহার করার ফলে অন্তত একটি রোল পাস করা বাধ্যতামূলক করা হয়েছে
+export const protectedRoute = (...allowedRoles: [UserRole, ...UserRole[]]) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      // 1. টোকেন চেক করা (কুকি বা হেডার থেকে)
+      const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
+
+      if (!token) {
+        return res.status(401).json({ error: 'Access token missing. Unauthorized access.' });
+      }
+
+      // 2. টোকেন ভেরিফাই করা
+      const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET!) as { userId: string; role: string };
+      req.user = decoded;
+
+      // 3. রোল ম্যাচ করছে কিনা চেক করা
+      if (!allowedRoles.includes(req.user.role as UserRole)) {
+        return res.status(403).json({ 
+          error: `Access denied. This route is restricted and your role (${req.user.role}) is not allowed.` 
+        });
+      }
+
+      next();
+    } catch (error) {
+      return res.status(403).json({ error: 'Invalid or expired token.' });
+    }
+  };
 };

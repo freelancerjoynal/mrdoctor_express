@@ -6,33 +6,16 @@ import crypto from 'crypto';
 import { sendOTPEmail, sendNewPasswordEmail } from '../utils/mailer.js';
 import { prisma } from '../lib/prisma.js';
 
-// Helper function to generate access and refresh tokens
-const generateTokens = (userId: number) => {
-  const accessToken = jwt.sign({ userId }, process.env.JWT_ACCESS_SECRET!, { expiresIn: '15m' });
-  const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET!, { expiresIn: '7d' });
+// Helper function to generate access and refresh tokens (রোল সহ টোকেন জেনারেট করা হচ্ছে)
+const generateTokens = (userId: string, role: string) => {
+  const accessToken = jwt.sign({ userId, role }, process.env.JWT_ACCESS_SECRET!, { expiresIn: '15m' });
+  const refreshToken = jwt.sign({ userId, role }, process.env.JWT_REFRESH_SECRET!, { expiresIn: '7d' });
   return { accessToken, refreshToken };
 };
 
-// 1. User Registration
-// export const signup = async (req: Request, res: Response) => {
-//   const { email, password } = req.body;
-//   try {
-//     const hashedPassword = await bcrypt.hash(password, 10);
-//     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-//     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // Expires in 10 mins
-
-//     await prisma.user.create({
-//       data: { email, password: hashedPassword, otp, otpExpiry }
-//     });
-
-//     await sendOTPEmail(email, otp);
-//     res.status(201).json({ message: 'Signup success! Verification OTP sent to your email.' });
-//   } catch (error) {
-//     res.status(400).json({ error: 'User already exists' });
-//   }
-// };
+// 1. User Registration (Role সহ সাইনআপ হ্যান্ডেল করা)
 export const signup = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
   
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -45,16 +28,21 @@ export const signup = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // 2. Prisma Transaction
+    // 2. Prisma Transaction (রোল পাঠানো না হলে ডিফল্ট BUSINESS_OWNER থাকবে)
     await prisma.$transaction(async (tx) => {
       await tx.user.create({
-        data: { email, password: hashedPassword, otp, otpExpiry }
+        data: { 
+          email, 
+          password: hashedPassword, 
+          role: role || 'DOCTOR', 
+          otp, 
+          otpExpiry 
+        }
       });
 
       try {
         await sendOTPEmail(email, otp);
       } catch (emailError) {
-        // আসল মেইল এররটি কনসোলে প্রিন্ট করবে যেন আপনি ডিবাগ করতে পারেন
         console.error("User creation aborted. Mail server error details:", emailError);
         throw new Error("OTP_SEND_FAILED");
       }
@@ -63,12 +51,10 @@ export const signup = async (req: Request, res: Response) => {
     return res.status(201).json({ message: 'Signup successful! Verification OTP has been sent to your email.' });
 
   } catch (error: any) {
-    // এখানে এররটি চেক করা হচ্ছে
     if (error.message === "OTP_SEND_FAILED") {
       return res.status(500).json({ error: 'Failed to send verification email. Account creation rolled back.' });
     }
 
-    // যদি ওটিপি ছাড়া অন্য কোনো এরর হয় (যেমন: ডাটাবেজ কানেকশন বা ইউনিক কনস্ট্রেইন্ট)
     console.error("Actual Signup Error:", error); 
     return res.status(500).json({ error: error.message || 'An unexpected error occurred during signup.' });
   }
@@ -85,7 +71,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
-    const { accessToken, refreshToken } = generateTokens(user.id);
+    const { accessToken, refreshToken } = generateTokens(user.id, user.role);
 
     // Update user: Verify and save refresh token
     await prisma.user.update({
@@ -108,7 +94,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
   }
 };
 
-// 3. Standard Login
+// 3. Standard Login (প্রতিবার লগইনের সময় ওটিপি জেনারেট করে পাঠানো হবে)
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   try {
@@ -118,25 +104,26 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // If not verified, send new OTP and block login
-    if (!user.isVerified) {
-      const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      await prisma.user.update({
-        where: { email },
-        data: { otp: newOtp, otpExpiry: new Date(Date.now() + 10 * 60 * 1000) }
-      });
-      await sendOTPEmail(email, newOtp);
-      return res.status(403).json({ error: 'Email not verified. New OTP sent.' });
-    }
+    // প্রতিবার লগইনের সময় নতুন ওটিপি জেনারেট করা হবে
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    const { accessToken, refreshToken } = generateTokens(user.id);
-    await prisma.user.update({ where: { id: user.id }, data: { refreshToken } });
+    await prisma.user.update({
+      where: { email },
+      data: { otp: newOtp, otpExpiry: otpExpiry }
+    });
 
-    res.cookie('accessToken', accessToken, { httpOnly: true, maxAge: 15 * 60 * 1000 });
-    res.cookie('refreshToken', refreshToken, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    await sendOTPEmail(email, newOtp);
 
-    res.json({ message: 'Login successful', accessToken });
+    // ইউজারকে জানিয়ে দেওয়া হচ্ছে যে ইমেইলে ওটিপি পাঠানো হয়েছে, ভেরিফাই করলেই লগইন কমপ্লিট হবে
+    return res.status(200).json({ 
+      message: 'Credentials verified. OTP has been sent to your email for login verification.',
+      requiresOTP: true,
+      email: user.email 
+    });
+
   } catch (error) {
+    console.error("Login Error:", error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -173,7 +160,6 @@ export const resetPassword = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
-    // Generate a secure random password
     const newRawPassword = crypto.randomBytes(4).toString('hex'); // 8 characters
     const hashedNewPassword = await bcrypt.hash(newRawPassword, 10);
 
@@ -186,7 +172,6 @@ export const resetPassword = async (req: Request, res: Response) => {
       }
     });
 
-    // Send the new password to user's email
     await sendNewPasswordEmail(email, newRawPassword);
 
     res.json({ message: 'A new password has been sent to your email.' });
@@ -204,8 +189,8 @@ export const refresh = async (req: Request, res: Response) => {
     const user = await prisma.user.findFirst({ where: { refreshToken } });
     if (!user) return res.status(403).json({ error: 'Invalid refresh token' });
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!) as { userId: number };
-    const newAccessToken = jwt.sign({ userId: decoded.userId }, process.env.JWT_ACCESS_SECRET!, { expiresIn: '15m' });
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!) as { userId: string; role: string };
+    const newAccessToken = jwt.sign({ userId: decoded.userId, role: decoded.role }, process.env.JWT_ACCESS_SECRET!, { expiresIn: '15m' });
 
     res.cookie('accessToken', newAccessToken, { httpOnly: true, maxAge: 15 * 60 * 1000 });
     res.json({ message: 'Token refreshed', accessToken: newAccessToken });

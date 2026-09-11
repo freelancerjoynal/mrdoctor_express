@@ -9,10 +9,10 @@ datasource db {
 
 enum Role {
   SUPER_ADMIN
+  DOCTOR
+  DOCTOR_STAFF
   BUSINESS_OWNER
-  MANAGER
-  RECEPTIONIST
-  VIEWER
+  HOSPITAL_STAFF
 }
 
 enum DoctorStatus {
@@ -43,6 +43,7 @@ model User {
   id           String    @id @default(uuid())
   email        String    @unique
   password     String
+  role         Role      @default(DOCTOR)
   isVerified   Boolean   @default(false)
   otp          String?
   otpExpiry    DateTime?
@@ -93,20 +94,20 @@ model Doctor {
 }
 
 model Hospital {
-  id                  String         @id @default(uuid())
-  name                String
-  slug                String         @unique
-  templateName        String         @default("template_a")
-  address             String?
-  phone               String?
-  establishedYear     Int?
-  status              HospitalStatus @default(PENDING)
+  id              String         @id @default(uuid())
+  name            String
+  slug            String         @unique
+  templateName    String         @default("template_a")
+  address         String?
+  phone           String?
+  establishedYear Int?
+  status          HospitalStatus @default(PENDING)
 
-  chambers            Chamber[]
-  schedules           DoctorSchedule[]
+  chambers        Chamber[]
+  schedules       DoctorSchedule[]
 
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 model Chamber {
@@ -127,8 +128,8 @@ model Chamber {
   longitude    Float?
 
   // চেম্বার ভেদে নতুন ও পুরনো রোগীর ভিজিট ফি
-  newPatientFee     Float    @default(0) // নতুন রোগীর ফি (যেমন: ৭০০)
-  oldPatientFee     Float    @default(0) // পুরনো/রিভিজিট রোগীর ফি (যেমন: ৬০০)
+  newPatientFee     Float    @default(0) // নতুন রোগীর ফি
+  oldPatientFee     Float    @default(0) // পুরনো/রিভিজিট রোগীর ফি
 
   // Relations
   schedules    DoctorSchedule[]
