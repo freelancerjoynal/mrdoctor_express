@@ -7,7 +7,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/server.ts",
-    "tunnel": "cloudflared --config .cloudflared/config.yml tunnel run mrdoctor-live"
+    "tunnel": "cloudflared tunnel run --url http://localhost:8000 mrdoctor"
   },
   "keywords": [],
   "author": "",

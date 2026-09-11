@@ -1,6 +1,6 @@
 import express from 'express';
 import { protect } from '../../middleware/authMiddleware.js';
-import { seedAll } from '../../controllers.../seeders/demoSeeder.js';
+import { seedAll } from '../../controllers/seeders/demoSeeder.js';
 
 
 
