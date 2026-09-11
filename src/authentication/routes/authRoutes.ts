@@ -1,13 +1,16 @@
+// Isolated routing for the authentication module.
+// Mounted by src/server.ts via ./authentication/routes/index.js
+// Mirrors src/whatsappChatbot/routes/* and src/publicWebsite/routes/*.
 import express from 'express';
-import { 
-  signup, 
-  verifyOTP, 
-  login, 
-  refresh, 
-  logout, 
-  forgotPassword, 
-  resetPassword 
-} from '../../controllers/authController.js';
+import {
+  signup,
+  verifyOTP,
+  login,
+  refresh,
+  logout,
+  forgotPassword,
+  resetPassword
+} from '../controllers/authController.js';
 
 const authRouter = express.Router();
 
@@ -20,6 +23,5 @@ authRouter.post('/logout', logout);
 // Password Reset routes
 authRouter.post('/forgot-password', forgotPassword); // Sends OTP
 authRouter.post('/reset-password', resetPassword);   // Verifies OTP & sends new password
-
 
 export default authRouter;

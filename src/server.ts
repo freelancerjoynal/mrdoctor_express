@@ -3,8 +3,7 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import cors from 'cors';
 
-import authRouter from './routes/auth/auth.js';
-import profileRouter from './routes/profile/profile.js';
+import { authRouter, profileRouter } from './authentication/routes/index.js';
 import seederRouter from './routes/seeders/seederRouter.js';
 import { whatsappRouter, doctorRedirectRouter } from './whatsappChatbot/routes/index.js';
 import websiteRouter from './publicWebsite/routes/index.js';

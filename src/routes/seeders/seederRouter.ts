@@ -1,5 +1,5 @@
 import express from 'express';
-import { protectedRoute } from '../../middleware/authMiddleware.js';
+import { protectedRoute } from '../../authentication/middleware/authMiddleware.js';
 import { seedAll } from '../../controllers/seeders/demoSeeder.js';
 
 

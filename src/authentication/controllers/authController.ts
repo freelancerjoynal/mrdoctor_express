@@ -1,26 +1,23 @@
+// Isolated controllers for the authentication module.
+// Mirrors src/whatsappChatbot/controllers/* and src/publicWebsite/controllers/*.
+// No imports from whatsappChatbot or publicWebsite.
 import type { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
-import { sendOTPEmail, sendNewPasswordEmail } from '../utils/mailer.js';
-import { prisma } from '../lib/prisma.js';
-
-// Helper function to generate access and refresh tokens (রোল সহ টোকেন জেনারেট করা হচ্ছে)
-const generateTokens = (userId: string, role: string) => {
-  const accessToken = jwt.sign({ userId, role }, process.env.JWT_ACCESS_SECRET!, { expiresIn: '15m' });
-  const refreshToken = jwt.sign({ userId, role }, process.env.JWT_REFRESH_SECRET!, { expiresIn: '7d' });
-  return { accessToken, refreshToken };
-};
+import { sendOTPEmail, sendNewPasswordEmail } from '../lib/mailer.js';
+import { generateTokens, generateOTP, getOTPExpiry } from '../services/authService.js';
+import { prisma } from '../../lib/prisma.js';
 
 // 1. User Registration (Role সহ সাইনআপ হ্যান্ডেল করা)
 export const signup = async (req: Request, res: Response) => {
   const { email, password, role } = req.body;
-  
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); 
+    const otp = generateOTP();
+    const otpExpiry = getOTPExpiry();
 
     // 1. Check if user already exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -31,12 +28,12 @@ export const signup = async (req: Request, res: Response) => {
     // 2. Prisma Transaction (রোল পাঠানো না হলে ডিফল্ট BUSINESS_OWNER থাকবে)
     await prisma.$transaction(async (tx) => {
       await tx.user.create({
-        data: { 
-          email, 
-          password: hashedPassword, 
-          role: role || 'DOCTOR', 
-          otp, 
-          otpExpiry 
+        data: {
+          email,
+          password: hashedPassword,
+          role: role || 'DOCTOR',
+          otp,
+          otpExpiry
         }
       });
 
@@ -55,7 +52,7 @@ export const signup = async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Failed to send verification email. Account creation rolled back.' });
     }
 
-    console.error("Actual Signup Error:", error); 
+    console.error("Actual Signup Error:", error);
     return res.status(500).json({ error: error.message || 'An unexpected error occurred during signup.' });
   }
 };
@@ -76,11 +73,11 @@ export const verifyOTP = async (req: Request, res: Response) => {
     // Update user: Verify and save refresh token
     await prisma.user.update({
       where: { email },
-      data: { 
-        isVerified: true, 
-        otp: null, 
+      data: {
+        isVerified: true,
+        otp: null,
         otpExpiry: null,
-        refreshToken: refreshToken 
+        refreshToken: refreshToken
       }
     });
 
@@ -105,8 +102,8 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // প্রতিবার লগইনের সময় নতুন ওটিপি জেনারেট করা হবে
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    const newOtp = generateOTP();
+    const otpExpiry = getOTPExpiry();
 
     await prisma.user.update({
       where: { email },
@@ -116,10 +113,10 @@ export const login = async (req: Request, res: Response) => {
     await sendOTPEmail(email, newOtp);
 
     // ইউজারকে জানিয়ে দেওয়া হচ্ছে যে ইমেইলে ওটিপি পাঠানো হয়েছে, ভেরিফাই করলেই লগইন কমপ্লিট হবে
-    return res.status(200).json({ 
+    return res.status(200).json({
       message: 'Credentials verified. OTP has been sent to your email for login verification.',
       requiresOTP: true,
-      email: user.email 
+      email: user.email
     });
 
   } catch (error) {
@@ -129,14 +126,14 @@ export const login = async (req: Request, res: Response) => {
 };
 
 // 4. Forget Password - Send OTP
-export const forgotPassword = async (req: Request, res: Response) => { 
+export const forgotPassword = async (req: Request, res: Response) => {
   const { email } = req.body;
   try {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    const otp = generateOTP();
+    const otpExpiry = getOTPExpiry();
 
     await prisma.user.update({
       where: { email },
@@ -165,10 +162,10 @@ export const resetPassword = async (req: Request, res: Response) => {
 
     await prisma.user.update({
       where: { email },
-      data: { 
-        password: hashedNewPassword, 
-        otp: null, 
-        otpExpiry: null 
+      data: {
+        password: hashedNewPassword,
+        otp: null,
+        otpExpiry: null
       }
     });
 

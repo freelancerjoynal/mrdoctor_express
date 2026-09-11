@@ -2,7 +2,7 @@
 import type { Response } from 'express';
 import bcrypt from 'bcrypt';
 import { prisma } from '../../lib/prisma.js';
-import { AuthRequest } from '../../middleware/authMiddleware.js';
+import { AuthRequest } from '../../authentication/middleware/authMiddleware.js';
 
 // ================================================================
 // 10 HOSPITALS

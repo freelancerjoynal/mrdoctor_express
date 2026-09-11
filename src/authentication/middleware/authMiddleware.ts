@@ -8,6 +8,10 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+// Alias kept for backwards compatibility (e.g. seeders importing AuthRequest).
+// Supports both `req.user` (set by protectedRoute) and `req.userId`.
+export type AuthRequest = AuthenticatedRequest & { userId?: string };
+
 export type UserRole = 'SUPER_ADMIN' | 'DOCTOR' | 'BUSINESS_OWNER' | 'HOSPITAL_STAFF' | 'DOCTOR_STAFF';
 
 // এখানে [UserRole, ...UserRole[]] ব্যবহার করার ফলে অন্তত একটি রোল পাস করা বাধ্যতামূলক করা হয়েছে
@@ -27,8 +31,8 @@ export const protectedRoute = (...allowedRoles: [UserRole, ...UserRole[]]) => {
 
       // 3. রোল ম্যাচ করছে কিনা চেক করা
       if (!allowedRoles.includes(req.user.role as UserRole)) {
-        return res.status(403).json({ 
-          error: `Access denied. This route is restricted and your role (${req.user.role}) is not allowed.` 
+        return res.status(403).json({
+          error: `Access denied. This route is restricted and your role (${req.user.role}) is not allowed.`
         });
       }
 
