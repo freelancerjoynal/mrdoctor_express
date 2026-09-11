@@ -12,7 +12,8 @@ export interface AuthenticatedRequest extends Request {
 // Supports both `req.user` (set by protectedRoute) and `req.userId`.
 export type AuthRequest = AuthenticatedRequest & { userId?: string };
 
-export type UserRole = 'SUPER_ADMIN' | 'DOCTOR' | 'BUSINESS_OWNER' | 'HOSPITAL_STAFF' | 'DOCTOR_STAFF';
+// All roles from the Role enum in prisma/schema.prisma — HOSPITAL was missing, which made a hospital-guarded route untypable.
+export type UserRole = 'SUPER_ADMIN' | 'DOCTOR' | 'DOCTOR_STAFF' | 'BUSINESS_OWNER' | 'HOSPITAL' | 'HOSPITAL_STAFF';
 
 // এখানে [UserRole, ...UserRole[]] ব্যবহার করার ফলে অন্তত একটি রোল পাস করা বাধ্যতামূলক করা হয়েছে
 export const protectedRoute = (...allowedRoles: [UserRole, ...UserRole[]]) => {

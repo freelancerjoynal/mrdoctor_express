@@ -4,9 +4,10 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 
 import { authRouter, profileRouter } from './authentication/routes/index.js';
-import seederRouter from './routes/seeders/seederRouter.js';
+import seederRouter from './seeder/routes/index.js';
 import { whatsappRouter, doctorRedirectRouter } from './whatsappChatbot/routes/index.js';
 import websiteRouter from './publicWebsite/routes/index.js';
+import usersRouter from './usersBackend/routes/index.js';
 
 dotenv.config();
 
@@ -33,6 +34,9 @@ app.use('/d', doctorRedirectRouter);
 
 // Public website routes
 app.use('/api/website', websiteRouter);
+
+// Canonical permission-based user/profile lookup (all roles, SUPER_ADMIN may view others)
+app.use('/api/users', usersRouter);
 
 // Server configuration
 const PORT = 8000;

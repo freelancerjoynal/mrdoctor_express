@@ -1,8 +1,10 @@
-// src/controllers/seeders/demoSeeder.ts
-import type { Response } from 'express';
+// Pure seeding logic for the seeder module.
+// No Express req/res here — the controller in ../controllers/ handles HTTP.
+// Throws on failure so the controller can map it to a 500 response.
+// Auth is enforced by protectedRoute on the route (SUPER_ADMIN only),
+// so no inline auth check is needed here.
 import bcrypt from 'bcrypt';
 import { prisma } from '../../lib/prisma.js';
-import { AuthRequest } from '../../authentication/middleware/authMiddleware.js';
 
 // ================================================================
 // 10 HOSPITALS
@@ -26,7 +28,7 @@ const HOSPITALS = [
 const FIRST_NAMES_M = [
   'মো. সামিউর রহমান', 'সৈয়দ হাসান', 'মো. মনিরুজ্জামান', 'মো. রেজাউল করিম',
   'মো. মিনহাজ উদ্দিন', 'মো. ময়নুল হক', 'রূপায়ন দাশ', 'আনছার আলী',
-  'মুহাম্মদ লিটন', 'মো. মহিমিনুল ইসলাম', 'এ.কে.এম. ওয়াজেদ', 'মো. মোস্তাফিজুর',
+  'মুহম্মদ লিটন', 'মো. মহিমিনুল ইসলাম', 'এ.কে.এম. ওয়াজেদ', 'মো. মোস্তাফিজুর',
   'বিপ্লব কুমার', 'মো. গোলাম মোস্তফা', 'কে. এম. রেজাউল', 'আব্দুল্লাহ আল মামুন',
   'মো. শহিদুল ইসলাম', 'সুমন কুমার দাস', 'মো. শাহজাহান', 'মো. আব্দুল কাদের',
   'মো. ফরহাদ হোসেন', 'মো. আবু বাক্কার', 'মো. রফিকুল ইসলাম', 'মো. ইসমাইল হোসেন',
@@ -133,28 +135,28 @@ function buildDoctors(): DoctorSeed[] {
   for (let i = 0; i < 100; i++) {
     const isFemale = i % 2 === 1;
     const firstName = isFemale
-      ? FIRST_NAMES_F[Math.floor(i / 2) % FIRST_NAMES_F.length]
-      : FIRST_NAMES_M[Math.floor(i / 2) % FIRST_NAMES_M.length];
+      ? FIRST_NAMES_F[Math.floor(i / 2) % FIRST_NAMES_F.length]!
+      : FIRST_NAMES_M[Math.floor(i / 2) % FIRST_NAMES_M.length]!;
 
     const name = `ডা. ${firstName}`;
-    const degree = DEGREES[i % DEGREES.length];
-    const speciality = SPECIALITIES[i % SPECIALITIES.length];
+    const degree = DEGREES[i % DEGREES.length]!;
+    const speciality = SPECIALITIES[i % SPECIALITIES.length]!;
     const baseFee = SPECIALITY_FEES[speciality] ?? [700, 600];
 
     const homeIdx = i % HOSPITALS.length;
-    const chamberSlugs: string[] = [HOSPITALS[homeIdx].slug];
+    const chamberSlugs: string[] = [HOSPITALS[homeIdx]!.slug];
 
     if (i % 5 === 0) {
       let otherIdx = (homeIdx + 3) % HOSPITALS.length;
       if (otherIdx === homeIdx) otherIdx = (otherIdx + 1) % HOSPITALS.length;
-      chamberSlugs.push(HOSPITALS[otherIdx].slug);
+      chamberSlugs.push(HOSPITALS[otherIdx]!.slug);
 
       if (i % 20 === 0) {
         let thirdIdx = (homeIdx + 7) % HOSPITALS.length;
-        while (chamberSlugs.includes(HOSPITALS[thirdIdx].slug)) {
+        while (chamberSlugs.includes(HOSPITALS[thirdIdx]!.slug)) {
           thirdIdx = (thirdIdx + 1) % HOSPITALS.length;
         }
-        chamberSlugs.push(HOSPITALS[thirdIdx].slug);
+        chamberSlugs.push(HOSPITALS[thirdIdx]!.slug);
       }
     }
 
@@ -169,7 +171,7 @@ function buildDoctors(): DoctorSeed[] {
       degree,
       speciality,
       tagline: speciality,
-      bio: `${HOSPITALS[homeIdx].name} — ${HOSPITALS[homeIdx].thana}, নীলফামারী`,
+      bio: `${HOSPITALS[homeIdx]!.name} — ${HOSPITALS[homeIdx]!.thana}, নীলফামারী`,
       phone,
       whatsappNumber: phone,
       whatsappId: `${slug}.wa`,
@@ -184,293 +186,266 @@ function buildDoctors(): DoctorSeed[] {
 }
 
 // ================================================================
-// 🎯 MAIN CONTROLLER
+// 🎯 MAIN SERVICE
 // ================================================================
-export const seedAll = async (req: AuthRequest, res: Response) => {
-  try {
-    console.log('🌱 ===== SEED CONTROLLER START =====');
+export const runSeedAll = async () => {
+  console.log('🌱 ===== SEED START =====');
 
-    const userId =
-      req.userId || (req as any).user?.id || (req as any).user?.userId;
+  const summary = {
+    hospitals: 0,
+    doctors: 0,
+    chambers: 0,
+    schedules: 0,
+    chatSessions: 0,
+  };
 
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        error: 'User not authenticated',
-      });
-    }
+  const defaultPassword = await bcrypt.hash('12345678', 10);
 
-    const summary = {
-      hospitals: 0,
-      doctors: 0,
-      chambers: 0,
-      schedules: 0,
-      chatSessions: 0,
-    };
+  // ----------------------------------------------------------
+  // 1. HOSPITALS (Linked with User)
+  // ----------------------------------------------------------
+  console.log('🏥 Seeding hospitals...');
+  const hospitalMap = new Map<
+    string,
+    { id: string; name: string; thana: string }
+  >();
 
-    const defaultPassword = await bcrypt.hash('12345678', 10);
+  for (const h of HOSPITALS) {
+    const hospitalEmail = `${h.slug}@hospital.com`;
 
-    // ----------------------------------------------------------
-    // 1. HOSPITALS (Linked with User)
-    // ----------------------------------------------------------
-    console.log('🏥 Seeding hospitals...');
-    const hospitalMap = new Map<
-      string,
-      { id: string; name: string; thana: string }
-    >();
-
-    for (const h of HOSPITALS) {
-      const hospitalEmail = `${h.slug}@hospital.com`;
-
-      const hospitalUser = await prisma.user.upsert({
-        where: { email: hospitalEmail },
-        update: {},
-        create: {
-          email: hospitalEmail,
-          password: defaultPassword,
-          role: 'HOSPITAL',
-          isVerified: true,
-        },
-      });
-
-      const created = await prisma.hospital.upsert({
-        where: { slug: h.slug },
-        update: {
-          userId: hospitalUser.id,
-          name: h.name,
-          address: h.address,
-          phone: h.phone,
-          establishedYear: h.establishedYear,
-        },
-        create: {
-          userId: hospitalUser.id,
-          name: h.name,
-          slug: h.slug,
-          address: h.address,
-          phone: h.phone,
-          establishedYear: h.establishedYear,
-          status: 'APPROVED',
-          templateName: 'template_a',
-        },
-      });
-
-      hospitalMap.set(h.slug, {
-        id: created.id,
-        name: created.name,
-        thana: h.thana,
-      });
-    }
-    summary.hospitals = hospitalMap.size;
-    console.log(`   ✅ ${summary.hospitals} hospitals ready`);
-
-    // ----------------------------------------------------------
-    // 2. DOCTORS (Linked with User)
-    // ----------------------------------------------------------
-    console.log('👨‍⚕️  Seeding doctors...');
-    const doctorSeeds = buildDoctors();
-    const doctorMap = new Map<
-      string,
-      { id: string; baseFee: [number, number]; chamberSlugs: string[] }
-    >();
-
-    for (const d of doctorSeeds) {
-      const doctorUser = await prisma.user.upsert({
-        where: { email: d.email },
-        update: {},
-        create: {
-          email: d.email,
-          password: defaultPassword,
-          role: 'DOCTOR',
-          isVerified: true,
-        },
-      });
-
-      const created = await prisma.doctor.upsert({
-        where: { username: d.username },
-        update: {
-          userId: doctorUser.id,
-          name: d.name,
-          degree: d.degree,
-          speciality: d.speciality,
-          tagline: d.tagline,
-          bio: d.bio,
-          phone: d.phone,
-          whatsappNumber: d.whatsappNumber,
-          whatsappId: d.whatsappId,
-          startedYear: d.startedYear,
-          status: d.status,
-        },
-        create: {
-          userId: doctorUser.id,
-          name: d.name,
-          username: d.username,
-          email: d.email,
-          degree: d.degree,
-          speciality: d.speciality,
-          tagline: d.tagline,
-          bio: d.bio,
-          phone: d.phone,
-          whatsappNumber: d.whatsappNumber,
-          whatsappId: d.whatsappId,
-          startedYear: d.startedYear,
-          status: d.status,
-          templateName: 'template_a',
-        },
-      });
-
-      doctorMap.set(d.username, {
-        id: created.id,
-        baseFee: d.baseFee,
-        chamberSlugs: d.chamberSlugs,
-      });
-    }
-    summary.doctors = doctorMap.size;
-    console.log(`   ✅ ${summary.doctors} doctors ready`);
-
-    // ----------------------------------------------------------
-    // 3. CHAMBERS
-    // ----------------------------------------------------------
-    console.log('🚪 Seeding chambers with fees...');
-    const chamberMap = new Map<string, string>();
-    const chamberNamePool = [
-      'চেম্বার',
-      'স্পেশালিষ্ট চেম্বার',
-      'ডে-কেয়ার',
-      'কনসালটেশন রুম',
-    ];
-
-    for (const info of doctorMap.values()) {
-      for (let ci = 0; ci < info.chamberSlugs.length; ci++) {
-        const hospitalSlug = info.chamberSlugs[ci];
-        const hospital = hospitalMap.get(hospitalSlug)!;
-        const [newFee, oldFee] = feeForChamber(info.baseFee, ci);
-
-        const chamberId = `ch-${info.id.slice(0, 8)}-${ci + 1}`;
-        const chamberKey = `${info.id}|${hospital.id}|${ci + 1}`;
-
-        const chamber = await prisma.chamber.upsert({
-          where: { id: chamberId },
-          update: {
-            newPatientFee: newFee,
-            oldPatientFee: oldFee,
-          },
-          create: {
-            id: chamberId,
-            doctorId: info.id,
-            hospitalId: hospital.id,
-            chamberName: `${hospital.name.split(' ')[0]} ${chamberNamePool[ci % chamberNamePool.length]}`,
-            addressLine: `${hospital.name}, ${hospital.thana}`,
-            thana: hospital.thana,
-            district: 'নীলফামারী',
-            division: 'রংপুর',
-            latitude: 25.93 + Math.random() * 0.3,
-            longitude: 88.85 + Math.random() * 0.15,
-            newPatientFee: newFee,
-            oldPatientFee: oldFee,
-          },
-        });
-
-        chamberMap.set(chamberKey, chamber.id);
-        summary.chambers++;
-      }
-    }
-    console.log(`   ✅ ${summary.chambers} chambers ready (with fees)`);
-
-    // ----------------------------------------------------------
-    // 4. SCHEDULES
-    // ----------------------------------------------------------
-    console.log('📅 Seeding schedules...');
-    let scheduleCounter = 0;
-
-    for (const info of doctorMap.values()) {
-      for (let ci = 0; ci < info.chamberSlugs.length; ci++) {
-        const hospitalSlug = info.chamberSlugs[ci];
-        const hospital = hospitalMap.get(hospitalSlug)!;
-        const chamberKey = `${info.id}|${hospital.id}|${ci + 1}`;
-        const chamberId = chamberMap.get(chamberKey)!;
-
-        const daySet = DAY_SETS[(scheduleCounter + ci * 2) % DAY_SETS.length];
-        const shift =
-          ci === 0
-            ? scheduleCounter % 3 === 0
-              ? EVENING_SHIFT
-              : MORNING_SHIFT
-            : AFTERNOON_SHIFT;
-
-        for (const day of daySet) {
-          const schId = `sch-${info.id.slice(0, 8)}-c${ci + 1}-${day}`;
-          await prisma.doctorSchedule.upsert({
-            where: { id: schId },
-            update: {},
-            create: {
-              id: schId,
-              doctorId: info.id,
-              hospitalId: hospital.id,
-              chamberId: chamberId,
-              dayOfWeek: day as any,
-              startTime: shift.start,
-              endTime: shift.end,
-            },
-          });
-          summary.schedules++;
-        }
-      }
-      scheduleCounter++;
-    }
-    console.log(`   ✅ ${summary.schedules} schedules ready`);
-
-    // ----------------------------------------------------------
-    // 5. DEMO CHAT SESSIONS
-    // ----------------------------------------------------------
-    console.log('💬 Seeding chat sessions...');
-    const doctorArr = Array.from(doctorMap.values());
-    const firstDoc = doctorArr[0];
-    const secondDoc = doctorArr[1] ?? firstDoc;
-
-    await prisma.chatSession.upsert({
-      where: { phoneNumber: '8801712345678' },
+    const hospitalUser = await prisma.user.upsert({
+      where: { email: hospitalEmail },
       update: {},
       create: {
-        phoneNumber: '8801712345678',
-        targetType: 'DOCTOR',
-        targetId: firstDoc.id,
-        targetName: 'ডা. (demo)',
-        lastFlow: 'GET_DOCTOR_FLOW',
-        lastStep: 'ACTIVE_CHAT',
+        email: hospitalEmail,
+        password: defaultPassword,
+        role: 'HOSPITAL',
+        isVerified: true,
       },
     });
-    await prisma.chatSession.upsert({
-      where: { phoneNumber: '8801798765432' },
-      update: {},
+
+    const created = await prisma.hospital.upsert({
+      where: { slug: h.slug },
+      update: {
+        userId: hospitalUser.id,
+        name: h.name,
+        address: h.address,
+        phone: h.phone,
+        establishedYear: h.establishedYear,
+      },
       create: {
-        phoneNumber: '8801798765432',
-        targetType: 'DOCTOR',
-        targetId: secondDoc.id,
-        targetName: 'ডা. (demo 2)',
-        lastFlow: 'BOOK_APPOINTMENT',
-        lastStep: 'CONFIRMING',
+        userId: hospitalUser.id,
+        name: h.name,
+        slug: h.slug,
+        address: h.address,
+        phone: h.phone,
+        establishedYear: h.establishedYear,
+        status: 'APPROVED',
+        templateName: 'template_a',
       },
     });
-    summary.chatSessions = 2;
-    console.log(`   ✅ ${summary.chatSessions} chat sessions ready`);
 
-    // ----------------------------------------------------------
-    // RESPONSE
-    // ----------------------------------------------------------
-    console.log('✅ ===== SEED CONTROLLER DONE =====\n');
-
-    return res.status(201).json({
-      success: true,
-      message:
-        'নীলফামারী জেলার ১০ হাসপাতাল, ১০০ ডাক্তার, চেম্বার (per-chamber ফি সহ) ও সিডিউল সফলভাবে সিড করা হয়েছে এবং ইউজার অ্যাকাউন্টের সাথে যুক্ত করা হয়েছে!',
-      summary,
-    });
-  } catch (error: any) {
-    console.error('❌ ERROR seeding:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to seed Nilphamari data',
-      details: error.message,
+    hospitalMap.set(h.slug, {
+      id: created.id,
+      name: created.name,
+      thana: h.thana,
     });
   }
+  summary.hospitals = hospitalMap.size;
+  console.log(`   ✅ ${summary.hospitals} hospitals ready`);
+
+  // ----------------------------------------------------------
+  // 2. DOCTORS (Linked with User)
+  // ----------------------------------------------------------
+  console.log('👨‍⚕️  Seeding doctors...');
+  const doctorSeeds = buildDoctors();
+  const doctorMap = new Map<
+    string,
+    { id: string; baseFee: [number, number]; chamberSlugs: string[] }
+  >();
+
+  for (const d of doctorSeeds) {
+    const doctorUser = await prisma.user.upsert({
+      where: { email: d.email },
+      update: {},
+      create: {
+        email: d.email,
+        password: defaultPassword,
+        role: 'DOCTOR',
+        isVerified: true,
+      },
+    });
+
+    const created = await prisma.doctor.upsert({
+      where: { username: d.username },
+      update: {
+        userId: doctorUser.id,
+        name: d.name,
+        degree: d.degree,
+        speciality: d.speciality,
+        tagline: d.tagline,
+        bio: d.bio,
+        phone: d.phone,
+        whatsappNumber: d.whatsappNumber,
+        whatsappId: d.whatsappId,
+        startedYear: d.startedYear,
+        status: d.status,
+      },
+      create: {
+        userId: doctorUser.id,
+        name: d.name,
+        username: d.username,
+        email: d.email,
+        degree: d.degree,
+        speciality: d.speciality,
+        tagline: d.tagline,
+        bio: d.bio,
+        phone: d.phone,
+        whatsappNumber: d.whatsappNumber,
+        whatsappId: d.whatsappId,
+        startedYear: d.startedYear,
+        status: d.status,
+        templateName: 'template_a',
+      },
+    });
+
+    doctorMap.set(d.username, {
+      id: created.id,
+      baseFee: d.baseFee,
+      chamberSlugs: d.chamberSlugs,
+    });
+  }
+  summary.doctors = doctorMap.size;
+  console.log(`   ✅ ${summary.doctors} doctors ready`);
+
+  // ----------------------------------------------------------
+  // 3. CHAMBERS
+  // ----------------------------------------------------------
+  console.log('🚪 Seeding chambers with fees...');
+  const chamberMap = new Map<string, string>();
+  const chamberNamePool = [
+    'চেম্বার',
+    'স্পেশালিষ্ট চেম্বার',
+    'ডে-কেয়ার',
+    'কনসালটেশন রুম',
+  ];
+
+  for (const info of doctorMap.values()) {
+    for (let ci = 0; ci < info.chamberSlugs.length; ci++) {
+      const hospitalSlug = info.chamberSlugs[ci]!;
+      const hospital = hospitalMap.get(hospitalSlug)!;
+      const [newFee, oldFee] = feeForChamber(info.baseFee, ci);
+
+      const chamberId = `ch-${info.id.slice(0, 8)}-${ci + 1}`;
+      const chamberKey = `${info.id}|${hospital.id}|${ci + 1}`;
+
+      const chamber = await prisma.chamber.upsert({
+        where: { id: chamberId },
+        update: {
+          newPatientFee: newFee,
+          oldPatientFee: oldFee,
+        },
+        create: {
+          id: chamberId,
+          doctorId: info.id,
+          hospitalId: hospital.id,
+            chamberName: `${hospital.name.split(' ')[0]} ${chamberNamePool[ci % chamberNamePool.length]!}`,
+          addressLine: `${hospital.name}, ${hospital.thana}`,
+          thana: hospital.thana,
+          district: 'নীলফামারী',
+          division: 'রংপুর',
+          latitude: 25.93 + Math.random() * 0.3,
+          longitude: 88.85 + Math.random() * 0.15,
+          newPatientFee: newFee,
+          oldPatientFee: oldFee,
+        },
+      });
+
+      chamberMap.set(chamberKey, chamber.id);
+      summary.chambers++;
+    }
+  }
+  console.log(`   ✅ ${summary.chambers} chambers ready (with fees)`);
+
+  // ----------------------------------------------------------
+  // 4. SCHEDULES
+  // ----------------------------------------------------------
+  console.log('📅 Seeding schedules...');
+  let scheduleCounter = 0;
+
+  for (const info of doctorMap.values()) {
+    for (let ci = 0; ci < info.chamberSlugs.length; ci++) {
+      const hospitalSlug = info.chamberSlugs[ci]!;
+      const hospital = hospitalMap.get(hospitalSlug)!;
+      const chamberKey = `${info.id}|${hospital.id}|${ci + 1}`;
+      const chamberId = chamberMap.get(chamberKey)!;
+
+      const daySet = DAY_SETS[(scheduleCounter + ci * 2) % DAY_SETS.length]!;
+      const shift =
+        ci === 0
+          ? scheduleCounter % 3 === 0
+            ? EVENING_SHIFT
+            : MORNING_SHIFT
+          : AFTERNOON_SHIFT;
+
+      for (const day of daySet) {
+        const schId = `sch-${info.id.slice(0, 8)}-c${ci + 1}-${day}`;
+        await prisma.doctorSchedule.upsert({
+          where: { id: schId },
+          update: {},
+          create: {
+            id: schId,
+            doctorId: info.id,
+            hospitalId: hospital.id,
+            chamberId: chamberId,
+            dayOfWeek: day as any,
+            startTime: shift.start,
+            endTime: shift.end,
+          },
+        });
+        summary.schedules++;
+      }
+    }
+    scheduleCounter++;
+  }
+  console.log(`   ✅ ${summary.schedules} schedules ready`);
+
+  // ----------------------------------------------------------
+  // 5. DEMO CHAT SESSIONS
+  // ----------------------------------------------------------
+  console.log('💬 Seeding chat sessions...');
+  const doctorArr = Array.from(doctorMap.values());
+  const firstDoc = doctorArr[0]!;
+  const secondDoc = doctorArr[1] ?? firstDoc;
+
+  await prisma.chatSession.upsert({
+    where: { phoneNumber: '8801712345678' },
+    update: {},
+    create: {
+      phoneNumber: '8801712345678',
+      targetType: 'DOCTOR',
+      targetId: firstDoc.id,
+      targetName: 'ডা. (demo)',
+      lastFlow: 'GET_DOCTOR_FLOW',
+      lastStep: 'ACTIVE_CHAT',
+    },
+  });
+  await prisma.chatSession.upsert({
+    where: { phoneNumber: '8801798765432' },
+    update: {},
+    create: {
+      phoneNumber: '8801798765432',
+      targetType: 'DOCTOR',
+      targetId: secondDoc.id,
+      targetName: 'ডা. (demo 2)',
+      lastFlow: 'BOOK_APPOINTMENT',
+      lastStep: 'CONFIRMING',
+    },
+  });
+  summary.chatSessions = 2;
+  console.log(`   ✅ ${summary.chatSessions} chat sessions ready`);
+
+  console.log('✅ ===== SEED DONE =====\n');
+
+  return { summary };
 };
