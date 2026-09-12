@@ -6,6 +6,7 @@ import { getHealth, getHome } from '../controllers/websiteController.js';
 import directoryRouter from './directoryRoutes.js';
 import locationRouter from './locationRoutes.js';
 import blogRouter from './blogRoutes.js';
+import reviewRouter from './reviewRoutes.js';
 
 const websiteRouter = express.Router();
 
@@ -20,5 +21,8 @@ websiteRouter.use('/', directoryRouter);
 
 // Public blogs (unauthenticated by design — PUBLISHED only)
 websiteRouter.use('/', blogRouter);
+
+// Public reviews (unauthenticated by design — APPROVED only, open submit)
+websiteRouter.use('/', reviewRouter);
 
 export default websiteRouter;

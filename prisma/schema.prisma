@@ -58,6 +58,12 @@ enum BlogStatus {
   ARCHIVED
 }
 
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
@@ -138,6 +144,7 @@ model Doctor {
   pendingAppointments PendingAppointment[]
   information         DoctorInformation?
   blogs               Blog[]
+  reviews             Review[]
 
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
@@ -163,6 +170,7 @@ model Hospital {
   chambers        Chamber[]
   schedules       DoctorSchedule[]
   blogs           Blog[]
+  reviews         Review[]
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -307,4 +315,32 @@ model Blog {
   @@index([doctorId, status])
   @@index([hospitalId, status])
   @@map("blogs")
+}
+
+// রোগীদের মতামত — ডাক্তার ও হাসপাতাল দুজনের জন্যই।
+// - doctorId বসলে ডাক্তারের রিভিউ, hospitalId বসলে হাসপাতালের রিভিউ (ঠিক একটি)।
+// - ভিজিটররা পাবলিক ফর্মে লিখে (PENDING), অনুমোদনের পর (APPROVED) সাইটে দেখায়।
+model Review {
+  id           String       @id @default(uuid())
+  rating       Int          @default(5)
+  reviewerName String
+  reviewerPhone String?
+  title        String?
+  comment      String
+
+  doctorId     String?
+  doctor       Doctor?      @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  hospitalId   String?
+  hospital     Hospital?    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  status       ReviewStatus @default(PENDING)
+  source       String       @default("website")
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([doctorId, status])
+  @@index([hospitalId, status])
+  @@map("reviews")
 }

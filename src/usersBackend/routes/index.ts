@@ -4,6 +4,7 @@ import express from 'express';
 import usersProfileRouter from './profileRoutes.js';
 import doctorInformationRouter from './doctorInformationRoutes.js';
 import blogRouter from './blogRoutes.js';
+import reviewRouter from './reviewRoutes.js';
 
 const usersRouter = express.Router();
 
@@ -15,6 +16,9 @@ usersRouter.use('/doctor-information', doctorInformationRouter);
 
 // GET|POST /api/users/blogs — blogs by doctors, hospitals and super-admins
 usersRouter.use('/blogs', blogRouter);
+
+// GET|PUT|DELETE /api/users/reviews — review moderation for profile owners
+usersRouter.use('/reviews', reviewRouter);
 
 export { usersRouter };
 export default usersRouter;

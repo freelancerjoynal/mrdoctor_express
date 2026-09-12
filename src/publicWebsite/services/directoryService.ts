@@ -118,6 +118,19 @@ const PUBLIC_DOCTOR_SELECT = {
       chamber: { select: { id: true, chamberName: true } },
     },
   },
+  reviews: {
+    where: { status: 'APPROVED' as const },
+    orderBy: { createdAt: 'desc' as const },
+    take: 3,
+    select: {
+      id: true,
+      rating: true,
+      reviewerName: true,
+      title: true,
+      comment: true,
+      createdAt: true,
+    },
+  },
 } as const;
 
 // Slim doctor reference nested inside hospital chambers (no schedules here).
@@ -146,6 +159,19 @@ const PUBLIC_HOSPITAL_SELECT = {
       newPatientFee: true,
       oldPatientFee: true,
       doctor: { select: NESTED_DOCTOR_SELECT },
+    },
+  },
+  reviews: {
+    where: { status: 'APPROVED' as const },
+    orderBy: { createdAt: 'desc' as const },
+    take: 3,
+    select: {
+      id: true,
+      rating: true,
+      reviewerName: true,
+      title: true,
+      comment: true,
+      createdAt: true,
     },
   },
 } as const;
@@ -206,10 +232,23 @@ export async function getPublicDoctors(filters: DoctorFilters) {
 }
 
 export async function getPublicDoctorByUsername(username: string) {
-  return prisma.doctor.findFirst({
+  const doctor = await prisma.doctor.findFirst({
     where: { username, status: 'APPROVED' },
     select: PUBLIC_DOCTOR_SELECT,
   });
+  if (!doctor) return null;
+  const agg = await prisma.review.aggregate({
+    where: { doctor: { username }, status: 'APPROVED' },
+    _avg: { rating: true },
+    _count: { rating: true },
+  });
+  return {
+    ...doctor,
+    rating: {
+      average: agg._avg.rating ? Math.round(agg._avg.rating * 10) / 10 : 0,
+      count: agg._count.rating,
+    },
+  };
 }
 
 export async function getPublicHospitals(filters: HospitalFilters) {
@@ -241,10 +280,23 @@ export async function getPublicHospitals(filters: HospitalFilters) {
 }
 
 export async function getPublicHospitalBySlug(slug: string) {
-  return prisma.hospital.findFirst({
+  const hospital = await prisma.hospital.findFirst({
     where: { slug, status: 'APPROVED' },
     select: PUBLIC_HOSPITAL_SELECT,
   });
+  if (!hospital) return null;
+  const agg = await prisma.review.aggregate({
+    where: { hospital: { slug }, status: 'APPROVED' },
+    _avg: { rating: true },
+    _count: { rating: true },
+  });
+  return {
+    ...hospital,
+    rating: {
+      average: agg._avg.rating ? Math.round(agg._avg.rating * 10) / 10 : 0,
+      count: agg._count.rating,
+    },
+  };
 }
 
 export async function getPublicChambers(filters: ChamberFilters) {

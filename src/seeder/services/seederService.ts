@@ -8,6 +8,7 @@ import { prisma } from '../../lib/prisma.js';
 import { buildExpertiseForSpeciality, buildTimelineForDoctor } from './doctorInformationContent.js';
 import { BLOG_SEEDS } from './blogSeedContent.js';
 import { buildDoctorPoolSeeds } from './blogPoolContent.js';
+import { buildDummyReviews } from './reviewSeedContent.js';
 
 // ================================================================
 // 10 HOSPITALS
@@ -610,6 +611,56 @@ export const runSeedAll = async () => {
   }
   (summary as Record<string, number>).blogs += poolCount;
   console.log(`   ✅ ${poolCount} pool blogs ready`);
+
+  // ----------------------------------------------------------
+  // 9. REVIEWS (dummy patient feedback for doctors + hospitals)
+  // ----------------------------------------------------------
+  console.log('⭐ Seeding reviews...');
+  let reviewCount = 0;
+  let reviewIndex = 0;
+  for (const d of allDoctors) {
+    for (const r of buildDummyReviews(reviewIndex)) {
+      await prisma.review.create({
+        data: {
+          rating: r.rating,
+          reviewerName: r.reviewerName,
+          title: r.title ?? null,
+          comment: r.comment,
+          status: r.status as any,
+          source: 'seed',
+          doctorId: d.id,
+          createdAt: new Date(Date.now() - r.daysAgo * 864e5),
+        },
+      });
+      reviewCount++;
+    }
+    reviewIndex++;
+  }
+  const allHospitals = await prisma.hospital.findMany({
+    select: { id: true },
+    orderBy: { slug: 'asc' },
+  });
+  let hospReviewIndex = 0;
+  for (const h of allHospitals) {
+    for (const r of buildDummyReviews(hospReviewIndex, true)) {
+      await prisma.review.create({
+        data: {
+          rating: r.rating,
+          reviewerName: r.reviewerName,
+          title: r.title ?? null,
+          comment: r.comment,
+          status: r.status as any,
+          source: 'seed',
+          hospitalId: h.id,
+          createdAt: new Date(Date.now() - r.daysAgo * 864e5),
+        },
+      });
+      reviewCount++;
+    }
+    hospReviewIndex++;
+  }
+  (summary as Record<string, number>).reviews = reviewCount;
+  console.log(`   ✅ ${reviewCount} reviews ready`);
 
   console.log('✅ ===== SEED DONE =====\n');
 

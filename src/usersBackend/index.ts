@@ -21,4 +21,7 @@ export {
 } from './controllers/blogController.js';
 export { listBlogs, getBlog, createBlog, updateBlog, deleteBlog } from './services/blogService.js';
 export type { BlogCaller, BlogAuthorType, BlogStatus, BlogInput } from './services/blogService.js';
+export { listUserReviews, moderateUserReview, removeUserReview } from './controllers/reviewController.js';
+export { listReviews, moderateReview, deleteReview } from './services/reviewService.js';
+export type { ReviewCaller } from './services/reviewService.js';
 export { usersRouter } from './routes/index.js';
