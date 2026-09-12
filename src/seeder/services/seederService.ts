@@ -5,6 +5,7 @@
 // so no inline auth check is needed here.
 import bcrypt from 'bcrypt';
 import { prisma } from '../../lib/prisma.js';
+import { buildExpertiseForSpeciality, buildTimelineForDoctor } from './doctorInformationContent.js';
 
 // ================================================================
 // 10 HOSPITALS
@@ -444,6 +445,45 @@ export const runSeedAll = async () => {
   });
   summary.chatSessions = 2;
   console.log(`   ✅ ${summary.chatSessions} chat sessions ready`);
+
+  // ----------------------------------------------------------
+  // 6. DOCTOR INFORMATIONS (expertise + timeline per doctor)
+  // ----------------------------------------------------------
+  console.log('📋 Seeding doctor informations...');
+  let infoCount = 0;
+  const allDoctors = await prisma.doctor.findMany({
+    select: {
+      id: true,
+      degree: true,
+      speciality: true,
+      startedYear: true,
+      chambers: { select: { thana: true }, take: 1 },
+    },
+    orderBy: { username: 'asc' },
+  });
+
+  let infoIndex = 0;
+  for (const d of allDoctors) {
+    const expertise = buildExpertiseForSpeciality(d.speciality);
+    const timeline = buildTimelineForDoctor(
+      {
+        degree: d.degree,
+        speciality: d.speciality,
+        startedYear: d.startedYear,
+        firstChamberThana: d.chambers[0]?.thana ?? null,
+      },
+      infoIndex,
+    );
+    await prisma.doctorInformation.upsert({
+      where: { doctorId: d.id },
+      update: { expertise: expertise as any, timeline: timeline as any },
+      create: { doctorId: d.id, expertise: expertise as any, timeline: timeline as any },
+    });
+    infoCount++;
+    infoIndex++;
+  }
+  (summary as Record<string, number>).doctorInformations = infoCount;
+  console.log(`   ✅ ${infoCount} doctor informations ready`);
 
   console.log('✅ ===== SEED DONE =====\n');
 

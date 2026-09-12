@@ -42,6 +42,13 @@ const PUBLIC_DOCTOR_SELECT = {
   startedYear: true,
   profilePicture: true,
   gender: true,
+  information: {
+    select: {
+      expertise: true,
+      timeline: true,
+      updatedAt: true,
+    },
+  },
   chambers: {
     select: {
       id: true,

@@ -9,4 +9,7 @@ export { getProfileData } from './services/profileService.js';
 export type { ProfileCaller } from './services/profileService.js';
 export { PROFILE_VISIBILITY } from './policies/profilePolicy.js';
 export type { RoleVisibility } from './policies/profilePolicy.js';
+export { showDoctorInformation, saveDoctorInformation } from './controllers/doctorInformationController.js';
+export { getDoctorInformation, upsertDoctorInformation } from './services/doctorInformationService.js';
+export type { ExpertiseItem, TimelineItem } from './services/doctorInformationService.js';
 export { usersRouter } from './routes/index.js';

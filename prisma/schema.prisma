@@ -124,6 +124,7 @@ model Doctor {
   chambers            Chamber[]
   schedules           DoctorSchedule[]
   pendingAppointments PendingAppointment[]
+  information         DoctorInformation?
 
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
@@ -228,8 +229,28 @@ model PendingAppointment {
 
   status          String   @default("PENDING")
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@map("pending_appointments")
+}
+
+// ডাক্তারের পাবলিক ওয়েবসাইটের ডাইনামিক সেকশনগুলোর জন্য অতিরিক্ত তথ্য।
+// Doctor এর সাথে one-to-one রিলেশন (doctorId unique)।
+// - expertise: [{ icon, service, service_details }] → "আমি যেসব চিকিৎসা সক্রিয়ভাবে করি"
+// - timeline:  [{ year, title }] → "যোগ্যতা ও অভিজ্ঞতা / একটি দীর্ঘ পথের প্রতিফলন"
+// দুটোই Json array — অবজেক্ট সংখ্যা নির্দিষ্ট নয়, যত খুশি যোগ করা যাবে।
+model DoctorInformation {
+  id        String   @id @default(uuid())
+
+  doctorId  String   @unique
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  expertise Json     @default("[]")
+  timeline  Json     @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("doctor_informations")
 }
