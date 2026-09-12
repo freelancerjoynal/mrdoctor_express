@@ -5,6 +5,7 @@ import usersProfileRouter from './profileRoutes.js';
 import doctorInformationRouter from './doctorInformationRoutes.js';
 import blogRouter from './blogRoutes.js';
 import reviewRouter from './reviewRoutes.js';
+import appointmentRouter from './appointmentRoutes.js';
 
 const usersRouter = express.Router();
 
@@ -19,6 +20,9 @@ usersRouter.use('/blogs', blogRouter);
 
 // GET|PUT|DELETE /api/users/reviews — review moderation for profile owners
 usersRouter.use('/reviews', reviewRouter);
+
+// GET|PATCH /api/users/appointments — pending intake scoped to own doctor/hospital
+usersRouter.use('/appointments', appointmentRouter);
 
 export { usersRouter };
 export default usersRouter;

@@ -171,6 +171,7 @@ model Hospital {
   schedules       DoctorSchedule[]
   blogs           Blog[]
   reviews         Review[]
+  pendingAppointments PendingAppointment[]
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -231,29 +232,39 @@ model DoctorSchedule {
 
 model PendingAppointment {
   id              String   @id @default(uuid())
-  phoneNumber     String   // sender WhatsApp number (session owner)
+  phoneNumber     String   @default("") // sender WhatsApp number (session owner); website bookings reuse contactPhone
   doctorId        String
   doctor          Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   doctorName      String?
 
+  // কোন হাসপাতালের চেম্বারের জন্য অনুরোধ (chamber.hospitalId থেকে বসে; সরাসরি ডাক্তার-চেম্বার হলে null)।
+  // এতে ডাক্তার-ভিত্তিক ও হাসপাতাল-ভিত্তিক ফিল্টার দুটোই সম্ভব।
+  hospitalId      String?
+  hospital        Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  hospitalName    String?
+
   problem         String   // 'আপনার সমস্যা কী?' — saved to memory
-  appointmentDate DateTime // today or tomorrow (running day only)
-  dayLabel        String?  // e.g. "আজকে — বৃহস্পতিবার, 11 Sep"
+  appointmentDate DateTime // WhatsApp: today/tomorrow; website: running day within 30 days
+  dayLabel        String?  // e.g. "আজকে — বৃহস্পতিবার, ১১ সেপ্টেম্বর"
 
   chamberId       String?  // selected chamber
   chamberName     String?
 
   patientName     String
+  patientType     String   @default("NEW") // NEW (নতুন রোগী) | RENEW (পুরনো রোগী)
   patientAge      Int?
   patientWeight   Float?
   patientArea     String?  // user's area
   contactPhone    String   // typed number or sender number via button
 
+  source          String   @default("whatsapp") // whatsapp | website
   status          String   @default("PENDING")
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  @@index([doctorId, status])
+  @@index([hospitalId, status])
   @@map("pending_appointments")
 }
 

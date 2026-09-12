@@ -7,7 +7,7 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../../lib/prisma.js';
 import { buildExpertiseForSpeciality, buildTimelineForDoctor } from './doctorInformationContent.js';
 import { BLOG_SEEDS } from './blogSeedContent.js';
-import { buildDoctorPoolSeeds } from './blogPoolContent.js';
+import { buildDoctorPoolSeeds, buildHospitalPoolSeeds } from './blogPoolContent.js';
 import { buildDummyReviews } from './reviewSeedContent.js';
 
 // ================================================================
@@ -611,6 +611,57 @@ export const runSeedAll = async () => {
   }
   (summary as Record<string, number>).blogs += poolCount;
   console.log(`   ✅ ${poolCount} pool blogs ready`);
+
+  // ----------------------------------------------------------
+  // 8b. HOSPITAL POOL BLOGS (2 per hospital portal)
+  // ----------------------------------------------------------
+  console.log('📝 Seeding per-hospital pool blogs...');
+  const seederHospitals = await prisma.hospital.findMany({
+    select: { id: true, slug: true, name: true },
+    orderBy: { slug: 'asc' },
+  });
+  let hospPoolCount = 0;
+  let hospPoolIndex = 0;
+  for (const h of seederHospitals) {
+    for (const s of buildHospitalPoolSeeds(h, hospPoolIndex * 9)) {
+      await prisma.blog.upsert({
+        where: { slug: s.slug },
+        update: {
+          title: s.title,
+          excerpt: s.excerpt,
+          content: s.content,
+          coverGradient: s.coverGradient,
+          coverSymbol: s.coverSymbol,
+          category: s.category,
+          tags: s.tags,
+          authorType: 'HOSPITAL' as any,
+          authorName: s.authorName,
+          hospitalId: h.id,
+          status: 'PUBLISHED',
+          publishedAt: s.publishedAt,
+        },
+        create: {
+          slug: s.slug,
+          title: s.title,
+          excerpt: s.excerpt,
+          content: s.content,
+          coverGradient: s.coverGradient,
+          coverSymbol: s.coverSymbol,
+          category: s.category,
+          tags: s.tags,
+          authorType: 'HOSPITAL' as any,
+          authorName: s.authorName,
+          hospitalId: h.id,
+          status: 'PUBLISHED',
+          publishedAt: s.publishedAt,
+        },
+      });
+      hospPoolCount++;
+    }
+    hospPoolIndex++;
+  }
+  (summary as Record<string, number>).blogs += hospPoolCount;
+  console.log(`   ✅ ${hospPoolCount} hospital pool blogs ready`);
 
   // ----------------------------------------------------------
   // 9. REVIEWS (dummy patient feedback for doctors + hospitals)

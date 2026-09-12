@@ -762,3 +762,58 @@ export function buildDoctorPoolSeeds(
     publishedAt: new Date(Date.now() - (daysAgoBase + i * 12 + 3) * 24 * 60 * 60 * 1000),
   }));
 }
+
+// ------------------------------------------------------------------
+// Hospital pool — 2 service/announcement posts per hospital portal.
+// ------------------------------------------------------------------
+export interface HospitalPoolSeedInput extends DoctorPoolSeedInput {}
+
+const HOSPITAL_POOL: DoctorPoolTopic[] = [
+  {
+    slugBase: 'emergency-care-guide',
+    title: 'জরুরি মুহূর্তে যা করবেন: আমাদের জরুরি বিভাগ',
+    excerpt: '২৪ ঘণ্টা জরুরি সেবা — কখন, কীভাবে আসবেন।',
+    content: [
+      'বুকে ব্যথা, শ্বাসকষ্ট, দুর্ঘটনা, প্রসব বেদনা বা শিশুর খিঁচুনি — এমন জরুরি অবস্থায় দেরি না করে সরাসরি আমাদের জরুরি বিভাগে চলে আসুন, যা ২৪ ঘণ্টা খোলা থাকে।',
+      'আসার সময় রোগীর আগের প্রেসক্রিপশন, রিপোর্ট ও নিয়মিত ওষুধের তালিকা সঙ্গে আনুন। ডায়াবেটিস-প্রেশারের রোগী হলে তা প্রথমেই কর্তব্যরত চিকিৎসককে জানান।',
+      'জরুরি রোগীদের অগ্রাধিকার দেওয়া হয় — টিকিট লাইনে দাঁড়িয়ে সময় নষ্ট করবেন না, সরাসরি জরুরি কাউন্টারে যান। অ্যাম্বুলেন্স প্রয়োজনে হাসপাতালের হটলাইনে ফোন করুন।',
+    ].join('\n\n'),
+    coverGradient: 'from-red-500 to-rose-700',
+    coverSymbol: '🚨',
+    category: 'হাসপাতাল ঘোষণা',
+    tags: ['জরুরি', 'সেবা', 'হটলাইন'],
+  },
+  {
+    slugBase: 'free-vaccination-camp',
+    title: 'বিনামূল্যে টিকাদান ও স্বাস্থ্য ক্যাম্প',
+    excerpt: 'শিশু টিকা, ডায়াবেটিস স্ক্রিনিং — নির্ধারিত দিনে ফ্রি।',
+    content: [
+      'প্রতি সপ্তাহের নির্ধারিত দিনে আমাদের টিকাদান কেন্দ্রে শিশুদের সব সরকারি টিকা বিনামূল্যে দেওয়া হয়। টিকা কার্ড সঙ্গে আনুন ও পরের ডোজের তারিখ লিখে নিন।',
+      'মাসের প্রথম শুক্রবারে ফ্রি ডায়াবেটিস ও প্রেশার স্ক্রিনিং ক্যাম্প হয়। ৪০ বছরের বেশি সবাইকে বছরে অন্তত একবার স্ক্রিনিং করানোর পরামর্শ দিই।',
+      'ক্যাম্পের তারিখ পরিবর্তন হলে এই পোর্টালের ব্লগেই আগাম জানিয়ে দেওয়া হয় — নিয়মিত চোখ রাখুন।',
+    ].join('\n\n'),
+    coverGradient: 'from-sky-500 to-blue-700',
+    coverSymbol: '💉',
+    category: 'হাসপাতাল ঘোষণা',
+    tags: ['টিকাদান', 'ক্যাম্প', 'ফ্রি'],
+  },
+];
+
+/** Build 2 ready-to-store seeds for one hospital. */
+export function buildHospitalPoolSeeds(
+  hospital: { slug: string; name: string },
+  daysAgoBase = 0,
+): HospitalPoolSeedInput[] {
+  return HOSPITAL_POOL.map((t, i) => ({
+    slug: `${t.slugBase}-${hospital.slug}`.slice(0, 80),
+    title: t.title,
+    excerpt: t.excerpt,
+    content: t.content,
+    coverGradient: t.coverGradient,
+    coverSymbol: t.coverSymbol,
+    category: t.category,
+    tags: t.tags,
+    authorName: hospital.name,
+    publishedAt: new Date(Date.now() - (daysAgoBase + i * 15 + 5) * 24 * 60 * 60 * 1000),
+  }));
+}

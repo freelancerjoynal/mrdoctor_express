@@ -1,7 +1,7 @@
 // Thin public controllers for the blog resource.
 // No auth here by design — only PUBLISHED posts are returned.
 import type { Request, Response } from 'express';
-import { getPublicBlogs, getPublicBlogBySlug, getPublicDoctorBlogs } from '../services/directoryService.js';
+import { getPublicBlogs, getPublicBlogBySlug, getPublicDoctorBlogs, getPublicHospitalBlogs } from '../services/directoryService.js';
 
 function parsePaging(req: Request): { page: number; limit: number } {
   const rawPage = Array.isArray(req.query.page) ? req.query.page[0] : req.query.page;
@@ -55,5 +55,19 @@ export const listDoctorBlogs = async (req: Request, res: Response) => {
     return res.json({ backend: 'publicWebsite', data: blogs });
   } catch {
     return res.status(500).json({ error: 'Failed to load doctor blogs' });
+  }
+};
+
+export const listHospitalBlogs = async (req: Request, res: Response) => {
+  try {
+    const rawTake = Array.isArray(req.query.take) ? req.query.take[0] : req.query.take;
+    const blogs = await getPublicHospitalBlogs(
+      req.params.slug as string,
+      typeof rawTake === 'string' ? parseInt(rawTake, 10) || 6 : 6,
+    );
+    if (!blogs) return res.status(404).json({ error: 'Hospital not found' });
+    return res.json({ backend: 'publicWebsite', data: blogs });
+  } catch {
+    return res.status(500).json({ error: 'Failed to load hospital blogs' });
   }
 };

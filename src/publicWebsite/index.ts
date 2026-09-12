@@ -5,7 +5,7 @@
 
 export { getHome, getHealth } from './controllers/websiteController.js';
 export { listDoctors, showDoctor, listHospitals, showHospital, listChambers, showChamber } from './controllers/directoryController.js';
-export { listBlogs, showBlog, listDoctorBlogs } from './controllers/blogController.js';
+export { listBlogs, showBlog, listDoctorBlogs, listHospitalBlogs } from './controllers/blogController.js';
 export {
   postReview,
   listDoctorReviews,
@@ -25,6 +25,7 @@ export {
   getPublicBlogs,
   getPublicBlogBySlug,
   getPublicDoctorBlogs,
+  getPublicHospitalBlogs,
 } from './services/directoryService.js';
 export { getLocationTree, listDivisions, listDistricts, listThanas } from './services/locationService.js';
 export {

@@ -139,6 +139,9 @@ const NESTED_DOCTOR_SELECT = {
   name: true,
   degree: true,
   speciality: true,
+  tagline: true,
+  profilePicture: true,
+  gender: true,
 } as const;
 
 // Public hospital card: identity + contact + associated chambers/doctors.
@@ -172,6 +175,26 @@ const PUBLIC_HOSPITAL_SELECT = {
       title: true,
       comment: true,
       createdAt: true,
+    },
+  },
+  blogs: {
+    where: { status: 'PUBLISHED' as const },
+    orderBy: { publishedAt: 'desc' as const },
+    take: 6,
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      excerpt: true,
+      content: true,
+      coverImage: true,
+      coverGradient: true,
+      coverSymbol: true,
+      category: true,
+      tags: true,
+      authorName: true,
+      publishedAt: true,
+      views: true,
     },
   },
 } as const;
@@ -380,6 +403,21 @@ export async function getPublicBlogBySlug(slug: string) {
     prisma.blog.update({ where: { slug }, data: { views: { increment: 1 } } }).catch(() => {});
   }
   return blog;
+}
+
+// Latest published posts of one hospital — powers the hospital portal blog section.
+export async function getPublicHospitalBlogs(slug: string, take = 6) {
+  const hospital = await prisma.hospital.findFirst({
+    where: { slug, status: 'APPROVED' },
+    select: { id: true },
+  });
+  if (!hospital) return null;
+  return prisma.blog.findMany({
+    where: { hospitalId: hospital.id, status: 'PUBLISHED' },
+    select: PUBLIC_BLOG_SELECT,
+    orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+    take: Math.min(Math.max(take, 1), 12),
+  });
 }
 
 // Latest published posts of one doctor — powers the profile-page blog section.

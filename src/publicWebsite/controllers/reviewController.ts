@@ -4,6 +4,7 @@ import type { Request, Response } from 'express';
 import {
   submitReview,
   getDoctorReviews,
+  getDoctorSpotlightReviews,
   getDoctorRatingSummary,
   getHospitalReviews,
   getHospitalRatingSummary,
@@ -57,6 +58,16 @@ export const listDoctorReviews = async (req: Request, res: Response) => {
     return res.json({ backend: 'publicWebsite', ...result });
   } catch {
     return res.status(500).json({ error: 'Failed to load reviews' });
+  }
+};
+
+export const showDoctorSpotlight = async (req: Request, res: Response) => {
+  try {
+    const data = await getDoctorSpotlightReviews(req.params.username as string, 2, 10);
+    if (!data) return res.status(404).json({ error: 'Doctor not found' });
+    return res.json({ backend: 'publicWebsite', data });
+  } catch {
+    return res.status(500).json({ error: 'Failed to load spotlight reviews' });
   }
 };
 

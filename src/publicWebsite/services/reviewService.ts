@@ -84,6 +84,37 @@ export async function submitReview(input: SubmitReviewInput) {
   });
 }
 
+// Random spotlight picks: 2 random reviews out of the latest 10 APPROVED ones.
+// Powers the hospital-popup "view profile" preview (speciality + tagline +
+// latest 2 random reviews). Empty array when there are none.
+export async function getDoctorSpotlightReviews(username: string, take = 2, pool = 10) {
+  const doctor = await prisma.doctor.findFirst({
+    where: { username, status: 'APPROVED' },
+    select: { id: true },
+  });
+  if (!doctor) return null;
+  const ids = await prisma.review.findMany({
+    where: { doctorId: doctor.id, status: 'APPROVED' },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(Math.max(pool, take), 25),
+    select: { id: true },
+  });
+  // Fisher–Yates shuffle, then take — uniform random picks.
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j]!, ids[i]!];
+  }
+  const picked = ids.slice(0, Math.min(Math.max(take, 1), 5)).map((r) => r.id);
+  if (!picked.length) return [];
+  const rows = await prisma.review.findMany({
+    where: { id: { in: picked } },
+    select: PUBLIC_REVIEW_SELECT,
+  });
+  // Preserve the shuffled order.
+  const order = new Map(picked.map((id, i) => [id, i]));
+  return rows.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+}
+
 export interface RatingSummary {
   average: number;
   count: number;

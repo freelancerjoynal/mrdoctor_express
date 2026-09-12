@@ -2,7 +2,7 @@
 // Deliberately NO protectedRoute here — only PUBLISHED posts are served.
 // Mounted by websiteRoutes at /api/website.
 import express from 'express';
-import { listBlogs, showBlog, listDoctorBlogs } from '../controllers/blogController.js';
+import { listBlogs, showBlog, listDoctorBlogs, listHospitalBlogs } from '../controllers/blogController.js';
 
 const blogRouter = express.Router();
 
@@ -12,5 +12,7 @@ blogRouter.get('/blogs', listBlogs);
 blogRouter.get('/blogs/:slug', showBlog);
 // GET /api/website/doctors/:username/blogs?take=
 blogRouter.get('/doctors/:username/blogs', listDoctorBlogs);
+// GET /api/website/hospitals/:slug/blogs?take=
+blogRouter.get('/hospitals/:slug/blogs', listHospitalBlogs);
 
 export default blogRouter;

@@ -5,6 +5,7 @@ import express from 'express';
 import {
   postReview,
   listDoctorReviews,
+  showDoctorSpotlight,
   showDoctorRating,
   listHospitalReviews,
   showHospitalRating,
@@ -16,6 +17,8 @@ const reviewRouter = express.Router();
 reviewRouter.post('/reviews', postReview);
 // GET /api/website/doctors/:username/reviews?page=&limit=
 reviewRouter.get('/doctors/:username/reviews', listDoctorReviews);
+// GET /api/website/doctors/:username/reviews/spotlight — 2 random picks from the latest 10 APPROVED reviews
+reviewRouter.get('/doctors/:username/reviews/spotlight', showDoctorSpotlight);
 // GET /api/website/doctors/:username/rating
 reviewRouter.get('/doctors/:username/rating', showDoctorRating);
 // GET /api/website/hospitals/:slug/reviews?page=&limit=

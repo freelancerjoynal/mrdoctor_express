@@ -7,6 +7,7 @@ import directoryRouter from './directoryRoutes.js';
 import locationRouter from './locationRoutes.js';
 import blogRouter from './blogRoutes.js';
 import reviewRouter from './reviewRoutes.js';
+import appointmentRouter from './appointmentRoutes.js';
 
 const websiteRouter = express.Router();
 
@@ -24,5 +25,8 @@ websiteRouter.use('/', blogRouter);
 
 // Public reviews (unauthenticated by design — APPROVED only, open submit)
 websiteRouter.use('/', reviewRouter);
+
+// Public appointments (unauthenticated by design — creates PENDING rows)
+websiteRouter.use('/', appointmentRouter);
 
 export default websiteRouter;
