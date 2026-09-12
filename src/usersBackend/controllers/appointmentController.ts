@@ -1,9 +1,16 @@
-// Thin controller for pending-appointment intake review.
-// GET /api/users/appointments[?status=&doctorUsername=&hospitalSlug=&page=&limit=]
-// PATCH /api/users/appointments/:id — { status: PENDING | CONFIRMED | CANCELLED }
+// Thin controller for the doctor's appointment admin panel.
+// GET /api/users/appointments/today — today's work queue (all statuses, with fees)
+// GET /api/users/appointments/summary — collection + income buckets (role-gated)
+// GET /api/users/appointments[?status=&doctorUsername=&hospitalSlug=&date=&page=&limit=]
+// PATCH /api/users/appointments/:id — { status: PENDING | CONFIRMED | DONE | CANCELLED }
 import type { Response } from 'express';
 import type { AuthenticatedRequest, UserRole } from '../../authentication/middleware/authMiddleware.js';
-import { listAppointments, updateAppointmentStatus } from '../services/appointmentService.js';
+import {
+  listAppointments,
+  listTodayAppointments,
+  getAppointmentSummary,
+  updateAppointmentStatus,
+} from '../services/appointmentService.js';
 
 function callerOf(req: AuthenticatedRequest) {
   return { userId: req.user!.userId, role: req.user!.role as UserRole };
@@ -32,6 +39,9 @@ export const listUserAppointments = async (req: AuthenticatedRequest, res: Respo
       status: parseOptional(req, 'status'),
       doctorUsername: parseOptional(req, 'doctorUsername'),
       hospitalSlug: parseOptional(req, 'hospitalSlug'),
+      date: parseOptional(req, 'date'),
+      from: parseOptional(req, 'from'),
+      to: parseOptional(req, 'to'),
     });
     return res.json({ backend: 'usersBackend', ...result });
   } catch (error: any) {
@@ -39,6 +49,36 @@ export const listUserAppointments = async (req: AuthenticatedRequest, res: Respo
     if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
       return res.status(404).json({ error: 'No profile linked to this user' });
     return res.status(500).json({ error: 'Failed to load appointments' });
+  }
+};
+
+export const showTodayAppointments = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await listTodayAppointments(callerOf(req));
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    return res.status(500).json({ error: "Failed to load today's appointments" });
+  }
+};
+
+export const showAppointmentSummary = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const summary = await getAppointmentSummary(callerOf(req), {
+      doctorUsername: parseOptional(req, 'doctorUsername'),
+      from: parseOptional(req, 'from'),
+      to: parseOptional(req, 'to'),
+    });
+    return res.json({ backend: 'usersBackend', data: summary });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
+      return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(500).json({ error: 'Failed to load summary' });
   }
 };
 
@@ -50,7 +90,7 @@ export const patchUserAppointment = async (req: AuthenticatedRequest, res: Respo
     if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
     if (error.message === 'APPOINTMENT_NOT_FOUND') return res.status(404).json({ error: 'Appointment not found' });
     if (error.message === 'INVALID_STATUS')
-      return res.status(400).json({ error: 'Status must be PENDING, CONFIRMED or CANCELLED' });
+      return res.status(400).json({ error: 'Status must be PENDING, CONFIRMED, DONE or CANCELLED' });
     if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
       return res.status(404).json({ error: 'No profile linked to this user' });
     return res.status(500).json({ error: 'Failed to update appointment' });

@@ -6,6 +6,7 @@ import doctorInformationRouter from './doctorInformationRoutes.js';
 import blogRouter from './blogRoutes.js';
 import reviewRouter from './reviewRoutes.js';
 import appointmentRouter from './appointmentRoutes.js';
+import staffRouter from './staffRoutes.js';
 
 const usersRouter = express.Router();
 
@@ -23,6 +24,9 @@ usersRouter.use('/reviews', reviewRouter);
 
 // GET|PATCH /api/users/appointments — pending intake scoped to own doctor/hospital
 usersRouter.use('/appointments', appointmentRouter);
+
+// GET|POST|DELETE /api/users/staff — a doctor's own staff (DOCTOR_STAFF users)
+usersRouter.use('/staff', staffRouter);
 
 export { usersRouter };
 export default usersRouter;

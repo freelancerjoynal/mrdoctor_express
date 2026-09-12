@@ -1,13 +1,21 @@
-// Authenticated pending-appointment routes.
+// Authenticated appointment admin-panel routes.
 // Mounted by src/usersBackend/routes/index.ts at /api/users/appointments.
 import express from 'express';
 import { protectedRoute } from '../../authentication/middleware/authMiddleware.js';
-import { listUserAppointments, patchUserAppointment } from '../controllers/appointmentController.js';
+import {
+  listUserAppointments,
+  showTodayAppointments,
+  showAppointmentSummary,
+  patchUserAppointment,
+} from '../controllers/appointmentController.js';
 
 const appointmentRouter = express.Router();
 
-const OWNERS = ['SUPER_ADMIN', 'DOCTOR', 'DOCTOR_STAFF', 'HOSPITAL', 'HOSPITAL_STAFF'] as const;
+const OWNERS = ['SUPER_ADMIN', 'DOCTOR', 'DOCTOR_STAFF', 'HOSPITAL'] as const;
 
+// Specific GETs first so they never collide with "/:id".
+appointmentRouter.get('/today', protectedRoute(...OWNERS), showTodayAppointments);
+appointmentRouter.get('/summary', protectedRoute(...OWNERS), showAppointmentSummary);
 appointmentRouter.get('/', protectedRoute(...OWNERS), listUserAppointments);
 appointmentRouter.patch('/:id', protectedRoute(...OWNERS), patchUserAppointment);
 

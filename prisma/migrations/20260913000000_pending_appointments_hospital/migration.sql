@@ -17,3 +17,12 @@ CREATE INDEX IF NOT EXISTS "pending_appointments_hospitalId_status_idx" ON "pend
 
 -- Patient type (NEW | RENEW), chosen on the website booking form.
 ALTER TABLE "pending_appointments" ADD COLUMN IF NOT EXISTS "patientType" TEXT NOT NULL DEFAULT 'NEW';
+
+-- Doctor staff link: which doctor a DOCTOR_STAFF user works for.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "staffDoctorId" TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_staffDoctorId_fkey') THEN
+    ALTER TABLE "users" ADD CONSTRAINT "users_staffDoctorId_fkey" FOREIGN KEY ("staffDoctorId") REFERENCES "doctors"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS "users_staffDoctorId_idx" ON "users"("staffDoctorId");

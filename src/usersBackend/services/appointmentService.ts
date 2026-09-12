@@ -1,7 +1,11 @@
-// Service layer for listing pending_appointments with ownership scoping.
-// DOCTOR sees rows for their own doctorId; HOSPITAL sees rows for their own
-// hospitalId (derived from the booked chamber); SUPER_ADMIN sees everything
-// and may narrow with doctorUsername / hospitalSlug / status filters.
+// Service layer for the doctor's appointment admin panel.
+// DOCTOR sees rows for their own doctorId; their DOCTOR_STAFF sees the same
+// rows via the staff link (but never month/lifetime income). HOSPITAL sees
+// rows for their own hospitalId; SUPER_ADMIN sees everything and may narrow
+// with doctorUsername / hospitalSlug / status / date filters.
+//
+// Lifecycle: PENDING (new request) -> CONFIRMED -> DONE (served, counts as
+// income) | CANCELLED (dropped from collection).
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
 
@@ -14,22 +18,52 @@ export interface AppointmentFilters {
   status?: string;
   doctorUsername?: string;
   hospitalSlug?: string;
+  date?: string;
+  from?: string;
+  to?: string;
   page: number;
   limit: number;
 }
 
-async function ownershipFilter(caller: AppointmentCaller): Promise<Record<string, unknown>> {
-  if (caller.role === 'SUPER_ADMIN') return {};
-  if (caller.role === 'DOCTOR' || caller.role === 'DOCTOR_STAFF') {
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseDay(value: string): Date | null {
+  if (!DATE_RE.test(value.trim())) return null;
+  const [y, m, d] = value.trim().split('-').map(Number);
+  const dt = new Date(y!, m! - 1, d!);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+export const APPOINTMENT_STATUSES = ['PENDING', 'CONFIRMED', 'DONE', 'CANCELLED'] as const;
+
+async function resolveDoctorId(caller: AppointmentCaller): Promise<string> {
+  if (caller.role === 'DOCTOR') {
     const own = await prisma.user.findUnique({
       where: { id: caller.userId },
       select: { doctorProfile: { select: { id: true } } },
     });
     const doctorId = (own as { doctorProfile?: { id: string } | null } | null)?.doctorProfile?.id;
     if (!doctorId) throw new Error('NO_DOCTOR_PROFILE');
-    return { doctorId };
+    return doctorId;
   }
-  if (caller.role === 'HOSPITAL' || caller.role === 'HOSPITAL_STAFF') {
+  if (caller.role === 'DOCTOR_STAFF') {
+    const own = await prisma.user.findUnique({
+      where: { id: caller.userId },
+      select: { staffDoctorId: true },
+    });
+    const doctorId = (own as { staffDoctorId?: string | null } | null)?.staffDoctorId;
+    if (!doctorId) throw new Error('NO_DOCTOR_PROFILE');
+    return doctorId;
+  }
+  throw new Error('FORBIDDEN');
+}
+
+async function ownershipFilter(caller: AppointmentCaller): Promise<Record<string, unknown>> {
+  if (caller.role === 'SUPER_ADMIN') return {};
+  if (caller.role === 'DOCTOR' || caller.role === 'DOCTOR_STAFF') {
+    return { doctorId: await resolveDoctorId(caller) };
+  }
+  if (caller.role === 'HOSPITAL') {
     const own = await prisma.user.findUnique({
       where: { id: caller.userId },
       select: { hospitalProfile: { select: { id: true } } },
@@ -41,12 +75,65 @@ async function ownershipFilter(caller: AppointmentCaller): Promise<Record<string
   throw new Error('FORBIDDEN');
 }
 
+/** Fee map of one doctor's chambers: chamberId -> { newFee, oldFee }. */
+async function chamberFeeMap(doctorId: string): Promise<Map<string, { newFee: number; oldFee: number }>> {
+  const chambers = await prisma.chamber.findMany({
+    where: { doctorId },
+    select: { id: true, newPatientFee: true, oldPatientFee: true },
+  });
+  return new Map(chambers.map((c) => [c.id, { newFee: Number(c.newPatientFee) || 0, oldFee: Number(c.oldPatientFee) || 0 }]));
+}
+
+/** Visit fee of one row: RENEW pays the old-patient fee, else the new-patient fee. */
+function feeOf(
+  row: { chamberId?: string | null; patientType?: string | null },
+  fees: Map<string, { newFee: number; oldFee: number }>,
+): number {
+  if (!row.chamberId) return 0;
+  const f = fees.get(row.chamberId);
+  if (!f) return 0;
+  return row.patientType === 'RENEW' ? f.oldFee : f.newFee;
+}
+
+function withFee<T extends { chamberId?: string | null; patientType?: string | null }>(
+  rows: T[],
+  fees: Map<string, { newFee: number; oldFee: number }>,
+) {
+  return rows.map((r) => ({ ...r, fee: feeOf(r, fees) }));
+}
+
+function dayRange(dateStr: string): { gte: Date; lt: Date } {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const gte = new Date(y!, m! - 1, d!);
+  const lt = new Date(y!, m! - 1, d! + 1);
+  return { gte, lt };
+}
+
+function startOfToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
 export async function listAppointments(caller: AppointmentCaller, filters: AppointmentFilters) {
   const owned = await ownershipFilter(caller);
   const where: Record<string, any> = { ...owned };
 
-  if (filters.status === 'PENDING' || filters.status === 'CONFIRMED' || filters.status === 'CANCELLED') {
+  if ((APPOINTMENT_STATUSES as readonly string[]).includes(filters.status ?? '')) {
     where.status = filters.status;
+  }
+  if (filters.date && /^\d{4}-\d{2}-\d{2}$/.test(filters.date.trim())) {
+    const { gte, lt } = dayRange(filters.date.trim());
+    where.appointmentDate = { gte, lt };
+  } else {
+    // Range filter for upcoming / last-30-days views (inclusive from, exclusive to).
+    const from = filters.from ? parseDay(filters.from) : null;
+    const to = filters.to ? parseDay(filters.to) : null;
+    if (from || to) {
+      where.appointmentDate = {
+        ...(from ? { gte: from } : {}),
+        ...(to ? { lt: new Date(to.getTime() + 86400000) } : {}),
+      };
+    }
   }
   // SUPER_ADMIN may narrow further; owners are already scoped so extra
   // filters only apply when they match the owned scope.
@@ -87,7 +174,168 @@ export async function listAppointments(caller: AppointmentCaller, filters: Appoi
       },
     }),
   ]);
-  return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  const doctorId = (where.doctorId as string | undefined) ?? (owned.doctorId as string | undefined);
+  const fees = doctorId ? await chamberFeeMap(doctorId) : new Map();
+  return { data: withFee(data, fees), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+}
+
+/** Today's work queue (all statuses), oldest first, each row with its fee. */
+export async function listTodayAppointments(caller: AppointmentCaller) {
+  const owned = await ownershipFilter(caller);
+  const today = startOfToday();
+  const tomorrow = new Date(today.getTime() + 86400000);
+  const where: Record<string, any> = {
+    ...owned,
+    appointmentDate: { gte: today, lt: tomorrow },
+  };
+  const data = await prisma.pendingAppointment.findMany({
+    where,
+    orderBy: { createdAt: 'asc' },
+    include: {
+      doctor: { select: { username: true, name: true, speciality: true } },
+      hospital: { select: { slug: true, name: true } },
+    },
+  });
+  const doctorId = owned.doctorId as string | undefined;
+  const fees = doctorId ? await chamberFeeMap(doctorId) : new Map();
+  return withFee(data, fees);
+}
+
+export interface IncomeBucket {
+  total: number;
+  count: number;
+  newCount: number;
+  renewCount: number;
+}
+
+function bucket(
+  rows: Array<{ patientType?: string | null; chamberId?: string | null }>,
+  fees: Map<string, { newFee: number; oldFee: number }>,
+): IncomeBucket {
+  let total = 0;
+  let newCount = 0;
+  let renewCount = 0;
+  for (const r of rows) {
+    total += feeOf(r, fees);
+    if (r.patientType === 'RENEW') renewCount += 1;
+    else newCount += 1;
+  }
+  return { total, count: rows.length, newCount, renewCount };
+}
+
+export interface CustomBucket extends IncomeBucket {
+  from: string;
+  to: string;
+}
+
+export interface AppointmentSummary {
+  today: string;
+  /** Expected collection today (everything not cancelled — statuses can still change). */
+  todayExpected: IncomeBucket;
+  /** Realized today (DONE only). */
+  todayDone: IncomeBucket;
+  /** Realized last 7 days (DONE). Visible to staff. */
+  week: IncomeBucket;
+  /** Realized last 30 days (DONE). Doctor only. */
+  month: IncomeBucket | null;
+  /** Realized lifetime (DONE). Doctor only (gross collection). */
+  lifetime: IncomeBucket | null;
+  /** Realized income (DONE) in the requested custom range. Staff ranges clamp to the last 7 days. */
+  custom: CustomBucket | null;
+}
+
+const DAY_MS = 86400000;
+
+function isoDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export async function getAppointmentSummary(
+  caller: AppointmentCaller,
+  opts: { doctorUsername?: string; from?: string; to?: string } = {},
+): Promise<AppointmentSummary> {
+  const owned = await ownershipFilter(caller);
+  let doctorId = owned.doctorId as string | undefined;
+  if (opts.doctorUsername?.trim()) {
+    if (caller.role !== 'SUPER_ADMIN') throw new Error('FORBIDDEN');
+    const doctor = await prisma.doctor.findFirst({
+      where: { username: opts.doctorUsername.trim() },
+      select: { id: true },
+    });
+    if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
+    doctorId = doctor.id;
+  }
+  if (!doctorId) throw new Error('DOCTOR_REQUIRED');
+
+  const fees = await chamberFeeMap(doctorId);
+  const today = startOfToday();
+  const tomorrow = new Date(today.getTime() + DAY_MS);
+  const weekAgo = new Date(today.getTime() - 6 * DAY_MS);
+
+  // Custom range (both ends inclusive): doctor picks any dates (max 366 days);
+  // staff clamps to the last 7 days.
+  const isStaff = caller.role === 'DOCTOR_STAFF';
+  let customFrom = opts.from ? parseDay(opts.from) : new Date(weekAgo);
+  let customToIncl = opts.to ? parseDay(opts.to) : new Date(today);
+  if (!customFrom || !customToIncl || customFrom > customToIncl) {
+    customFrom = new Date(weekAgo);
+    customToIncl = new Date(today);
+  }
+  if (customToIncl.getTime() - customFrom.getTime() > 365 * DAY_MS) {
+    customFrom = new Date(customToIncl.getTime() - 365 * DAY_MS);
+  }
+  if (isStaff) {
+    if (customFrom < weekAgo) customFrom = new Date(weekAgo);
+    if (customToIncl > today) customToIncl = new Date(today);
+  }
+  const customToLt = new Date(customToIncl.getTime() + DAY_MS);
+
+  const [todayRows, weekRows, monthRows, lifetimeRows, customRows] = await Promise.all([
+    prisma.pendingAppointment.findMany({
+      where: { doctorId, appointmentDate: { gte: today, lt: tomorrow }, status: { not: 'CANCELLED' } },
+      select: { patientType: true, chamberId: true },
+    }),
+    prisma.pendingAppointment.findMany({
+      where: { doctorId, status: 'DONE', appointmentDate: { gte: weekAgo, lt: tomorrow } },
+      select: { patientType: true, chamberId: true },
+    }),
+    caller.role === 'DOCTOR_STAFF'
+      ? Promise.resolve(null)
+      : prisma.pendingAppointment.findMany({
+          where: {
+            doctorId,
+            status: 'DONE',
+            appointmentDate: { gte: new Date(today.getTime() - 29 * 86400000), lt: tomorrow },
+          },
+          select: { patientType: true, chamberId: true },
+        }),
+    caller.role === 'DOCTOR_STAFF'
+      ? Promise.resolve(null)
+      : prisma.pendingAppointment.findMany({
+          where: { doctorId, status: 'DONE' },
+          select: { patientType: true, chamberId: true },
+        }),
+    prisma.pendingAppointment.findMany({
+      where: { doctorId, status: 'DONE', appointmentDate: { gte: customFrom, lt: customToLt } },
+      select: { patientType: true, chamberId: true },
+    }),
+  ]);
+
+  const todayDoneRows = await prisma.pendingAppointment.findMany({
+    where: { doctorId, appointmentDate: { gte: today, lt: tomorrow }, status: 'DONE' },
+    select: { patientType: true, chamberId: true },
+  });
+
+  const iso = isoDay(today);
+  return {
+    today: iso,
+    todayExpected: bucket(todayRows, fees),
+    todayDone: bucket(todayDoneRows, fees),
+    week: bucket(weekRows, fees),
+    month: monthRows ? bucket(monthRows, fees) : null,
+    lifetime: lifetimeRows ? bucket(lifetimeRows, fees) : null,
+    custom: { from: isoDay(customFrom), to: isoDay(customToIncl), ...bucket(customRows, fees) },
+  };
 }
 
 function pickPaging(filters: AppointmentFilters) {
@@ -97,7 +345,7 @@ function pickPaging(filters: AppointmentFilters) {
 }
 
 export async function updateAppointmentStatus(caller: AppointmentCaller, id: string, status: string) {
-  if (status !== 'PENDING' && status !== 'CONFIRMED' && status !== 'CANCELLED') {
+  if (!(APPOINTMENT_STATUSES as readonly string[]).includes(status)) {
     throw new Error('INVALID_STATUS');
   }
   const owned = await ownershipFilter(caller);

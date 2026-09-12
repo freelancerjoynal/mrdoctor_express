@@ -83,6 +83,10 @@ model User {
   hospitalProfile   Hospital?
   superAdminProfile SuperAdminProfile?
 
+  // DOCTOR_STAFF কোন ডাক্তারের অধীনে কাজ করে (ডাক্তারই স্টাফ যোগ করে)।
+  staffDoctorId String?
+  staffDoctor   Doctor?  @relation("DoctorStaff", fields: [staffDoctorId], references: [id], onDelete: Cascade)
+
   @@map("users")
 }
 
@@ -142,6 +146,7 @@ model Doctor {
   chambers            Chamber[]
   schedules           DoctorSchedule[]
   pendingAppointments PendingAppointment[]
+  staffMembers        User[]              @relation("DoctorStaff")
   information         DoctorInformation?
   blogs               Blog[]
   reviews             Review[]
