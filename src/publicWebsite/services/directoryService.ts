@@ -40,6 +40,8 @@ const PUBLIC_DOCTOR_SELECT = {
   tagline: true,
   bio: true,
   startedYear: true,
+  profilePicture: true,
+  gender: true,
   chambers: {
     select: {
       id: true,

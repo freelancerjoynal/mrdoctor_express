@@ -24,6 +24,11 @@ enum DoctorStatus {
   REFUSED
 }
 
+enum Gender {
+  MALE
+  FEMALE
+}
+
 enum HospitalStatus {
   PENDING
   APPROVED
@@ -111,6 +116,8 @@ model Doctor {
   email               String?        @unique
   username            String         @unique
   templateName        String         @default("template_a")
+  profilePicture      String?
+  gender              Gender?
   startedYear         Int?
   status              DoctorStatus   @default(PENDING)
   
