@@ -31,6 +31,34 @@ export interface ChamberFilters extends DirectoryPaging {
   thana?: string;
 }
 
+export interface BlogFilters extends DirectoryPaging {
+  search?: string;
+  category?: string;
+  authorType?: string;
+  doctorUsername?: string;
+  hospitalSlug?: string;
+}
+
+// Public blog card — safe subset of the blogs table (no authorUserId, no drafts).
+const PUBLIC_BLOG_SELECT = {
+  id: true,
+  slug: true,
+  title: true,
+  excerpt: true,
+  content: true,
+  coverImage: true,
+  coverGradient: true,
+  coverSymbol: true,
+  category: true,
+  tags: true,
+  authorType: true,
+  authorName: true,
+  publishedAt: true,
+  views: true,
+  doctor: { select: { username: true, name: true, speciality: true } },
+  hospital: { select: { slug: true, name: true } },
+} as const;
+
 // Public doctor card: identity + professional info + associated chambers/schedules.
 const PUBLIC_DOCTOR_SELECT = {
   username: true,
@@ -47,6 +75,26 @@ const PUBLIC_DOCTOR_SELECT = {
       expertise: true,
       timeline: true,
       updatedAt: true,
+    },
+  },
+  blogs: {
+    where: { status: 'PUBLISHED' as const },
+    orderBy: { publishedAt: 'desc' as const },
+    take: 6,
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      excerpt: true,
+      content: true,
+      coverImage: true,
+      coverGradient: true,
+      coverSymbol: true,
+      category: true,
+      tags: true,
+      authorName: true,
+      publishedAt: true,
+      views: true,
     },
   },
   chambers: {
@@ -234,5 +282,65 @@ export async function getPublicChamberById(id: string) {
   return prisma.chamber.findUnique({
     where: { id },
     select: PUBLIC_CHAMBER_SELECT,
+  });
+}
+
+// Only PUBLISHED blogs are ever public. Drafts/archived stay in usersBackend.
+export async function getPublicBlogs(filters: BlogFilters) {
+  const { search, category, authorType, doctorUsername, hospitalSlug, page, limit } = filters;
+
+  const where: any = { status: 'PUBLISHED' };
+  if (category) where.category = { contains: category, mode: 'insensitive' };
+  if (authorType === 'DOCTOR' || authorType === 'HOSPITAL' || authorType === 'SUPER_ADMIN') {
+    where.authorType = authorType;
+  }
+  if (doctorUsername) where.doctor = { username: doctorUsername };
+  if (hospitalSlug) where.hospital = { slug: hospitalSlug };
+  if (search) {
+    where.OR = [
+      { title: { contains: search, mode: 'insensitive' } },
+      { excerpt: { contains: search, mode: 'insensitive' } },
+      { content: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  const [total, data] = await prisma.$transaction([
+    prisma.blog.count({ where }),
+    prisma.blog.findMany({
+      where,
+      select: PUBLIC_BLOG_SELECT,
+      orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+  ]);
+
+  return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+}
+
+export async function getPublicBlogBySlug(slug: string) {
+  const blog = await prisma.blog.findFirst({
+    where: { slug, status: 'PUBLISHED' },
+    select: PUBLIC_BLOG_SELECT,
+  });
+  if (blog) {
+    // Best-effort view counter — never blocks the response.
+    prisma.blog.update({ where: { slug }, data: { views: { increment: 1 } } }).catch(() => {});
+  }
+  return blog;
+}
+
+// Latest published posts of one doctor — powers the profile-page blog section.
+export async function getPublicDoctorBlogs(username: string, take = 6) {
+  const doctor = await prisma.doctor.findFirst({
+    where: { username, status: 'APPROVED' },
+    select: { id: true },
+  });
+  if (!doctor) return null;
+  return prisma.blog.findMany({
+    where: { doctorId: doctor.id, status: 'PUBLISHED' },
+    select: PUBLIC_BLOG_SELECT,
+    orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+    take: Math.min(Math.max(take, 1), 12),
   });
 }

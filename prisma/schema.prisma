@@ -46,6 +46,18 @@ enum DayOfWeek {
   FRIDAY
 }
 
+enum BlogAuthorType {
+  DOCTOR
+  HOSPITAL
+  SUPER_ADMIN
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
@@ -125,6 +137,7 @@ model Doctor {
   schedules           DoctorSchedule[]
   pendingAppointments PendingAppointment[]
   information         DoctorInformation?
+  blogs               Blog[]
 
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
@@ -149,6 +162,7 @@ model Hospital {
 
   chambers        Chamber[]
   schedules       DoctorSchedule[]
+  blogs           Blog[]
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -253,4 +267,44 @@ model DoctorInformation {
   updatedAt DateTime @updatedAt
 
   @@map("doctor_informations")
+}
+
+// ব্লগ — ডাক্তার, হাসপাতাল ও সুপার-অ্যাডমিন তিনজনই লিখতে পারেন।
+// - DOCTOR লিখলে doctorId বসে, HOSPITAL লিখলে hospitalId বসে,
+//   SUPER_ADMIN লিখলে authorUserId বসে (প্রয়োজনে doctorId/hospitalId-ও দিতে পারেন)।
+// - পাবলিক সাইটে শুধু PUBLISHED ব্লগ দেখায়; ডাক্তারের প্রোফাইল পেজে
+//   তার নিজের ব্লগগুলো "স্বাস্থ্য নিয়ে কিছু জরুরি কথা" সেকশনে আসে।
+model Blog {
+  id            String          @id @default(uuid())
+  slug          String          @unique
+  title         String
+  excerpt       String?
+  content       String
+  coverImage    String?
+  coverGradient String          @default("from-emerald-500 to-teal-700")
+  coverSymbol   String          @default("✿")
+  category      String          @default("স্বাস্থ্য টিপস")
+  tags          String[]        @default([])
+
+  authorType    BlogAuthorType  @default(DOCTOR)
+  authorName    String?
+  authorUserId  String?
+
+  doctorId      String?
+  doctor        Doctor?         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  hospitalId    String?
+  hospital      Hospital?       @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  status        BlogStatus      @default(DRAFT)
+  publishedAt   DateTime?
+  views         Int             @default(0)
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([status, publishedAt])
+  @@index([doctorId, status])
+  @@index([hospitalId, status])
+  @@map("blogs")
 }

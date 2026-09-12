@@ -5,6 +5,7 @@ import express from 'express';
 import { getHealth, getHome } from '../controllers/websiteController.js';
 import directoryRouter from './directoryRoutes.js';
 import locationRouter from './locationRoutes.js';
+import blogRouter from './blogRoutes.js';
 
 const websiteRouter = express.Router();
 
@@ -16,5 +17,8 @@ websiteRouter.use('/', locationRouter);
 
 // Public directory catalog (unauthenticated by design)
 websiteRouter.use('/', directoryRouter);
+
+// Public blogs (unauthenticated by design — PUBLISHED only)
+websiteRouter.use('/', blogRouter);
 
 export default websiteRouter;

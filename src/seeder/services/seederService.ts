@@ -6,6 +6,8 @@
 import bcrypt from 'bcrypt';
 import { prisma } from '../../lib/prisma.js';
 import { buildExpertiseForSpeciality, buildTimelineForDoctor } from './doctorInformationContent.js';
+import { BLOG_SEEDS } from './blogSeedContent.js';
+import { buildDoctorPoolSeeds } from './blogPoolContent.js';
 
 // ================================================================
 // 10 HOSPITALS
@@ -454,6 +456,8 @@ export const runSeedAll = async () => {
   const allDoctors = await prisma.doctor.findMany({
     select: {
       id: true,
+      username: true,
+      name: true,
       degree: true,
       speciality: true,
       startedYear: true,
@@ -484,6 +488,128 @@ export const runSeedAll = async () => {
   }
   (summary as Record<string, number>).doctorInformations = infoCount;
   console.log(`   ✅ ${infoCount} doctor informations ready`);
+
+  // ----------------------------------------------------------
+  // 7. BLOGS (doctors, hospitals & super-admin)
+  // ----------------------------------------------------------
+  console.log('📝 Seeding blogs...');
+  let blogCount = 0;
+  for (const seed of BLOG_SEEDS) {
+    let doctorId: string | null = null;
+    let hospitalId: string | null = null;
+    if (seed.doctorUsername) {
+      const hit = doctorMap.get(seed.doctorUsername);
+      if (hit) doctorId = hit.id;
+      else {
+        const found = await prisma.doctor.findUnique({
+          where: { username: seed.doctorUsername },
+          select: { id: true },
+        });
+        doctorId = found?.id ?? null;
+      }
+    }
+    if (seed.hospitalSlug) {
+      const hit = hospitalMap.get(seed.hospitalSlug);
+      if (hit) hospitalId = hit.id;
+      else {
+        const found = await prisma.hospital.findUnique({
+          where: { slug: seed.hospitalSlug },
+          select: { id: true },
+        });
+        hospitalId = found?.id ?? null;
+      }
+    }
+    if ((seed.authorType === 'DOCTOR' && !doctorId) || (seed.authorType === 'HOSPITAL' && !hospitalId)) {
+      continue;
+    }
+    await prisma.blog.upsert({
+      where: { slug: seed.slug },
+      update: {
+        title: seed.title,
+        excerpt: seed.excerpt,
+        content: seed.content,
+        coverGradient: seed.coverGradient,
+        coverSymbol: seed.coverSymbol,
+        category: seed.category,
+        tags: seed.tags,
+        authorType: seed.authorType as any,
+        authorName: seed.authorName,
+        doctorId,
+        hospitalId,
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+      },
+      create: {
+        slug: seed.slug,
+        title: seed.title,
+        excerpt: seed.excerpt,
+        content: seed.content,
+        coverGradient: seed.coverGradient,
+        coverSymbol: seed.coverSymbol,
+        category: seed.category,
+        tags: seed.tags,
+        authorType: seed.authorType as any,
+        authorName: seed.authorName,
+        doctorId,
+        hospitalId,
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+      },
+    });
+    blogCount++;
+  }
+  (summary as Record<string, number>).blogs = blogCount;
+  console.log(`   ✅ ${blogCount} blogs ready`);
+
+  // ----------------------------------------------------------
+  // 8. DOCTOR POOL BLOGS (3 per doctor → every profile is dynamic)
+  // ----------------------------------------------------------
+  console.log('📝 Seeding per-doctor pool blogs...');
+  let poolCount = 0;
+  let poolIndex = 0;
+  for (const d of allDoctors) {
+    for (const s of buildDoctorPoolSeeds(
+      { username: d.username, name: d.name, speciality: d.speciality },
+      (poolIndex * 7) % 60,
+    )) {
+      await prisma.blog.upsert({
+        where: { slug: s.slug },
+        update: {
+          title: s.title,
+          excerpt: s.excerpt,
+          content: s.content,
+          coverGradient: s.coverGradient,
+          coverSymbol: s.coverSymbol,
+          category: s.category,
+          tags: s.tags,
+          authorType: 'DOCTOR' as any,
+          authorName: s.authorName,
+          doctorId: d.id,
+          status: 'PUBLISHED',
+          publishedAt: s.publishedAt,
+        },
+        create: {
+          slug: s.slug,
+          title: s.title,
+          excerpt: s.excerpt,
+          content: s.content,
+          coverGradient: s.coverGradient,
+          coverSymbol: s.coverSymbol,
+          category: s.category,
+          tags: s.tags,
+          authorType: 'DOCTOR' as any,
+          authorName: s.authorName,
+          doctorId: d.id,
+          status: 'PUBLISHED',
+          publishedAt: s.publishedAt,
+        },
+      });
+      poolCount++;
+    }
+    poolIndex++;
+  }
+  (summary as Record<string, number>).blogs += poolCount;
+  console.log(`   ✅ ${poolCount} pool blogs ready`);
 
   console.log('✅ ===== SEED DONE =====\n');
 
