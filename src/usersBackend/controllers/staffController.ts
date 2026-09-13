@@ -23,7 +23,7 @@ export const listUserStaff = async (req: AuthenticatedRequest, res: Response) =>
 
 export const inviteUserStaff = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const result = await inviteStaff(callerOf(req), { email: req.body?.email });
+    const result = await inviteStaff(callerOf(req), { email: req.body?.email, name: req.body?.name });
     return res.status(201).json({
       backend: 'usersBackend',
       data: result,
@@ -37,6 +37,7 @@ export const inviteUserStaff = async (req: AuthenticatedRequest, res: Response) 
       return res.status(404).json({ error: 'No doctor profile linked to this user' });
     if (error.message === 'EMAIL_TAKEN') return res.status(409).json({ error: 'এই ইমেইলে ইতিমধ্যে অ্যাকাউন্ট আছে।' });
     if (error.message === 'INVALID_EMAIL') return res.status(400).json({ error: 'সঠিক ইমেইল ঠিকানা দিন।' });
+    if (error.message === 'INVALID_NAME') return res.status(400).json({ error: 'স্টাফের নাম দিন (২–৮০ অক্ষর)।' });
     return res.status(500).json({ error: 'Failed to invite staff' });
   }
 };

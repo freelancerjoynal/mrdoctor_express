@@ -25,14 +25,15 @@ export const sendOTPEmail = async (email: string, otp: string): Promise<void> =>
 };
 
 // function to send staff login credentials when a doctor invites staff
-export const sendStaffCredentialsEmail = async (email: string, tempPassword: string, doctorName: string): Promise<void> => {
+export const sendStaffCredentialsEmail = async (email: string, tempPassword: string, doctorName: string, staffName?: string): Promise<void> => {
+  const greeting = staffName ? `${staffName}, ${doctorName} আপনাকে স্টাফ হিসেবে যোগ করেছেন।` : `${doctorName} আপনাকে স্টাফ হিসেবে যোগ করেছেন।`;
   await transporter.sendMail({
     from: '"MrDoctor" <no-reply@mrdoctor.com>',
     to: email,
     subject: "আপনার স্টাফ লগইন তথ্য — MrDoctor",
-    text: `${doctorName} আপনাকে স্টাফ হিসেবে যোগ করেছেন।\n\nইমেইল: ${email}\nপাসওয়ার্ড: ${tempPassword}\n\nএই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।`,
+    text: `${greeting}\n\nইমেইল: ${email}\nপাসওয়ার্ড: ${tempPassword}\n\nএই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।`,
     html: `
-      <h3>${doctorName} আপনাকে স্টাফ হিসেবে যোগ করেছেন</h3>
+      <h3>${greeting}</h3>
       <p>ইমেইল: <b>${email}</b></p>
       <p>পাসওয়ার্ড: <b>${tempPassword}</b></p>
       <p>এই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।</p>

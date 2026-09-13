@@ -64,11 +64,26 @@ enum ReviewStatus {
   REJECTED
 }
 
+enum BookingType {
+  ONLINE
+  OFFLINE
+}
+
+enum PaymentStatus {
+  SUCCESS
+  FAILED
+  PENDING
+  CANCELLED
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
   password     String
   role         Role      @default(DOCTOR)
+  // Display name for roles without a dedicated profile table
+  // (DOCTOR_STAFF, HOSPITAL_STAFF, BUSINESS_OWNER). Email is immutable.
+  name         String?
   isVerified   Boolean   @default(false)
   otp          String?
   otpExpiry    DateTime?
@@ -146,6 +161,7 @@ model Doctor {
   chambers            Chamber[]
   schedules           DoctorSchedule[]
   pendingAppointments PendingAppointment[]
+  confirmedAppointments ConfirmedAppointment[]
   staffMembers        User[]              @relation("DoctorStaff")
   information         DoctorInformation?
   blogs               Blog[]
@@ -177,6 +193,7 @@ model Hospital {
   blogs           Blog[]
   reviews         Review[]
   pendingAppointments PendingAppointment[]
+  confirmedAppointments ConfirmedAppointment[]
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -268,9 +285,89 @@ model PendingAppointment {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  confirmedAppointments ConfirmedAppointment[]
+
   @@index([doctorId, status])
   @@index([hospitalId, status])
   @@map("pending_appointments")
+}
+
+// নিশ্চিত (confirmed) অ্যাপয়েন্টমেন্ট — pending_appointments এর সব ফিল্ড +
+// bookingType (ONLINE / OFFLINE)।
+// - OFFLINE: শুধু রোগীর তথ্য, নতুন/পুরনো ধরন ও আদায়ের টাকা (collectionAmount)।
+// - ONLINE: উপরের সব + পেমেন্ট গেটওয়ে হিস্ট্রি/অডিট ফিল্ড
+//   (transactionId, orderId, paymentUserId, paymentAmount, currency,
+//   paymentStatus, paymentMethod, gatewayResponse, paidAt)।
+model ConfirmedAppointment {
+  id              String   @id @default(uuid())
+
+  // মূল pending অনুরোধের লিংক (ঐচ্ছিক — সরাসরি confirmed এন্ট্রিও হতে পারে)।
+  pendingAppointmentId String?
+  pendingAppointment   PendingAppointment? @relation(fields: [pendingAppointmentId], references: [id], onDelete: SetNull)
+
+  phoneNumber     String   @default("")
+  doctorId        String
+  doctor          Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorName      String?
+
+  hospitalId      String?
+  hospital        Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  hospitalName    String?
+
+  problem         String
+  appointmentDate DateTime
+  dayLabel        String?
+
+  chamberId       String?
+  chamberName     String?
+
+  patientName     String
+  patientType     String   @default("NEW") // NEW (নতুন রোগী) | RENEW (পুরনো রোগী)
+  patientAge      Int?
+  patientWeight   Float?
+  patientArea     String?
+  contactPhone    String
+
+  source          String   @default("whatsapp") // whatsapp | website
+  status          String   @default("CONFIRMED")
+
+  // বুকিং ধরন: OFFLINE (সরাসরি/ক্যাশ) | ONLINE (পেমেন্ট গেটওয়ে)।
+  bookingType     BookingType @default(OFFLINE)
+
+  // দৈনিক সিরিয়াল: প্রতি ডাক্তারের প্রতি দিন (appointmentDate) রাত ১২টায়
+  // নতুন করে ১ থেকে শুরু। @@unique দিয়ে একই দিনে ডুপ্লিকেট আটকানো হয়।
+  serial          Int         @default(0)
+
+  // OFFLINE আদায়: সরাসরি সংগৃহীত টাকা।
+  collectionAmount Float?
+
+  // ---- ONLINE পেমেন্ট গেটওয়ে হিস্ট্রি / অডিটিং ----
+  // গেটওয়ে (bKash/SSLCommerz/Shurjopay...) থেকে পাওয়া ইউনিক ট্রানজেকশন আইডি —
+  // ভেরিফিকেশন ও রিফান্ডের জন্য সবচেয়ে গুরুত্বপূর্ণ।
+  transactionId   String?  @unique
+  // সিস্টেমের নিজস্ব অর্ডার/রেফারেন্স আইডি — নিজেদের অর্ডারের সাথে মেলানোর জন্য।
+  orderId         String?  @unique
+  // কোন ইউজার অ্যাকাউন্টের বিপরীতে পেমেন্ট এসেছে (ডাক্তারের doctorId তো আছেই)।
+  paymentUserId   String?
+  paymentAmount   Float?
+  currency        String   @default("BDT")
+  paymentStatus   PaymentStatus?
+  // মাধ্যম/প্রোভাইডার: bKash, Nagad, Visa Card, Mastercard...
+  paymentMethod   String?
+  // গেটওয়ে থেকে আসা পুরো রেসপন্স JSON — ডিসপুট/ডিবাগ ট্রেসিংয়ের জন্য।
+  gatewayResponse Json?
+  // পেমেন্ট সফলের সঠিক সময়।
+  paidAt          DateTime?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([doctorId, status])
+  @@index([hospitalId, status])
+  @@index([bookingType])
+  @@index([paymentUserId])
+  @@unique([doctorId, appointmentDate, serial])
+  @@map("confirmed_appointments")
 }
 
 // ডাক্তারের পাবলিক ওয়েবসাইটের ডাইনামিক সেকশনগুলোর জন্য অতিরিক্ত তথ্য।

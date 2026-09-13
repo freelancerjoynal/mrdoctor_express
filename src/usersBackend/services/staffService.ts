@@ -16,6 +16,7 @@ export interface StaffCaller {
 const STAFF_SELECT = {
   id: true,
   email: true,
+  name: true,
   role: true,
   isVerified: true,
   createdAt: true,
@@ -31,6 +32,13 @@ async function resolveOwnDoctorId(caller: StaffCaller): Promise<string> {
   const doctor = (own as { doctorProfile?: { id: string; name: string } | null } | null)?.doctorProfile;
   if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
   return doctor.id;
+}
+
+function cleanName(raw: unknown): string {
+  if (typeof raw !== 'string') throw new Error('INVALID_NAME');
+  const name = raw.trim().replace(/\s+/g, ' ');
+  if (name.length < 2 || name.length > 80) throw new Error('INVALID_NAME');
+  return name;
 }
 
 function cleanEmail(raw: unknown): string {
@@ -56,9 +64,10 @@ export async function listStaff(caller: StaffCaller) {
   });
 }
 
-export async function inviteStaff(caller: StaffCaller, input: { email?: string }) {
+export async function inviteStaff(caller: StaffCaller, input: { email?: string; name?: string }) {
   const doctorId = await resolveOwnDoctorId(caller);
   const email = cleanEmail(input.email);
+  const name = cleanName(input.name);
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) throw new Error('EMAIL_TAKEN');
 
@@ -69,6 +78,7 @@ export async function inviteStaff(caller: StaffCaller, input: { email?: string }
   const staff = await prisma.user.create({
     data: {
       email,
+      name,
       password: hashedPassword,
       role: 'DOCTOR_STAFF',
       isVerified: true,
@@ -79,7 +89,7 @@ export async function inviteStaff(caller: StaffCaller, input: { email?: string }
 
   let emailSent = true;
   try {
-    await sendStaffCredentialsEmail(email, tempPassword, doctor?.name ?? 'আপনার ডাক্তার');
+    await sendStaffCredentialsEmail(email, tempPassword, doctor?.name ?? 'আপনার ডাক্তার', name);
   } catch (error) {
     console.error('Staff credentials email failed:', error);
     emailSent = false;

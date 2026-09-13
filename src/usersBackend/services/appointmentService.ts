@@ -228,6 +228,23 @@ export interface CustomBucket extends IncomeBucket {
   to: string;
 }
 
+/**
+ * Monday-to-Sunday weekly collection (never a rolling "last 7 days").
+ * - patientCount: every appointment in the range, any status.
+ * - total/newCount/renewCount/doneCount: realized (DONE) only.
+ * - cancelled: CANCELLED rows in the range.
+ */
+export interface WeeklyBucket {
+  from: string;
+  to: string;
+  total: number;
+  patientCount: number;
+  doneCount: number;
+  newCount: number;
+  renewCount: number;
+  cancelled: number;
+}
+
 export interface AppointmentSummary {
   today: string;
   /** Expected collection today (everything not cancelled — statuses can still change). */
@@ -236,6 +253,10 @@ export interface AppointmentSummary {
   todayDone: IncomeBucket;
   /** Realized last 7 days (DONE). Visible to staff. */
   week: IncomeBucket;
+  /** This Monday 00:00 → now. Visible to doctor + staff. */
+  thisWeek: WeeklyBucket;
+  /** Last Monday 00:00 → Sunday 24:00 (full previous Mon–Sun week). Visible to doctor + staff. */
+  lastWeek: WeeklyBucket;
   /** Realized last 30 days (DONE). Doctor only. */
   month: IncomeBucket | null;
   /** Realized lifetime (DONE). Doctor only (gross collection). */
@@ -248,6 +269,48 @@ const DAY_MS = 86400000;
 
 function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Monday 00:00 starting the week that contains `now` (server-local days). */
+function startOfWeekMonday(now: Date): Date {
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sinceMonday = (day.getDay() + 6) % 7;
+  return new Date(day.getTime() - sinceMonday * DAY_MS);
+}
+
+function weeklyBucket(
+  rows: Array<{ status?: string | null; patientType?: string | null; chamberId?: string | null }>,
+  fees: Map<string, { newFee: number; oldFee: number }>,
+  from: Date,
+  to: Date,
+): WeeklyBucket {
+  let total = 0;
+  let doneCount = 0;
+  let newCount = 0;
+  let renewCount = 0;
+  let cancelled = 0;
+  for (const r of rows) {
+    if (r.status === 'CANCELLED') {
+      cancelled += 1;
+      continue;
+    }
+    if (r.status === 'DONE') {
+      total += feeOf(r, fees);
+      doneCount += 1;
+      if (r.patientType === 'RENEW') renewCount += 1;
+      else newCount += 1;
+    }
+  }
+  return {
+    from: isoDay(from),
+    to: isoDay(to),
+    total,
+    patientCount: rows.length,
+    doneCount,
+    newCount,
+    renewCount,
+    cancelled,
+  };
 }
 
 export async function getAppointmentSummary(
@@ -271,6 +334,11 @@ export async function getAppointmentSummary(
   const today = startOfToday();
   const tomorrow = new Date(today.getTime() + DAY_MS);
   const weekAgo = new Date(today.getTime() - 6 * DAY_MS);
+  const now = new Date();
+  // Monday-to-Sunday weeks (server-local days): this Monday 00:00 → now,
+  // and the full previous week Monday 00:00 → Sunday 24:00 (= this Monday 00:00).
+  const monday = startOfWeekMonday(now);
+  const prevMonday = new Date(monday.getTime() - 7 * DAY_MS);
 
   // Custom range (both ends inclusive): doctor picks any dates (max 366 days);
   // staff clamps to the last 7 days.
@@ -290,8 +358,7 @@ export async function getAppointmentSummary(
   }
   const customToLt = new Date(customToIncl.getTime() + DAY_MS);
 
-  const [todayRows, weekRows, monthRows, lifetimeRows, customRows] = await Promise.all([
-    prisma.pendingAppointment.findMany({
+  const [todayRows, weekRows, monthRows, lifetimeRows, customRows, thisWeekRows, lastWeekRows] = await Promise.all([    prisma.pendingAppointment.findMany({
       where: { doctorId, appointmentDate: { gte: today, lt: tomorrow }, status: { not: 'CANCELLED' } },
       select: { patientType: true, chamberId: true },
     }),
@@ -319,6 +386,15 @@ export async function getAppointmentSummary(
       where: { doctorId, status: 'DONE', appointmentDate: { gte: customFrom, lt: customToLt } },
       select: { patientType: true, chamberId: true },
     }),
+    // Weekly Mon–Sun buckets: every status (money/counts split in JS).
+    prisma.pendingAppointment.findMany({
+      where: { doctorId, appointmentDate: { gte: monday, lt: now } },
+      select: { status: true, patientType: true, chamberId: true },
+    }),
+    prisma.pendingAppointment.findMany({
+      where: { doctorId, appointmentDate: { gte: prevMonday, lt: monday } },
+      select: { status: true, patientType: true, chamberId: true },
+    }),
   ]);
 
   const todayDoneRows = await prisma.pendingAppointment.findMany({
@@ -332,6 +408,8 @@ export async function getAppointmentSummary(
     todayExpected: bucket(todayRows, fees),
     todayDone: bucket(todayDoneRows, fees),
     week: bucket(weekRows, fees),
+    thisWeek: weeklyBucket(thisWeekRows, fees, monday, today),
+    lastWeek: weeklyBucket(lastWeekRows, fees, prevMonday, new Date(monday.getTime() - DAY_MS)),
     month: monthRows ? bucket(monthRows, fees) : null,
     lifetime: lifetimeRows ? bucket(lifetimeRows, fees) : null,
     custom: { from: isoDay(customFrom), to: isoDay(customToIncl), ...bucket(customRows, fees) },
