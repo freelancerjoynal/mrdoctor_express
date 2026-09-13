@@ -18,6 +18,8 @@ import {
   patchConfirmedAppointment,
   deleteConfirmedAppointment,
   postCancelRequest,
+  showStaffCollections,
+  showStaffCollectionRows,
 } from '../controllers/appointmentController.js';
 
 const appointmentRouter = express.Router();
@@ -37,6 +39,8 @@ appointmentRouter.get('/local-options', protectedRoute('DOCTOR', 'DOCTOR_STAFF')
 appointmentRouter.get('/collection/summary', protectedRoute(...OWNERS), showCollectionSummary);
 appointmentRouter.get('/collection/days', protectedRoute('DOCTOR', 'SUPER_ADMIN'), showCollectionDays);
 appointmentRouter.get('/collection/week', protectedRoute('DOCTOR', 'DOCTOR_STAFF', 'SUPER_ADMIN'), showCollectionWeek);
+appointmentRouter.get('/staff-collections', protectedRoute('DOCTOR', 'DOCTOR_STAFF'), showStaffCollections);
+appointmentRouter.get('/staff-collections/rows', protectedRoute('DOCTOR', 'DOCTOR_STAFF'), showStaffCollectionRows);
 appointmentRouter.get('/', protectedRoute(...OWNERS), listUserAppointments);
 appointmentRouter.patch('/:id', protectedRoute(...OWNERS), patchUserAppointment);
 

@@ -27,6 +27,11 @@ import {
   requestOnlineCancel,
   listServed,
 } from '../services/confirmedService.js';
+import {
+  getStaffCollections,
+  listStaffRows,
+  type StaffCollectionRange,
+} from '../services/staffCollectionService.js';
 
 function callerOf(req: AuthenticatedRequest) {
   return { userId: req.user!.userId, role: req.user!.role as UserRole };
@@ -326,6 +331,52 @@ export const listServedAppointments = async (req: AuthenticatedRequest, res: Res
   }
 };
 
+// GET /api/users/appointments/staff-collections?range=today|tomorrow|last30
+// Per-taker OFFLINE (cash) totals — confirmed + served combined.
+export const showStaffCollections = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const rawRange = parseOptional(req, 'range');
+    const range: StaffCollectionRange =
+      rawRange === 'tomorrow' || rawRange === 'last30' ? rawRange : 'today';
+    const data = await getStaffCollections(callerOf(req), {
+      range,
+      doctorUsername: parseOptional(req, 'doctorUsername'),
+    });
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
+      return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(500).json({ error: 'Failed to load staff collections' });
+  }
+};
+
+// GET /api/users/appointments/staff-collections/rows?range=&userId=
+// OFFLINE rows taken by one staff (confirmed + served).
+export const showStaffCollectionRows = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const rawRange = parseOptional(req, 'range');
+    const range: StaffCollectionRange =
+      rawRange === 'tomorrow' || rawRange === 'last30' ? rawRange : 'today';
+    const data = await listStaffRows(callerOf(req), {
+      range,
+      userId: parseOptional(req, 'userId') ?? 'unknown',
+      doctorUsername: parseOptional(req, 'doctorUsername'),
+      limit: parseOptional(req, 'limit'),
+    });
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
+      return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(500).json({ error: 'Failed to load staff rows' });
+  }
+};
+
 function confirmedActionError(res: Response, error: any) {
   const msg = error?.message ?? 'UNKNOWN';
   if (msg === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
@@ -336,6 +387,8 @@ function confirmedActionError(res: Response, error: any) {
     return res.status(403).json({ error: 'অনলাইন বুকিং ডিলিট করা যাবে না। ক্যানসেল রিকোয়েস্ট পাঠান।' });
   if (msg === 'NOT_ONLINE') return res.status(400).json({ error: 'এটি অনলাইন বুকিং নয়।' });
   if (msg === 'ALREADY_CANCELLED') return res.status(400).json({ error: 'বুকিংটি আগেই বাতিল হয়েছে।' });
+  if (msg === 'FUTURE_SERVE')
+    return res.status(400).json({ error: 'আগামী দিনের বুকিং আজ সেবা সম্পন্ন করা যাবে না।' });
   if (msg === 'AMOUNT_NOT_EDITABLE')
     return res.status(400).json({ error: 'অনলাইন পেমেন্টের টাকা এখানে বদলানো যাবে না।' });
   if (msg === 'NOTHING_TO_UPDATE') return res.status(400).json({ error: 'বদলানোর মতো কিছু নেই।' });

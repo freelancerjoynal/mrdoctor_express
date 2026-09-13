@@ -102,6 +102,24 @@ function openDays(schedules: Array<{ dayOfWeek: string }>): Array<{ date: string
   return out;
 }
 
+/** Who is taking this booking (cash tracking): user id + display name snapshot. */
+async function resolveTaker(caller: LocalBookingCaller): Promise<{ id: string; name: string }> {
+  const user = await prisma.user.findUnique({
+    where: { id: caller.userId },
+    select: {
+      name: true,
+      email: true,
+      doctorProfile: { select: { name: true } },
+    },
+  });
+  const base =
+    caller.role === 'DOCTOR'
+      ? user?.doctorProfile?.name || user?.name || ''
+      : user?.name || '';
+  const name = base.trim() || user?.email?.split('@')[0]?.trim() || 'স্টাফ';
+  return { id: caller.userId, name };
+}
+
 async function resolveDoctor(caller: LocalBookingCaller): Promise<{ id: string; name: string }> {
   if (caller.role === 'DOCTOR') {
     const own = await prisma.user.findUnique({
@@ -225,6 +243,7 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
     }
   }
 
+  const taker = await resolveTaker(caller);
   const booking = await createConfirmedWithSerial({
     doctorId: doctor.id,
     appointmentDate,
@@ -243,6 +262,8 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
     status: 'CONFIRMED',
     bookingType: 'OFFLINE',
     collectionAmount,
+    createdBy: taker.id,
+    createdByName: taker.name,
   });
 
   let smsSent = false;

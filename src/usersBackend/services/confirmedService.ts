@@ -255,6 +255,9 @@ function snapshotOf(row: {
 export async function completeConfirmed(caller: ConfirmedCaller, id: string) {
   const row = await ownedRow(caller, id);
   if (row.status === 'CANCELLED') throw new Error('ALREADY_CANCELLED');
+  // Same-day only: tomorrow's booking can't be served today.
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  if (startOf(row.appointmentDate) > startOf(new Date())) throw new Error('FUTURE_SERVE');
   const [served] = await prisma.$transaction([
     prisma.servedAppointment.create({
       data: {
@@ -271,6 +274,8 @@ export async function completeConfirmed(caller: ConfirmedCaller, id: string) {
         bookingType: row.bookingType,
         collectionAmount: row.collectionAmount,
         paymentAmount: row.paymentAmount,
+        createdBy: row.createdBy,
+        createdByName: row.createdByName,
         servedBy: caller.userId,
       },
     }),

@@ -331,6 +331,11 @@ model ConfirmedAppointment {
   source          String   @default("whatsapp") // whatsapp | website
   status          String   @default("CONFIRMED")
 
+  // কোন স্টাফ/ডাক্তার বুকিংটি নিয়েছে (cash tracking) — local walk-in এ বসে,
+  // অনলাইন/সিস্টেম বুকিংয়ে null থাকে।
+  createdBy       String?
+  createdByName   String?
+
   // বুকিং ধরন: OFFLINE (সরাসরি/ক্যাশ) | ONLINE (পেমেন্ট গেটওয়ে)।
   bookingType     BookingType @default(OFFLINE)
 
@@ -366,6 +371,7 @@ model ConfirmedAppointment {
   @@index([hospitalId, status])
   @@index([bookingType])
   @@index([paymentUserId])
+  @@index([createdBy])
   @@unique([doctorId, appointmentDate, serial])
   @@map("confirmed_appointments")
 }
@@ -431,9 +437,13 @@ model ServedAppointment {
   paymentAmount    Float?
   servedBy        String
   servedAt        DateTime    @default(now())
+  // বুকিংটি মূলত কে নিয়েছিল (confirmed থেকে কপি হয়) — cash tracking।
+  createdBy       String?
+  createdByName   String?
   createdAt       DateTime    @default(now())
 
   @@index([doctorId, appointmentDate])
+  @@index([createdBy])
   @@map("served_appointments")
 }
 
