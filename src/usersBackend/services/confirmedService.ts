@@ -129,7 +129,15 @@ export async function listConfirmed(caller: ConfirmedCaller, filters: ConfirmedF
 
   const page = Math.max(1, filters.page || 1);
   const limit = Math.min(50, Math.max(1, filters.limit || 20));
-  const [total, rows] = await prisma.$transaction([
+  // Tab counters ride along (bookingType ALL, same ownership scope) so the
+  // panel needs no extra round trips to keep them fresh.
+  const today = startOfToday();
+  const day = (offset: number) => ({
+    gte: new Date(today.getTime() + offset * DAY_MS),
+    lt: new Date(today.getTime() + (offset + 1) * DAY_MS),
+  });
+  const last30 = { gte: new Date(today.getTime() - 29 * DAY_MS), lt: new Date(today.getTime() + DAY_MS) };
+  const [total, rows, cToday, cTomorrow, cLast30] = await prisma.$transaction([
     prisma.confirmedAppointment.count({ where }),
     prisma.confirmedAppointment.findMany({
       where,
@@ -141,6 +149,9 @@ export async function listConfirmed(caller: ConfirmedCaller, filters: ConfirmedF
         hospital: { select: { slug: true, name: true } },
       },
     }),
+    prisma.confirmedAppointment.count({ where: { ...owned, appointmentDate: day(0) } }),
+    prisma.confirmedAppointment.count({ where: { ...owned, appointmentDate: day(1) } }),
+    prisma.confirmedAppointment.count({ where: { ...owned, appointmentDate: last30 } }),
   ]);
 
   // Unified realized amount: offline cash or online gateway amount.
@@ -148,5 +159,26 @@ export async function listConfirmed(caller: ConfirmedCaller, filters: ConfirmedF
     ...r,
     amount: Number(r.collectionAmount ?? r.paymentAmount ?? 0) || 0,
   }));
-  return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  return {
+    data,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    counts: { today: cToday, tomorrow: cTomorrow, last30: cLast30 },
+  };
+}
+
+/** Tab counters only (today / tomorrow / last30, bookingType ALL). One round trip. */
+export async function getConfirmedCounts(caller: ConfirmedCaller, doctorUsername?: string) {
+  const owned = await ownershipFilter(caller, doctorUsername);
+  const today = startOfToday();
+  const day = (offset: number) => ({
+    gte: new Date(today.getTime() + offset * DAY_MS),
+    lt: new Date(today.getTime() + (offset + 1) * DAY_MS),
+  });
+  const last30 = { gte: new Date(today.getTime() - 29 * DAY_MS), lt: new Date(today.getTime() + DAY_MS) };
+  const [cToday, cTomorrow, cLast30] = await prisma.$transaction([
+    prisma.confirmedAppointment.count({ where: { ...owned, appointmentDate: day(0) } }),
+    prisma.confirmedAppointment.count({ where: { ...owned, appointmentDate: day(1) } }),
+    prisma.confirmedAppointment.count({ where: { ...owned, appointmentDate: last30 } }),
+  ]);
+  return { today: cToday, tomorrow: cTomorrow, last30: cLast30 };
 }

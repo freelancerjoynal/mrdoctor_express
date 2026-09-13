@@ -76,7 +76,7 @@ async function ownershipFilter(caller: AppointmentCaller): Promise<Record<string
 }
 
 /** Fee map of one doctor's chambers: chamberId -> { newFee, oldFee }. */
-async function chamberFeeMap(doctorId: string): Promise<Map<string, { newFee: number; oldFee: number }>> {
+export async function chamberFeeMap(doctorId: string): Promise<Map<string, { newFee: number; oldFee: number }>> {
   const chambers = await prisma.chamber.findMany({
     where: { doctorId },
     select: { id: true, newPatientFee: true, oldPatientFee: true },
@@ -85,7 +85,7 @@ async function chamberFeeMap(doctorId: string): Promise<Map<string, { newFee: nu
 }
 
 /** Visit fee of one row: RENEW pays the old-patient fee, else the new-patient fee. */
-function feeOf(
+export function feeOf(
   row: { chamberId?: string | null; patientType?: string | null },
   fees: Map<string, { newFee: number; oldFee: number }>,
 ): number {

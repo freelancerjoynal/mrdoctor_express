@@ -13,11 +13,13 @@ import {
 } from '../services/appointmentService.js';
 import { createLocalBooking } from '../services/localBookingService.js';
 import { getLocalBookingOptions } from '../services/localBookingService.js';
+import { getCollectionSummary, getMonthDays } from '../services/collectionService.js';
 import {
   listConfirmed,
   type ConfirmedRange,
   type ConfirmedTypeFilter,
 } from '../services/confirmedService.js';
+import { getConfirmedCounts } from '../services/confirmedService.js';
 
 function callerOf(req: AuthenticatedRequest) {
   return { userId: req.user!.userId, role: req.user!.role as UserRole };
@@ -116,6 +118,42 @@ export const showLocalBookingOptions = async (req: AuthenticatedRequest, res: Re
   }
 };
 
+// GET /api/users/appointments/collection/summary[?doctorUsername=] — today/week/month/lifetime boxes.
+export const showCollectionSummary = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await getCollectionSummary(callerOf(req), {
+      doctorUsername: parseOptional(req, 'doctorUsername'),
+    });
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
+      return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(500).json({ error: 'Failed to load collection' });
+  }
+};
+
+// GET /api/users/appointments/collection/days?year=&month=[&doctorUsername=] — per-day month breakdown.
+export const showCollectionDays = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await getMonthDays(callerOf(req), {
+      year: parseOptional(req, 'year'),
+      month: parseOptional(req, 'month'),
+      doctorUsername: parseOptional(req, 'doctorUsername'),
+    });
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
+      return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(500).json({ error: 'Failed to load month days' });
+  }
+};
+
 // POST /api/users/appointments/local — staff walk-in offline booking + SMS receipt.
 export const createLocalBookingAppointment = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -174,5 +212,19 @@ export const listConfirmedAppointments = async (req: AuthenticatedRequest, res: 
       return res.status(404).json({ error: 'No profile linked to this user' });
     if (error.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'Doctor not found' });
     return res.status(500).json({ error: 'Failed to load confirmed appointments' });
+  }
+};
+
+// GET /api/users/appointments/confirmed/counts[?doctorUsername=] — tab counters, one round trip.
+export const showConfirmedCounts = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await getConfirmedCounts(callerOf(req), parseOptional(req, 'doctorUsername'));
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(500).json({ error: 'Failed to load counts' });
   }
 };

@@ -9,7 +9,10 @@ import {
   patchUserAppointment,
   createLocalBookingAppointment,
   showLocalBookingOptions,
+  showCollectionSummary,
+  showCollectionDays,
   listConfirmedAppointments,
+  showConfirmedCounts,
 } from '../controllers/appointmentController.js';
 
 const appointmentRouter = express.Router();
@@ -20,7 +23,10 @@ const OWNERS = ['SUPER_ADMIN', 'DOCTOR', 'DOCTOR_STAFF', 'HOSPITAL'] as const;
 appointmentRouter.get('/today', protectedRoute(...OWNERS), showTodayAppointments);
 appointmentRouter.get('/summary', protectedRoute(...OWNERS), showAppointmentSummary);
 appointmentRouter.get('/confirmed', protectedRoute(...OWNERS), listConfirmedAppointments);
+appointmentRouter.get('/confirmed/counts', protectedRoute(...OWNERS), showConfirmedCounts);
 appointmentRouter.get('/local-options', protectedRoute('DOCTOR', 'DOCTOR_STAFF'), showLocalBookingOptions);
+appointmentRouter.get('/collection/summary', protectedRoute(...OWNERS), showCollectionSummary);
+appointmentRouter.get('/collection/days', protectedRoute('DOCTOR', 'SUPER_ADMIN'), showCollectionDays);
 appointmentRouter.get('/', protectedRoute(...OWNERS), listUserAppointments);
 appointmentRouter.patch('/:id', protectedRoute(...OWNERS), patchUserAppointment);
 
