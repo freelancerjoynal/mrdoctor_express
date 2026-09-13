@@ -8,6 +8,7 @@ import {
   showAppointmentSummary,
   patchUserAppointment,
   createLocalBookingAppointment,
+  showLocalBookingOptions,
   listConfirmedAppointments,
 } from '../controllers/appointmentController.js';
 
@@ -19,6 +20,7 @@ const OWNERS = ['SUPER_ADMIN', 'DOCTOR', 'DOCTOR_STAFF', 'HOSPITAL'] as const;
 appointmentRouter.get('/today', protectedRoute(...OWNERS), showTodayAppointments);
 appointmentRouter.get('/summary', protectedRoute(...OWNERS), showAppointmentSummary);
 appointmentRouter.get('/confirmed', protectedRoute(...OWNERS), listConfirmedAppointments);
+appointmentRouter.get('/local-options', protectedRoute('DOCTOR', 'DOCTOR_STAFF'), showLocalBookingOptions);
 appointmentRouter.get('/', protectedRoute(...OWNERS), listUserAppointments);
 appointmentRouter.patch('/:id', protectedRoute(...OWNERS), patchUserAppointment);
 

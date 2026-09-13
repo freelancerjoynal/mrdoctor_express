@@ -121,16 +121,17 @@ export async function getAppointmentOptions(username: string) {
   });
   if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
 
-  // Next 30 days that are running days (per chamber when schedules are chamber-bound).
+  // Today + tomorrow only, keeping ONLY running days (doctor has a schedule).
+  // Max one day advance — never offers anything beyond tomorrow.
   const days: Array<{ date: string; dayOfWeek: string; dayBn: string; label: string }> = [];
   const now = new Date();
-  for (let offset = 0; offset < 30; offset++) {
+  for (let offset = 0; offset < 2; offset++) {
     const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
     const dayOfWeek = jsDayToEnum(date);
     if (!(doctor.schedules || []).some((s) => String(s.dayOfWeek).toUpperCase() === dayOfWeek)) continue;
     const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     days.push({ date: iso, dayOfWeek, dayBn: DAY_BN[dayOfWeek]!, label: buildDayLabel(date) });
-    if (days.length >= 14) break;
+    if (days.length >= 2) break;
   }
 
   return {
@@ -211,7 +212,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
   }
   if (!doctor.chambers.length) throw new Error('NO_CHAMBER');
 
-  // Date: must be a running day (chamber-bound schedules win, else full roster), within 30 days.
+  // Date: must be a running day (chamber-bound schedules win, else full roster), max tomorrow.
   if (typeof input.appointmentDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input.appointmentDate.trim())) {
     throw new Error('INVALID_DATE');
   }
@@ -221,7 +222,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
   const now = new Date();
   const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.round((startOf(appointmentDate) - startOf(now)) / 86400000);
-  if (diffDays < 0 || diffDays > 30) throw new Error('INVALID_DATE');
+  if (diffDays < 0 || diffDays > 1) throw new Error('INVALID_DATE');
   const dayOfWeek = jsDayToEnum(appointmentDate);
   const relevant = chamber
     ? (() => {

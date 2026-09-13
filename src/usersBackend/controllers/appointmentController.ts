@@ -12,6 +12,7 @@ import {
   updateAppointmentStatus,
 } from '../services/appointmentService.js';
 import { createLocalBooking } from '../services/localBookingService.js';
+import { getLocalBookingOptions } from '../services/localBookingService.js';
 import {
   listConfirmed,
   type ConfirmedRange,
@@ -102,6 +103,19 @@ export const patchUserAppointment = async (req: AuthenticatedRequest, res: Respo
   }
 };
 
+// GET /api/users/appointments/local-options — chambers + schedules + next 2 running days.
+export const showLocalBookingOptions = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const options = await getLocalBookingOptions(callerOf(req));
+    return res.json({ backend: 'usersBackend', data: options });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE')
+      return res.status(404).json({ error: 'No doctor linked to this account' });
+    return res.status(500).json({ error: 'Failed to load booking options' });
+  }
+};
+
 // POST /api/users/appointments/local — staff walk-in offline booking + SMS receipt.
 export const createLocalBookingAppointment = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -131,7 +145,9 @@ export const createLocalBookingAppointment = async (req: AuthenticatedRequest, r
     if (error.message === 'INVALID_PATIENT_TYPE')
       return res.status(400).json({ error: 'রোগীর ধরন নতুন বা পুরনো হতে হবে।' });
     if (error.message === 'INVALID_AMOUNT') return res.status(400).json({ error: 'সঠিক আদায়ের টাকা দিন।' });
-    if (error.message === 'INVALID_DATE') return res.status(400).json({ error: 'সঠিক তারিখ দিন (YYYY-MM-DD)।' });
+    if (error.message === 'INVALID_DATE') return res.status(400).json({ error: 'সঠিক তারিখ বেছে নিন (আজ / আগামীকাল)।' });
+    if (error.message === 'CLOSED_DAY')
+      return res.status(400).json({ error: 'ওই দিন চেম্বার বন্ধ থাকে — চালু দিন বেছে নিন।' });
     if (error.message === 'INVALID_AGE') return res.status(400).json({ error: 'সঠিক বয়স দিন।' });
     if (error.message === 'INVALID_CHAMBER') return res.status(400).json({ error: 'চেম্বার সঠিক নয়।' });
     return res.status(500).json({ error: 'Failed to create booking' });

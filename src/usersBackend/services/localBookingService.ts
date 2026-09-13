@@ -64,6 +64,44 @@ function bnDate(dt: Date): string {
   }
 }
 
+const DAY_BN: Record<string, string> = {
+  SATURDAY: 'শনিবার',
+  SUNDAY: 'রবিবার',
+  MONDAY: 'সোমবার',
+  TUESDAY: 'মঙ্গলবার',
+  WEDNESDAY: 'বুধবার',
+  THURSDAY: 'বৃহস্পতিবার',
+  FRIDAY: 'শুক্রবার',
+};
+
+function jsDayToEnum(d: Date): string {
+  return ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][d.getDay()]!;
+}
+
+/** "আজকে — বৃহস্পতিবার, ১২ সেপ্টেম্বর" style label for the two booking days. */
+function dayLabel(date: Date, offset: number): string {
+  const prefix = offset === 0 ? 'আজকে — ' : 'আগামীকাল — ';
+  return `${prefix}${DAY_BN[jsDayToEnum(date)]}, ${bnDate(date)}`;
+}
+
+function isoDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Today + tomorrow only, keeping ONLY running days. Max one day advance. */
+function openDays(schedules: Array<{ dayOfWeek: string }>): Array<{ date: string; dayOfWeek: string; label: string }> {
+  const running = new Set(schedules.map((s) => String(s.dayOfWeek).toUpperCase()));
+  const out: Array<{ date: string; dayOfWeek: string; label: string }> = [];
+  const now = new Date();
+  for (let offset = 0; offset < 2; offset++) {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    const dayOfWeek = jsDayToEnum(date);
+    if (running.size > 0 && !running.has(dayOfWeek)) continue;
+    out.push({ date: isoDay(date), dayOfWeek, label: dayLabel(date, offset) });
+  }
+  return out;
+}
+
 async function resolveDoctor(caller: LocalBookingCaller): Promise<{ id: string; name: string }> {
   if (caller.role === 'DOCTOR') {
     const own = await prisma.user.findUnique({
@@ -168,6 +206,25 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
     }
   }
 
+  // Date rule: today + tomorrow only, and only a running day of this chamber
+  // (chamber-bound schedules win, else the doctor's full roster).
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOf(appointmentDate) - startOf(new Date())) / 86400000);
+  if (diffDays < 0 || diffDays > 1) throw new Error('INVALID_DATE');
+  const schedules = await prisma.doctorSchedule.findMany({
+    where: { doctorId: doctor.id },
+    select: { dayOfWeek: true, chamberId: true },
+  });
+  if (schedules.length > 0) {
+    const own = chamberId
+      ? schedules.filter((s) => (s.chamberId || '').toLowerCase() === chamberId!.toLowerCase())
+      : [];
+    const relevant = own.length > 0 ? own : schedules;
+    if (!relevant.some((s) => String(s.dayOfWeek).toUpperCase() === jsDayToEnum(appointmentDate))) {
+      throw new Error('CLOSED_DAY');
+    }
+  }
+
   const booking = await createConfirmedWithSerial({
     doctorId: doctor.id,
     appointmentDate,
@@ -206,4 +263,38 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
   }
 
   return { booking, smsSent };
+}
+
+/**
+ * Booking options for the staff walk-in form: chambers + schedules +
+ * the next running days (today + tomorrow max, 2 options max).
+ */
+export async function getLocalBookingOptions(caller: LocalBookingCaller) {
+  if (caller.role !== 'DOCTOR' && caller.role !== 'DOCTOR_STAFF') throw new Error('FORBIDDEN');
+  const doctor = await resolveDoctor(caller);
+  const [chambers, schedules] = await Promise.all([
+    prisma.chamber.findMany({
+      where: { doctorId: doctor.id },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, chamberName: true, addressLine: true, thana: true, district: true },
+    }),
+    prisma.doctorSchedule.findMany({
+      where: { doctorId: doctor.id },
+      select: { dayOfWeek: true, chamberId: true, startTime: true, endTime: true },
+    }),
+  ]);
+  return {
+    chambers: chambers.map((c) => ({
+      id: c.id,
+      name: c.chamberName || c.addressLine || 'চেম্বার',
+      area: [c.thana, c.district].filter(Boolean).join(', '),
+    })),
+    schedules: schedules.map((s) => ({
+      dayOfWeek: String(s.dayOfWeek),
+      chamberId: s.chamberId,
+      startTime: s.startTime,
+      endTime: s.endTime,
+    })),
+    days: openDays(schedules),
+  };
 }
