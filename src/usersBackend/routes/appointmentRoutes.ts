@@ -15,6 +15,7 @@ import {
   listConfirmedAppointments,
   showConfirmedCounts,
   listServedAppointments,
+  showServedCounts,
   patchConfirmedAppointment,
   deleteConfirmedAppointment,
   postCancelRequest,
@@ -35,6 +36,7 @@ appointmentRouter.post('/confirmed/:id/cancel-request', protectedRoute('DOCTOR',
 appointmentRouter.patch('/confirmed/:id', protectedRoute('DOCTOR', 'DOCTOR_STAFF'), patchConfirmedAppointment);
 appointmentRouter.delete('/confirmed/:id', protectedRoute('DOCTOR', 'DOCTOR_STAFF'), deleteConfirmedAppointment);
 appointmentRouter.get('/served', protectedRoute(...OWNERS), listServedAppointments);
+appointmentRouter.get('/served/counts', protectedRoute('DOCTOR', 'DOCTOR_STAFF', 'SUPER_ADMIN'), showServedCounts);
 appointmentRouter.get('/local-options', protectedRoute('DOCTOR', 'DOCTOR_STAFF'), showLocalBookingOptions);
 appointmentRouter.get('/collection/summary', protectedRoute(...OWNERS), showCollectionSummary);
 appointmentRouter.get('/collection/days', protectedRoute('DOCTOR', 'SUPER_ADMIN'), showCollectionDays);

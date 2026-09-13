@@ -181,6 +181,23 @@ export async function getConfirmedCounts(caller: ConfirmedCaller, doctorUsername
   return { today: cToday, tomorrow: cTomorrow, last30: cLast30 };
 }
 
+/** Served-tab counters (today / tomorrow / last30). Doctor + staff scope. */
+export async function getServedCounts(caller: ConfirmedCaller, doctorUsername?: string) {
+  const owned = await ownershipFilter(caller, doctorUsername);
+  const today = startOfToday();
+  const day = (offset: number) => ({
+    gte: new Date(today.getTime() + offset * DAY_MS),
+    lt: new Date(today.getTime() + (offset + 1) * DAY_MS),
+  });
+  const last30 = { gte: new Date(today.getTime() - 29 * DAY_MS), lt: new Date(today.getTime() + DAY_MS) };
+  const [cToday, cTomorrow, cLast30] = await prisma.$transaction([
+    prisma.servedAppointment.count({ where: { ...owned, appointmentDate: day(0) } }),
+    prisma.servedAppointment.count({ where: { ...owned, appointmentDate: day(1) } }),
+    prisma.servedAppointment.count({ where: { ...owned, appointmentDate: last30 } }),
+  ]);
+  return { today: cToday, tomorrow: cTomorrow, last30: cLast30 };
+}
+
 // ---------------------------------------------------------------------------
 // Row actions (doctor + staff portal): service-done, update, delete,
 // online cancel-request. Ownership mirrors the list scope.
@@ -226,6 +243,20 @@ async function ownedRow(caller: ConfirmedCaller, id: string) {
   return row;
 }
 
+/**
+ * Approval gate: a restricted staffer (canApprove=false) may collect
+ * (book) and update, but only the doctor may serve/done or delete.
+ * Cancel-requests stay open — they still need approval by design.
+ */
+async function assertCanApprove(caller: ConfirmedCaller): Promise<void> {
+  if (caller.role !== 'DOCTOR_STAFF') return;
+  const own = await prisma.user.findUnique({
+    where: { id: caller.userId },
+    select: { canApprove: true },
+  });
+  if (own && own.canApprove === false) throw new Error('APPROVE_FORBIDDEN');
+}
+
 function snapshotOf(row: {
   id: string;
   doctorId: string;
@@ -253,6 +284,7 @@ function snapshotOf(row: {
 
 /** Service done: move the row to served_appointments (snapshot + remove). */
 export async function completeConfirmed(caller: ConfirmedCaller, id: string) {
+  await assertCanApprove(caller);
   const row = await ownedRow(caller, id);
   if (row.status === 'CANCELLED') throw new Error('ALREADY_CANCELLED');
   // Same-day only: tomorrow's booking can't be served today.
@@ -409,8 +441,10 @@ function isoDayOf(d: Date): string {
 /**
  * Delete a walk-in (OFFLINE) booking: snapshot to cancelled_appointments_local,
  * then remove the row. ONLINE rows can never be deleted — use a cancel request.
+ * After removal the day's serials are rearranged 1..N so no gap remains.
  */
 export async function deleteOfflineBooking(caller: ConfirmedCaller, id: string, reason?: unknown) {
+  await assertCanApprove(caller);
   const row = await ownedRow(caller, id);
   if (row.bookingType !== 'OFFLINE') throw new Error('ONLINE_DELETE_FORBIDDEN');
   const cleanReason =
@@ -419,7 +453,31 @@ export async function deleteOfflineBooking(caller: ConfirmedCaller, id: string, 
     data: { ...snapshotOf(row), reason: cleanReason, requestedBy: caller.userId },
   });
   await prisma.confirmedAppointment.delete({ where: { id } });
+  await rearrangeDaySerials(row.doctorId, row.appointmentDate);
   return { deleted: true };
+}
+
+/**
+ * Rearrange one doctor-day's serials to a contiguous 1..N (ordered by old
+ * serial). Two passes via negative temps so the
+ * @@unique([doctorId, appointmentDate, serial]) guard never collides.
+ */
+async function rearrangeDaySerials(doctorId: string, appointmentDate: Date): Promise<void> {
+  const rest = await prisma.confirmedAppointment.findMany({
+    where: { doctorId, appointmentDate },
+    orderBy: { serial: 'asc' },
+    select: { id: true, serial: true },
+  });
+  const moves = rest
+    .map((r, i) => ({ id: r.id, to: i + 1 }))
+    .filter((m, i) => rest[i]!.serial !== m.to);
+  if (moves.length === 0) return;
+  await prisma.$transaction(
+    moves.map((m) => prisma.confirmedAppointment.update({ where: { id: m.id }, data: { serial: -m.to } })),
+  );
+  await prisma.$transaction(
+    moves.map((m) => prisma.confirmedAppointment.update({ where: { id: m.id }, data: { serial: m.to } })),
+  );
 }
 
 /**

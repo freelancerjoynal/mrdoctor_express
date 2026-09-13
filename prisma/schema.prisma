@@ -102,6 +102,11 @@ model User {
   staffDoctorId String?
   staffDoctor   Doctor?  @relation("DoctorStaff", fields: [staffDoctorId], references: [id], onDelete: Cascade)
 
+  // স্টাফ সেবা-সম্পন্ন (approve) / ডিলিট করতে পারবে কি না।
+  // ডাক্তার StaffPanel থেকে সীমাবদ্ধ করলে false — তখন শুধু
+  // কালেকশন (বুকিং) + আপডেট, অনুমোদন শুধু ডাক্তার দেবেন।
+  canApprove    Boolean @default(true)
+
   @@map("users")
 }
 

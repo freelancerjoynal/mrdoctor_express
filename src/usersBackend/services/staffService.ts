@@ -19,6 +19,7 @@ const STAFF_SELECT = {
   name: true,
   role: true,
   isVerified: true,
+  canApprove: true,
   createdAt: true,
 } as const;
 
@@ -64,10 +65,16 @@ export async function listStaff(caller: StaffCaller) {
   });
 }
 
-export async function inviteStaff(caller: StaffCaller, input: { email?: string; name?: string }) {
+export async function inviteStaff(
+  caller: StaffCaller,
+  input: { email?: string; name?: string; canApprove?: unknown },
+) {
   const doctorId = await resolveOwnDoctorId(caller);
   const email = cleanEmail(input.email);
   const name = cleanName(input.name);
+  // Manage-approve option: false = staff can only collect + update,
+  // approval (serve/done) stays with the doctor. Default true (full rights).
+  const canApprove = input.canApprove === undefined ? true : Boolean(input.canApprove);
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) throw new Error('EMAIL_TAKEN');
 
@@ -83,6 +90,7 @@ export async function inviteStaff(caller: StaffCaller, input: { email?: string; 
       role: 'DOCTOR_STAFF',
       isVerified: true,
       staffDoctorId: doctorId,
+      canApprove,
     },
     select: STAFF_SELECT,
   });
@@ -96,6 +104,27 @@ export async function inviteStaff(caller: StaffCaller, input: { email?: string; 
   }
   // tempPassword is shown exactly once — it is never stored in plain text.
   return { staff, tempPassword, emailSent };
+}
+
+/** Flip a staff member's approve right (DOCTOR owns, SUPER_ADMIN may). */
+export async function updateStaff(
+  caller: StaffCaller,
+  id: string,
+  input: { canApprove?: unknown },
+) {
+  if (caller.role !== 'DOCTOR' && caller.role !== 'SUPER_ADMIN') throw new Error('FORBIDDEN');
+  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, staffDoctorId: true } });
+  if (!target || target.role !== 'DOCTOR_STAFF') throw new Error('STAFF_NOT_FOUND');
+  if (caller.role === 'DOCTOR') {
+    const doctorId = await resolveOwnDoctorId(caller);
+    if (target.staffDoctorId !== doctorId) throw new Error('FORBIDDEN');
+  }
+  if (input.canApprove === undefined) throw new Error('NOTHING_TO_UPDATE');
+  return prisma.user.update({
+    where: { id },
+    data: { canApprove: Boolean(input.canApprove) },
+    select: STAFF_SELECT,
+  });
 }
 
 export async function removeStaff(caller: StaffCaller, id: string) {

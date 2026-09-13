@@ -137,12 +137,19 @@ async function rangeBucket(
 
 export interface CollectionSummary {
   today: string;
+  tomorrow: string;
   /** Served today only — আজকের আয় (today's income). */
   todayBox: CollectionBucket;
   /** Confirmed today only — still pending service. */
   todayConfirmed: CollectionBucket;
   /** Served + confirmed today — আজ আদায় (never drops on serve). */
   todayTotal: CollectionBucket;
+  /** Served tomorrow only. */
+  tomorrowBox: CollectionBucket;
+  /** Confirmed tomorrow only — still pending service. */
+  tomorrowConfirmed: CollectionBucket;
+  /** Served + confirmed tomorrow — আগামীকালের কালেকশন. */
+  tomorrowTotal: CollectionBucket;
   week: { from: string; to: string } & CollectionBucket;
   /** Calendar-month box. Doctor only (null for staff). */
   month: { year: number; month: number; name: string; from: string; to: string } & CollectionBucket | null;
@@ -167,25 +174,33 @@ export async function getCollectionSummary(
 
   const today = startOfToday();
   const tomorrow = new Date(today.getTime() + DAY_MS);
+  const dayAfter = new Date(today.getTime() + 2 * DAY_MS);
   const monday = startOfWeekMonday(new Date());
   const nextMonday = new Date(monday.getTime() + 7 * DAY_MS);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
 
-  const [todayServed, todayConfirmed, weekBox, monthBox, lifetimeBox] = await Promise.all([
-    rangeBucket(doctor.id, 'served', today, tomorrow),
-    rangeBucket(doctor.id, 'confirmed', today, tomorrow),
-    rangeBucket(doctor.id, 'served', monday, nextMonday),
-    caller.role === 'DOCTOR_STAFF' ? Promise.resolve(null) : rangeBucket(doctor.id, 'served', monthStart, nextMonthStart),
-    caller.role === 'DOCTOR_STAFF' ? Promise.resolve(null) : rangeBucket(doctor.id, 'served'),
-  ]);
+  const [todayServed, todayConfirmed, tomorrowServed, tomorrowConfirmed, weekBox, monthBox, lifetimeBox] =
+    await Promise.all([
+      rangeBucket(doctor.id, 'served', today, tomorrow),
+      rangeBucket(doctor.id, 'confirmed', today, tomorrow),
+      rangeBucket(doctor.id, 'served', tomorrow, dayAfter),
+      rangeBucket(doctor.id, 'confirmed', tomorrow, dayAfter),
+      rangeBucket(doctor.id, 'served', monday, nextMonday),
+      caller.role === 'DOCTOR_STAFF' ? Promise.resolve(null) : rangeBucket(doctor.id, 'served', monthStart, nextMonthStart),
+      caller.role === 'DOCTOR_STAFF' ? Promise.resolve(null) : rangeBucket(doctor.id, 'served'),
+    ]);
 
   const monthIdx = today.getMonth();
   return {
     today: isoDay(today),
+    tomorrow: isoDay(tomorrow),
     todayBox: todayServed,
     todayConfirmed,
     todayTotal: combineBuckets(todayServed, todayConfirmed),
+    tomorrowBox: tomorrowServed,
+    tomorrowConfirmed,
+    tomorrowTotal: combineBuckets(tomorrowServed, tomorrowConfirmed),
     week: { from: isoDay(monday), to: isoDay(new Date(nextMonday.getTime() - DAY_MS)), ...weekBox },
     month: monthBox
       ? {

@@ -19,7 +19,7 @@ import {
   type ConfirmedRange,
   type ConfirmedTypeFilter,
 } from '../services/confirmedService.js';
-import { getConfirmedCounts } from '../services/confirmedService.js';
+import { getConfirmedCounts, getServedCounts } from '../services/confirmedService.js';
 import {
   completeConfirmed,
   updateConfirmed,
@@ -259,6 +259,20 @@ export const showConfirmedCounts = async (req: AuthenticatedRequest, res: Respon
   }
 };
 
+// GET /api/users/appointments/served/counts[?doctorUsername=] — served-tab counters.
+export const showServedCounts = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await getServedCounts(callerOf(req), parseOptional(req, 'doctorUsername'));
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(500).json({ error: 'Failed to load counts' });
+  }
+};
+
 // PATCH /api/users/appointments/confirmed/:id — { status: 'DONE' } moves the row
 // to served_appointments, or detail fields { patientName, contactPhone, appointmentDate, collectionAmount }.
 export const patchConfirmedAppointment = async (req: AuthenticatedRequest, res: Response) => {
@@ -389,6 +403,8 @@ function confirmedActionError(res: Response, error: any) {
   if (msg === 'ALREADY_CANCELLED') return res.status(400).json({ error: 'বুকিংটি আগেই বাতিল হয়েছে।' });
   if (msg === 'FUTURE_SERVE')
     return res.status(400).json({ error: 'আগামী দিনের বুকিং আজ সেবা সম্পন্ন করা যাবে না।' });
+  if (msg === 'APPROVE_FORBIDDEN')
+    return res.status(403).json({ error: 'অনুমতি নেই — শুধু ডাক্তার অনুমোদন/ডিলিট করতে পারবেন।' });
   if (msg === 'AMOUNT_NOT_EDITABLE')
     return res.status(400).json({ error: 'অনলাইন পেমেন্টের টাকা এখানে বদলানো যাবে না।' });
   if (msg === 'NOTHING_TO_UPDATE') return res.status(400).json({ error: 'বদলানোর মতো কিছু নেই।' });

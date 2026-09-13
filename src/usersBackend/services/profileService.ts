@@ -30,6 +30,7 @@ export async function getProfileData(caller: ProfileCaller, targetUserId?: strin
       name: true,
       role: true,
       isVerified: true,
+      canApprove: true,
       createdAt: true,
       // Self view follows the caller's matrix row; privileged others-view gets everything.
       doctorProfile: isSelf ? visibility.includeDoctorProfile : true,
