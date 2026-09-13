@@ -1,9 +1,8 @@
-// Service for walk-in (local) offline bookings by doctor staff.
-// POST /api/users/appointments/local — creates a ConfirmedAppointment with
-// bookingType OFFLINE, then best-effort sends an SMS receipt to the patient.
-// Mandatory: patient name, phone, NEW/RENEW type, collection amount.
+// Walk-in (local) offline booking by doctor staff.
+// Creates a ConfirmedAppointment with bookingType OFFLINE,
+// then sends an SMS receipt (best effort, never fails the booking).
 import { prisma } from '../../lib/prisma.js';
-import { normalizeBdPhone, sendSms } from '../../lib/sms.js';
+import { singleMessage } from '../../lib/sms.js';
 import { createConfirmedWithSerial } from './confirmedService.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
 
@@ -33,6 +32,15 @@ function cleanName(raw: unknown): string {
   return name;
 }
 
+function cleanPhone(raw: unknown): string {
+  if (typeof raw !== 'string') throw new Error('INVALID_PHONE');
+  let digits = raw.replace(/[^\d]/g, '');
+  if (digits.startsWith('880')) digits = '0' + digits.slice(3);
+  if (digits.startsWith('00880')) digits = '0' + digits.slice(5);
+  if (!/^01\d{9}$/.test(digits)) throw new Error('INVALID_PHONE');
+  return digits;
+}
+
 function cleanAmount(raw: unknown): number {
   const n = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
   if (typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n > 10000000) {
@@ -46,11 +54,6 @@ function parseDay(value: unknown): Date | null {
   const [y, m, d] = value.trim().split('-').map(Number);
   const dt = new Date(y!, m! - 1, d!);
   return Number.isNaN(dt.getTime()) ? null : dt;
-}
-
-function todayLocal(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
 function bnDate(dt: Date): string {
@@ -67,7 +70,7 @@ async function resolveDoctor(caller: LocalBookingCaller): Promise<{ id: string; 
       where: { id: caller.userId },
       select: { doctorProfile: { select: { id: true, name: true } } },
     });
-    const doctor = (own as { doctorProfile?: { id: string; name: string } | null } | null)?.doctorProfile;
+    const doctor = own?.doctorProfile;
     if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
     return doctor;
   }
@@ -88,14 +91,15 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
 
   const doctor = await resolveDoctor(caller);
   const patientName = cleanName(input.patientName);
-  const phone = normalizeBdPhone(input.phone);
+  const phone = cleanPhone(input.phone);
 
   const type = typeof input.patientType === 'string' ? input.patientType.trim().toUpperCase() : '';
   if (type !== 'NEW' && type !== 'RENEW') throw new Error('INVALID_PATIENT_TYPE');
 
   const collectionAmount = cleanAmount(input.collectionAmount);
 
-  let appointmentDate = todayLocal();
+  const now = new Date();
+  let appointmentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (input.date !== undefined && input.date !== null && String(input.date).trim() !== '') {
     const parsed = parseDay(input.date);
     if (!parsed) throw new Error('INVALID_DATE');
@@ -108,21 +112,60 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
     if (!Number.isInteger(n) || n < 0 || n > 150) throw new Error('INVALID_AGE');
     age = n;
   }
+
   const area = typeof input.area === 'string' && input.area.trim() ? input.area.trim().slice(0, 120) : null;
   const problem =
     typeof input.problem === 'string' && input.problem.trim()
       ? input.problem.trim().slice(0, 500)
       : 'সরাসরি বুকিং';
 
+  let chamberId: string | null = null;
   let chamberName: string | null = null;
-  const chamberId = typeof input.chamberId === 'string' && input.chamberId.trim() ? input.chamberId.trim() : null;
-  if (chamberId) {
-    const chamber = await prisma.chamber.findUnique({
-      where: { id: chamberId },
-      select: { id: true, doctorId: true, chamberName: true },
-    });
-    if (!chamber || chamber.doctorId !== doctor.id) throw new Error('INVALID_CHAMBER');
+  let chamberText = '';
+  let mapLink = '';
+  const requestedChamberId =
+    typeof input.chamberId === 'string' && input.chamberId.trim() ? input.chamberId.trim() : null;
+  const chamber = requestedChamberId
+    ? await prisma.chamber.findUnique({
+        where: { id: requestedChamberId },
+        select: {
+          id: true,
+          doctorId: true,
+          chamberName: true,
+          addressLine: true,
+          thana: true,
+          district: true,
+          latitude: true,
+          longitude: true,
+        },
+      })
+    : await prisma.chamber.findFirst({
+        where: { doctorId: doctor.id },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          doctorId: true,
+          chamberName: true,
+          addressLine: true,
+          thana: true,
+          district: true,
+          latitude: true,
+          longitude: true,
+        },
+      });
+  if (requestedChamberId && (!chamber || chamber.doctorId !== doctor.id)) throw new Error('INVALID_CHAMBER');
+  if (chamber) {
+    chamberId = chamber.id;
     chamberName = chamber.chamberName;
+    chamberText = [chamber.chamberName, chamber.addressLine, chamber.thana, chamber.district]
+      .filter(Boolean)
+      .join(', ');
+    // Google Map link built from the chamber's latitude/longitude stored in DB.
+    if (chamber.latitude != null && chamber.longitude != null) {
+      mapLink = `https://www.google.com/maps?q=${chamber.latitude},${chamber.longitude}`;
+    } else if (chamberText) {
+      mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chamberText)}`;
+    }
   }
 
   const booking = await createConfirmedWithSerial({
@@ -144,20 +187,22 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
     bookingType: 'OFFLINE',
     collectionAmount,
   });
-  console.log(`[LocalBooking] saved id=${booking.id} serial=${booking.serial} type=${type} amount=${collectionAmount}`);
 
-  // SMS receipt — best effort, never fails the booking.
   let smsSent = false;
   try {
-    console.log(`[LocalBooking] SMS sending booking=${booking.id} to=${phone}`);
-    const sms = await sendSms({
-      to: phone,
-      message: `প্রিয় ${patientName}, ${doctor.name}-এর চেম্বারে আপনার সিরিয়াল নিশ্চিত। তারিখ: ${bnDate(appointmentDate)}। ফি ৳${collectionAmount} গ্রহণ করা হয়েছে।`,
-    });
+    const serial = (booking as { serial?: number }).serial ?? '';
+    const lines = [
+      `প্রিয় ${patientName}, ${doctor.name}-এর চেম্বারে আপনার বুকিং নিশ্চিত।`,
+      `সিরিয়াল: ${serial}, তারিখ: ${bnDate(appointmentDate)}।`,
+    ];
+    if (chamberText) lines.push(`চেম্বার: ${chamberText}।`);
+    if (mapLink) lines.push(`ম্যাপ: ${mapLink}`);
+    if (type === 'RENEW') lines.push(`অনুগ্রহ করে আপনার পুরনো প্রেসক্রিপশনটি সঙ্গে নিয়ে আসুন।`);
+    lines.push(`ফি ৳${collectionAmount} গ্রহণ করা হয়েছে।`);
+    await singleMessage(phone, lines.join('\n'));
     smsSent = true;
-    console.log(`[LocalBooking] SMS sent booking=${booking.id} to=${phone} gateway=${sms.response.slice(0, 200)}`);
   } catch (error: any) {
-    console.error(`[LocalBooking] SMS failed booking=${booking.id} to=${phone}:`, error?.message ?? error);
+    console.error(`[LocalBooking] SMS failed to=${phone}:`, error?.message ?? error);
   }
 
   return { booking, smsSent };
