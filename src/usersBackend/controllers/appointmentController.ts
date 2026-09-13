@@ -13,13 +13,20 @@ import {
 } from '../services/appointmentService.js';
 import { createLocalBooking } from '../services/localBookingService.js';
 import { getLocalBookingOptions } from '../services/localBookingService.js';
-import { getCollectionSummary, getMonthDays } from '../services/collectionService.js';
+import { getCollectionSummary, getMonthDays, getWeekDays } from '../services/collectionService.js';
 import {
   listConfirmed,
   type ConfirmedRange,
   type ConfirmedTypeFilter,
 } from '../services/confirmedService.js';
 import { getConfirmedCounts } from '../services/confirmedService.js';
+import {
+  completeConfirmed,
+  updateConfirmed,
+  deleteOfflineBooking,
+  requestOnlineCancel,
+  listServed,
+} from '../services/confirmedService.js';
 
 function callerOf(req: AuthenticatedRequest) {
   return { userId: req.user!.userId, role: req.user!.role as UserRole };
@@ -154,6 +161,24 @@ export const showCollectionDays = async (req: AuthenticatedRequest, res: Respons
   }
 };
 
+// GET /api/users/appointments/collection/week?offset=0[&doctorUsername=] — per-day week breakdown.
+export const showCollectionWeek = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await getWeekDays(callerOf(req), {
+      offset: parseOptional(req, 'offset'),
+      doctorUsername: parseOptional(req, 'doctorUsername'),
+    });
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
+      return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(500).json({ error: 'Failed to load week days' });
+  }
+};
+
 // POST /api/users/appointments/local — staff walk-in offline booking + SMS receipt.
 export const createLocalBookingAppointment = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -228,3 +253,97 @@ export const showConfirmedCounts = async (req: AuthenticatedRequest, res: Respon
     return res.status(500).json({ error: 'Failed to load counts' });
   }
 };
+
+// PATCH /api/users/appointments/confirmed/:id — { status: 'DONE' } moves the row
+// to served_appointments, or detail fields { patientName, contactPhone, appointmentDate, collectionAmount }.
+export const patchConfirmedAppointment = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const body = req.body ?? {};
+    const updated =
+      body?.status === 'DONE'
+        ? await completeConfirmed(callerOf(req), id)
+        : await updateConfirmed(callerOf(req), id, {
+            patientName: body?.patientName,
+            contactPhone: body?.contactPhone,
+            appointmentDate: body?.appointmentDate,
+            collectionAmount: body?.collectionAmount,
+          });
+    return res.json({ backend: 'usersBackend', data: updated });
+  } catch (error: any) {
+    return confirmedActionError(res, error);
+  }
+};
+
+// DELETE /api/users/appointments/confirmed/:id — walk-in (OFFLINE) only.
+// Snapshots to cancelled_appointments_local, then removes the row.
+export const deleteConfirmedAppointment = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    await deleteOfflineBooking(callerOf(req), req.params.id as string, req.body?.reason);
+    return res.json({ backend: 'usersBackend', data: { deleted: true } });
+  } catch (error: any) {
+    return confirmedActionError(res, error);
+  }
+};
+
+// POST /api/users/appointments/confirmed/:id/cancel-request — ONLINE only.
+// Saves to cancelled_appointments_online; the booking stays untouched.
+export const postCancelRequest = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    await requestOnlineCancel(callerOf(req), req.params.id as string, req.body?.reason);
+    return res.status(201).json({
+      backend: 'usersBackend',
+      data: { requested: true },
+      message: 'রিকোয়েস্ট পাঠানো হয়েছে।',
+    });
+  } catch (error: any) {
+    if (error.message === 'ALREADY_REQUESTED')
+      return res.status(409).json({ error: 'রিকোয়েস্ট আগেই পাঠানো হয়েছে।' });
+    return confirmedActionError(res, error);
+  }
+};
+
+// GET /api/users/appointments/served?range=today|tomorrow|last30&bookingType=ALL|ONLINE|OFFLINE
+export const listServedAppointments = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const rawRange = parseOptional(req, 'range');
+    const rawType = parseOptional(req, 'bookingType');
+    const range: ConfirmedRange = rawRange === 'tomorrow' || rawRange === 'last30' ? rawRange : 'today';
+    const bookingType: ConfirmedTypeFilter = rawType === 'ONLINE' || rawType === 'OFFLINE' ? rawType : 'ALL';
+    const result = await listServed(callerOf(req), {
+      range,
+      bookingType,
+      doctorUsername: parseOptional(req, 'doctorUsername'),
+      ...parsePaging(req),
+    });
+    return res.json({ backend: 'usersBackend', ...result });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(500).json({ error: 'Failed to load served appointments' });
+  }
+};
+
+function confirmedActionError(res: Response, error: any) {
+  const msg = error?.message ?? 'UNKNOWN';
+  if (msg === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+  if (msg === 'APPOINTMENT_NOT_FOUND') return res.status(404).json({ error: 'বুকিং পাওয়া যায়নি।' });
+  if (msg === 'NO_DOCTOR_PROFILE' || msg === 'NO_HOSPITAL_PROFILE')
+    return res.status(404).json({ error: 'No profile linked to this user' });
+  if (msg === 'ONLINE_DELETE_FORBIDDEN')
+    return res.status(403).json({ error: 'অনলাইন বুকিং ডিলিট করা যাবে না। ক্যানসেল রিকোয়েস্ট পাঠান।' });
+  if (msg === 'NOT_ONLINE') return res.status(400).json({ error: 'এটি অনলাইন বুকিং নয়।' });
+  if (msg === 'ALREADY_CANCELLED') return res.status(400).json({ error: 'বুকিংটি আগেই বাতিল হয়েছে।' });
+  if (msg === 'AMOUNT_NOT_EDITABLE')
+    return res.status(400).json({ error: 'অনলাইন পেমেন্টের টাকা এখানে বদলানো যাবে না।' });
+  if (msg === 'NOTHING_TO_UPDATE') return res.status(400).json({ error: 'বদলানোর মতো কিছু নেই।' });
+  if (msg === 'INVALID_NAME') return res.status(400).json({ error: 'রোগীর নাম দিন (২–৮০ অক্ষর)।' });
+  if (msg === 'INVALID_PHONE') return res.status(400).json({ error: 'সঠিক মোবাইল নম্বর দিন (01XXXXXXXXX)।' });
+  if (msg === 'INVALID_AMOUNT') return res.status(400).json({ error: 'সঠিক টাকা দিন।' });
+  if (msg === 'INVALID_DATE') return res.status(400).json({ error: 'সঠিক তারিখ বেছে নিন (আজ / আগামীকাল)।' });
+  if (msg === 'CLOSED_DAY')
+    return res.status(400).json({ error: 'ওই দিন চেম্বার বন্ধ থাকে — চালু দিন বেছে নিন।' });
+  return res.status(500).json({ error: 'অনুরোধ ব্যর্থ হয়েছে।' });
+}

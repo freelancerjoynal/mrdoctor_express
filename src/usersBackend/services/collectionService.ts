@@ -1,11 +1,15 @@
-// Collection (আদায়) boxes for the appointment panel — computed purely from
-// confirmed_appointments (the booking ledger) and refreshed live.
+// Collection (আদায়) boxes — served_appointments is the income ledger
+// (realized income), confirmed_appointments is the expected ledger.
+// - todayBox       = served today only (আজকের আয় / today's income)
+// - todayConfirmed = confirmed today only (still pending service)
+// - todayTotal     = served + confirmed today (আজ আদায় — never decreases
+//   when a booking is marked served, it just moves ledgers)
+// - week/month/lifetime = served ranges (dashboard income views).
 //
-// Per row: actual collected amount (collectionAmount ?? paymentAmount),
+// Per row: amount = (collectionAmount ?? paymentAmount),
 // split by booking channel:
 // - ONLINE  = bookingType ONLINE (gateway-paid requests)
 // - OFFLINE = bookingType OFFLINE (walk-in cash bookings)
-// Only CANCELLED rows are excluded.
 //
 // Day rule (server-local midnights, identical to the booking day rule):
 // - today    = [today 00:00, tomorrow 00:00)
@@ -97,12 +101,18 @@ async function resolveDoctor(caller: CollectionCaller, doctorUsername?: string):
   throw new Error('FORBIDDEN');
 }
 
-/** Merge one range from confirmed_appointments: ONLINE + OFFLINE channels. */
-async function rangeBucket(doctorId: string, gte?: Date, lt?: Date): Promise<CollectionBucket> {
+/** Merge one range: ONLINE + OFFLINE channels, from either ledger. */
+async function rangeBucket(
+  doctorId: string,
+  source: 'served' | 'confirmed',
+  gte?: Date,
+  lt?: Date,
+): Promise<CollectionBucket> {
   const dateFilter =
     gte || lt ? { appointmentDate: { ...(gte ? { gte } : {}), ...(lt ? { lt } : {}) } } : {};
-  const rows = await prisma.confirmedAppointment.findMany({
-    where: { doctorId, status: { not: 'CANCELLED' }, ...dateFilter },
+  const model = source === 'served' ? prisma.servedAppointment : prisma.confirmedAppointment;
+  const rows = await (model as typeof prisma.servedAppointment).findMany({
+    where: { doctorId, ...dateFilter },
     select: { bookingType: true, collectionAmount: true, paymentAmount: true },
   });
   const bucket = (type: string): ChannelBucket => {
@@ -127,12 +137,26 @@ async function rangeBucket(doctorId: string, gte?: Date, lt?: Date): Promise<Col
 
 export interface CollectionSummary {
   today: string;
+  /** Served today only — আজকের আয় (today's income). */
   todayBox: CollectionBucket;
+  /** Confirmed today only — still pending service. */
+  todayConfirmed: CollectionBucket;
+  /** Served + confirmed today — আজ আদায় (never drops on serve). */
+  todayTotal: CollectionBucket;
   week: { from: string; to: string } & CollectionBucket;
   /** Calendar-month box. Doctor only (null for staff). */
   month: { year: number; month: number; name: string; from: string; to: string } & CollectionBucket | null;
   /** Joining-date → now box. Doctor only (null for staff). */
   lifetime: { joinedAt: string } & CollectionBucket | null;
+}
+
+function combineBuckets(a: CollectionBucket, b: CollectionBucket): CollectionBucket {
+  return {
+    total: a.total + b.total,
+    count: a.count + b.count,
+    online: { total: a.online.total + b.online.total, count: a.online.count + b.online.count },
+    offline: { total: a.offline.total + b.offline.total, count: a.offline.count + b.offline.count },
+  };
 }
 
 export async function getCollectionSummary(
@@ -148,17 +172,20 @@ export async function getCollectionSummary(
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
 
-  const [todayBox, weekBox, monthBox, lifetimeBox] = await Promise.all([
-    rangeBucket(doctor.id, today, tomorrow),
-    rangeBucket(doctor.id, monday, nextMonday),
-    caller.role === 'DOCTOR_STAFF' ? Promise.resolve(null) : rangeBucket(doctor.id, monthStart, nextMonthStart),
-    caller.role === 'DOCTOR_STAFF' ? Promise.resolve(null) : rangeBucket(doctor.id),
+  const [todayServed, todayConfirmed, weekBox, monthBox, lifetimeBox] = await Promise.all([
+    rangeBucket(doctor.id, 'served', today, tomorrow),
+    rangeBucket(doctor.id, 'confirmed', today, tomorrow),
+    rangeBucket(doctor.id, 'served', monday, nextMonday),
+    caller.role === 'DOCTOR_STAFF' ? Promise.resolve(null) : rangeBucket(doctor.id, 'served', monthStart, nextMonthStart),
+    caller.role === 'DOCTOR_STAFF' ? Promise.resolve(null) : rangeBucket(doctor.id, 'served'),
   ]);
 
   const monthIdx = today.getMonth();
   return {
     today: isoDay(today),
-    todayBox,
+    todayBox: todayServed,
+    todayConfirmed,
+    todayTotal: combineBuckets(todayServed, todayConfirmed),
     week: { from: isoDay(monday), to: isoDay(new Date(nextMonday.getTime() - DAY_MS)), ...weekBox },
     month: monthBox
       ? {
@@ -193,6 +220,92 @@ export interface MonthDays {
   offline: ChannelBucket;
 }
 
+export interface WeekDayRow {
+  date: string;
+  total: number;
+  count: number;
+  online: ChannelBucket;
+  offline: ChannelBucket;
+}
+
+export interface WeekDays {
+  from: string;
+  to: string;
+  offset: number;
+  days: WeekDayRow[];
+  total: number;
+  count: number;
+  online: ChannelBucket;
+  offline: ChannelBucket;
+}
+
+/** Per-day আদায় for one Mon–Sun week (served ledger). offset=0 → current week, -1 → last week. */
+export async function getWeekDays(
+  caller: CollectionCaller,
+  opts: { offset?: unknown; doctorUsername?: string } = {},
+): Promise<WeekDays> {
+  const doctor = await resolveDoctor(caller, opts.doctorUsername);
+
+  let offset = Number(opts.offset);
+  if (!Number.isInteger(offset) || offset < -52 || offset > 1) offset = 0;
+
+  const monday = new Date(startOfWeekMonday(new Date()).getTime() + offset * 7 * DAY_MS);
+  const nextMonday = new Date(monday.getTime() + 7 * DAY_MS);
+
+  const rows = await prisma.servedAppointment.findMany({
+    where: {
+      doctorId: doctor.id,
+      appointmentDate: { gte: monday, lt: nextMonday },
+    },
+    select: { appointmentDate: true, bookingType: true, collectionAmount: true, paymentAmount: true },
+  });
+
+  const byDay = new Map<string, WeekDayRow>();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday.getTime() + i * DAY_MS);
+    const date = isoDay(d);
+    byDay.set(date, {
+      date,
+      total: 0,
+      count: 0,
+      online: { total: 0, count: 0 },
+      offline: { total: 0, count: 0 },
+    });
+  }
+  for (const r of rows) {
+    const row = byDay.get(isoDay(r.appointmentDate));
+    if (!row) continue;
+    const amount = Number(r.collectionAmount ?? r.paymentAmount ?? 0) || 0;
+    const channel = r.bookingType === 'ONLINE' ? row.online : row.offline;
+    channel.total += amount;
+    channel.count += 1;
+    row.total += amount;
+    row.count += 1;
+  }
+
+  const days = [...byDay.values()];
+  const total = days.reduce((s, d) => s + d.total, 0);
+  const count = days.reduce((s, d) => s + d.count, 0);
+  const online = {
+    total: days.reduce((s, d) => s + d.online.total, 0),
+    count: days.reduce((s, d) => s + d.online.count, 0),
+  };
+  const offline = {
+    total: days.reduce((s, d) => s + d.offline.total, 0),
+    count: days.reduce((s, d) => s + d.offline.count, 0),
+  };
+  return {
+    from: isoDay(monday),
+    to: isoDay(new Date(nextMonday.getTime() - DAY_MS)),
+    offset,
+    days,
+    total,
+    count,
+    online,
+    offline,
+  };
+}
+
 /** Per-day আদায় for one calendar month (that month's day 1 → last day). Doctor only. */
 export async function getMonthDays(
   caller: CollectionCaller,
@@ -211,10 +324,9 @@ export async function getMonthDays(
   const lt = new Date(year, month, 1);
   const lastDay = new Date(year, month, 0).getDate();
 
-  const rows = await prisma.confirmedAppointment.findMany({
+  const rows = await prisma.servedAppointment.findMany({
     where: {
       doctorId: doctor.id,
-      status: { not: 'CANCELLED' },
       appointmentDate: { gte, lt },
     },
     select: { appointmentDate: true, bookingType: true, collectionAmount: true, paymentAmount: true },

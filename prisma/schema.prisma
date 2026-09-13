@@ -370,6 +370,73 @@ model ConfirmedAppointment {
   @@map("confirmed_appointments")
 }
 
+// অনলাইন বুকিংয়ের ক্যানসেল রিকোয়েস্ট — ডাক্তার/স্টাফ ডিলিট করতে পারে না,
+// শুধু রিকোয়েস্ট পাঠায় (সারি অক্ষত থাকে)। আপাতত শুধু সেভ হয়, দেখার UI পরে।
+model CancelledAppointmentOnline {
+  id              String   @id @default(uuid())
+  appointmentId   String   @unique
+  doctorId        String
+  doctorName      String?
+  patientName     String
+  contactPhone    String
+  patientType     String   @default("NEW")
+  appointmentDate DateTime
+  serial          Int      @default(0)
+  amount          Float    @default(0)
+  reason          String?
+  requestedBy     String
+  createdAt       DateTime @default(now())
+
+  @@index([doctorId])
+  @@map("cancelled_appointments_online")
+}
+
+// সরাসরি (লোকাল/অফলাইন) বুকিং বাতিলের স্ন্যাপশট — ডিলিটের আগে সেভ হয়।
+// আপাতত শুধু সেভ হয়, দেখার UI পরে।
+model CancelledAppointmentLocal {
+  id              String   @id @default(uuid())
+  appointmentId   String   @unique
+  doctorId        String
+  doctorName      String?
+  patientName     String
+  contactPhone    String
+  patientType     String   @default("NEW")
+  appointmentDate DateTime
+  serial          Int      @default(0)
+  amount          Float    @default(0)
+  reason          String?
+  requestedBy     String
+  createdAt       DateTime @default(now())
+
+  @@index([doctorId])
+  @@map("cancelled_appointments_local")
+}
+
+// সেবা সম্পন্ন (served) বুকিংয়ের স্থায়ী হিসাব — "সেবা সম্পন্ন" চাপ দিলে
+// confirmed সারি এখানে move হয়। বক্স, মাসিক পেজ ও হিরো সব এখান থেকে পড়ে।
+model ServedAppointment {
+  id              String      @id @default(uuid())
+  appointmentId   String      @unique
+  doctorId        String
+  doctorName      String?
+  patientName     String
+  patientType     String      @default("NEW")
+  contactPhone    String
+  appointmentDate DateTime
+  serial          Int         @default(0)
+  chamberId       String?
+  chamberName     String?
+  bookingType     BookingType @default(OFFLINE)
+  collectionAmount Float?
+  paymentAmount    Float?
+  servedBy        String
+  servedAt        DateTime    @default(now())
+  createdAt       DateTime    @default(now())
+
+  @@index([doctorId, appointmentDate])
+  @@map("served_appointments")
+}
+
 // ডাক্তারের পাবলিক ওয়েবসাইটের ডাইনামিক সেকশনগুলোর জন্য অতিরিক্ত তথ্য।
 // Doctor এর সাথে one-to-one রিলেশন (doctorId unique)।
 // - expertise: [{ icon, service, service_details }] → "আমি যেসব চিকিৎসা সক্রিয়ভাবে করি"
