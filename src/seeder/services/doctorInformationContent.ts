@@ -108,9 +108,100 @@ const FALLBACK_EXPERTISE: RawExpertise[] = [
   ['প', 'স্বাস্থ্য ও জীবনযাত্রা পরামর্শ', 'খাদ্যাভ্যাস, ব্যায়াম ও ঘুম নিয়ে ব্যক্তিগত স্বাস্থ্য পরিকল্পনা।'],
 ];
 
+// English mirrors (same order as EXPERTISE_BY_SPECIALITY) — used for expertise_en.
+const EXPERTISE_EN_BY_SPECIALITY: Record<string, RawExpertise[]> = {
+  'মেডিসিন বিশেষজ্ঞ': [
+    ['F', 'Fever & Infection Treatment', 'Accurate diagnosis and treatment of viral fever, typhoid, dengue and respiratory infections.'],
+    ['D', 'Diabetes & Hypertension Care', 'Regular monitoring, medication adjustment and lifestyle advice for blood sugar and blood pressure.'],
+    ['C', 'Chest Pain & Breathlessness Evaluation', 'Primary cardiac risk assessment, ECG advice and necessary referrals.'],
+  ],
+  'হৃদরোগ বিশেষজ্ঞ': [
+    ['H', 'Heart Disease Management', 'Regular monitoring and treatment of hypertension, heart failure and chest pain.'],
+    ['E', 'ECG & Echo Guidance', 'Analysis of ECG and echocardiogram reports to assess heart function and next steps.'],
+    ['B', 'Blood Pressure & Cholesterol Management', 'Combined medication, diet and exercise plan to reduce stroke and heart attack risk.'],
+  ],
+  'জেনারেল ও ল্যাপারোস্কোপিক সার্জন': [
+    ['G', 'Gallbladder & Appendicitis Surgery', 'Safe laparoscopic operation with small incisions and fast recovery.'],
+    ['H', 'Hernia & Piles Treatment', 'Hernia repair, modern piles-fissure surgery and post-operative care.'],
+    ['T', 'Tumor & Cyst Operation', 'Safe surgical removal of small tumors, cysts and abscesses from different body parts.'],
+  ],
+  'অর্থোপেডিক ও ট্রমা সার্জন': [
+    ['F', 'Fracture & Joint Care', 'Emergency orthopedic care, plaster and surgery for fractures, dislocations and injuries.'],
+    ['B', 'Arthritis & Back Pain', 'Medication, physiotherapy and exercise advice for arthritis, back-neck pain and sciatica.'],
+    ['K', 'Knee & Joint Pain Management', 'Long-term treatment plan for age-related joint degeneration, knee pain and mobility issues.'],
+  ],
+  'স্ত্রী রোগ ও প্রসূতিবিদ্যা বিশেষজ্ঞ': [
+    ['P', 'Pregnancy Care & Delivery', 'Regular antenatal checkups, safe delivery planning and postnatal care.'],
+    ['H', 'Irregular Periods & Hormonal Issues', 'Diagnosis and treatment of irregular menstruation, PCOS and hormonal disorders.'],
+    ['F', 'Infertility & Family Planning', 'Conception support, ultrasound guidance and safe family planning services.'],
+  ],
+  'শিশু রোগ বিশেষজ্ঞ': [
+    ['N', 'Newborn Care & Vaccination', 'Growth monitoring, EPI vaccination schedule and nutrition advice after birth.'],
+    ['F', 'Child Fever, Cold & Diarrhea', 'Fast diagnosis and safe child-dose treatment for pneumonia, diarrhea and viral fever.'],
+    ['G', 'Nutrition & Growth Monitoring', 'Nutrition chart and counseling for poor weight gain, food refusal and delayed development.'],
+  ],
+  'নাক, কান ও গলা বিশেষজ্ঞ': [
+    ['E', 'Ear Infection & Hearing Issues', 'Diagnosis, wash and medication for ear infections, discharge and hearing loss.'],
+    ['S', 'Sinus & Nasal Polyps', 'Endoscopy advice and surgical decisions for blocked nose, sinusitis and polyps.'],
+    ['T', 'Tonsil & Throat Pain', 'Treatment and surgery advice for repeated tonsillitis, hoarseness and swallowing difficulty.'],
+  ],
+  'চর্ম ও যৌন রোগ বিশেষজ্ঞ': [
+    ['S', 'Itching & Allergy', 'Accurate diagnosis and treatment of eczema, fungal infections and skin allergies.'],
+    ['A', 'Acne & Melasma Treatment', 'Modern medication and skincare advice for acne, spots and melasma.'],
+    ['H', 'Hair Fall & Dandruff', 'Long-term treatment for excess hair fall, dandruff and scalp problems.'],
+  ],
+  'বক্ষব্যাধি বিশেষজ্ঞ': [
+    ['A', 'Asthma & Breathlessness', 'Inhaler planning and regular follow-up for asthma, COPD and allergic breathlessness.'],
+    ['T', 'Tuberculosis (TB) Treatment', 'Sputum testing, DOTS guidance and full-course supervision for chronic cough and TB.'],
+    ['C', 'Chronic Cough & Phlegm', 'Step-by-step treatment with chest X-ray analysis, especially for smoking-related lung issues.'],
+  ],
+  'ডায়াবেটিস ও মেডিসিন বিশেষজ্ঞ': [
+    ['D', 'Diabetes Management', 'Complete blood sugar control plan with medication and lifestyle guidance, not just drugs.'],
+    ['T', 'Thyroid & Hormonal Issues', 'Report-based treatment of thyroid, hormonal imbalance and metabolic disorders.'],
+    ['W', 'Weight & Lifestyle Counseling', 'Diet chart and exercise plan for obesity, fatty liver and pre-diabetes.'],
+  ],
+  'কিডনি রোগ বিশেষজ্ঞ': [
+    ['K', 'Kidney Failure Monitoring', 'Regular report monitoring and medication adjustment for rising creatinine and CKD.'],
+    ['U', 'UTI & Kidney Stones', 'Diagnosis and treatment advice for burning urination, repeated UTI and kidney stones.'],
+    ['D', 'Dialysis Guidance', 'Detailed guidelines on when dialysis is needed, preparation and post-dialysis care.'],
+  ],
+  'চক্ষু রোগ বিশেষজ্ঞ': [
+    ['C', 'Cataract Advice', 'Cataract staging for blurry vision and guidance on operation timing and preparation.'],
+    ['E', 'Vision Testing & Glasses', 'Power determination and glasses advice for poor vision, headache and childhood refractive errors.'],
+    ['I', 'Red Eye & Infections', 'Safe medication and care advice for red eyes, watering and eye infections.'],
+  ],
+  'প্যাথলজি বিশেষজ্ঞ': [
+    ['B', 'Blood Report Analysis', 'Easy-language explanation of CBC, sugar, lipid profile and all routine reports.'],
+    ['S', 'Diabetes & Cholesterol Screening', 'Personal screening plan for which test to do and when, based on risk.'],
+    ['C', 'Cancer Screening Advice', 'Understanding biopsy and tumor marker reports with onward specialist referrals.'],
+  ],
+  'গ্যাস্ট্রোএন্টেরোলজি বিশেষজ্ঞ': [
+    ['G', 'Gastric & Ulcer', 'Endoscopy advice and medication for heartburn, sour belching and stomach ulcers.'],
+    ['L', 'Liver & Jaundice', 'Report-based treatment of fatty liver, jaundice and hepatitis with liver function tests.'],
+    ['P', 'Piles & Constipation', 'Diet, medication and surgery advice for chronic constipation and piles-fissure.'],
+  ],
+  'ডেন্টাল সার্জন': [
+    ['T', 'Tooth Extraction & Filling', 'Filling of decayed teeth, root canal advice and safe tooth extraction.'],
+    ['G', 'Bleeding Gums Treatment', 'Scaling advice and care plan for swollen gums, bleeding and bad breath.'],
+    ['S', 'Scaling & Bright Teeth', 'Regular dental care for tartar buildup, yellowness and overall oral health.'],
+  ],
+};
+
+const FALLBACK_EXPERTISE_EN: RawExpertise[] = [
+  ['G', 'General Health Checkup', 'Regular health checkups, blood pressure-sugar testing and preventive advice.'],
+  ['F', 'Fever, Cold & Common Illness', 'Fast diagnosis and treatment of seasonal fever, cold-cough and stomach issues.'],
+  ['L', 'Health & Lifestyle Counseling', 'Personal health plan for diet, exercise and sleep.'],
+];
+
 /** Speciality → 3 expertise cards. Unknown speciality falls back to general care. */
 export function buildExpertiseForSpeciality(speciality: string): ExpertiseItem[] {
   const rows = EXPERTISE_BY_SPECIALITY[speciality.trim()] ?? FALLBACK_EXPERTISE;
+  return rows.map(([icon, service, service_details]) => ({ icon, service, service_details }));
+}
+
+/** English mirror of buildExpertiseForSpeciality — used for expertise_en. */
+export function buildExpertiseEnForSpeciality(speciality: string): ExpertiseItem[] {
+  const rows = EXPERTISE_EN_BY_SPECIALITY[speciality.trim()] ?? FALLBACK_EXPERTISE_EN;
   return rows.map(([icon, service, service_details]) => ({ icon, service, service_details }));
 }
 

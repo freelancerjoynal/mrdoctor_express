@@ -7,7 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-
 enum Role {
   SUPER_ADMIN
   DOCTOR
@@ -88,10 +87,10 @@ model User {
   otp          String?
   otpExpiry    DateTime?
   refreshToken String?
-  
+
   // Timestamps
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // রোলের উপর ভিত্তি করে সংশ্লিষ্ট প্রোফাইলগুলোর সাথে অপশনাল ওয়ান-টু-ওয়ান রিলেশন
   doctorProfile     Doctor?
@@ -100,27 +99,27 @@ model User {
 
   // DOCTOR_STAFF কোন ডাক্তারের অধীনে কাজ করে (ডাক্তারই স্টাফ যোগ করে)।
   staffDoctorId String?
-  staffDoctor   Doctor?  @relation("DoctorStaff", fields: [staffDoctorId], references: [id], onDelete: Cascade)
+  staffDoctor   Doctor? @relation("DoctorStaff", fields: [staffDoctorId], references: [id], onDelete: Cascade)
 
   // স্টাফ সেবা-সম্পন্ন (approve) / ডিলিট করতে পারবে কি না।
   // ডাক্তার StaffPanel থেকে সীমাবদ্ধ করলে false — তখন শুধু
   // কালেকশন (বুকিং) + আপডেট, অনুমোদন শুধু ডাক্তার দেবেন।
-  canApprove    Boolean @default(true)
+  canApprove Boolean @default(true)
 
   @@map("users")
 }
 
 // সুপার এডমিন প্রোফাইল টেবিল (মেইন User টেবিলের সাথে কানেক্টেড)
 model SuperAdminProfile {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   name        String?
   permissions String[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("super_admin_profiles")
 }
@@ -140,155 +139,178 @@ model ChatSession {
 }
 
 model Doctor {
-  id                  String         @id @default(uuid())
-  
+  id String @id @default(uuid())
+
   // মেইন User টেবিলের সাথে লিংক করার জন্য userId (অপশনাল রাখা হয়েছে যাতে প্রয়োজনে স্বাধীনভাবে এন্ট্রি হতে পারে)
-  userId              String?        @unique
-  user                User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name                String
+  name_en             String?
   degree              String
+  degree_en           String?
   speciality          String
+  speciality_en       String?
   tagline             String?
+  tagline_en          String?
   bio                 String?
+  bio_en              String?
   phone               String
   whatsappNumber      String?
   whatsappAccessToken String?
   whatsappId          String?
-  email               String?        @unique
-  username            String         @unique
-  templateName        String         @default("template_a")
+  email               String?      @unique
+  username            String       @unique
+  templateName        String       @default("template_a")
   profilePicture      String?
   gender              Gender?
+  religion            String?
   startedYear         Int?
-  status              DoctorStatus   @default(PENDING)
-  
-  chambers            Chamber[]
-  schedules           DoctorSchedule[]
-  pendingAppointments PendingAppointment[]
-  confirmedAppointments ConfirmedAppointment[]
-  staffMembers        User[]              @relation("DoctorStaff")
-  information         DoctorInformation?
-  blogs               Blog[]
-  reviews             Review[]
+  status              DoctorStatus @default(PENDING)
 
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  chambers              Chamber[]
+  schedules             DoctorSchedule[]
+  pendingAppointments   PendingAppointment[]
+  confirmedAppointments ConfirmedAppointment[]
+  staffMembers          User[]                 @relation("DoctorStaff")
+  information           DoctorInformation?
+  blogs                 Blog[]
+  reviews               Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("doctors")
 }
 
 model Hospital {
-  id              String         @id @default(uuid())
-  
+  id String @id @default(uuid())
+
   // মেইন User টেবিলের সাথে লিংক করার জন্য userId
-  userId          String?        @unique
-  user            User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name            String
+  name_en         String?
   slug            String         @unique
   templateName    String         @default("template_a")
-  address         String?
+  division        String
+  division_en     String?
+  district        String
+  district_en     String?
+  thana           String
+  thana_en        String?
+  addressLine     String?
+  addressLine_en  String?
   phone           String?
   establishedYear Int?
   status          HospitalStatus @default(PENDING)
 
-  chambers        Chamber[]
-  schedules       DoctorSchedule[]
-  blogs           Blog[]
-  reviews         Review[]
-  pendingAppointments PendingAppointment[]
+  chambers              Chamber[]
+  schedules             DoctorSchedule[]
+  blogs                 Blog[]
+  reviews               Review[]
+  pendingAppointments   PendingAppointment[]
   confirmedAppointments ConfirmedAppointment[]
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("hospitals")
 }
 
 model Chamber {
-  id           String    @id @default(uuid())
-  doctorId     String?
-  doctor       Doctor?   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  id       String  @id @default(uuid())
+  doctorId String?
+  doctor   Doctor? @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  hospitalId String?
+  hospital   Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  chamberName    String?
+  chamberName_en String?
+  addressLine    String?
+  addressLine_en String?
+
+  thana          String?
+  thana_en       String?
   
-  hospitalId   String?
-  hospital     Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  chamberName  String?
-  addressLine  String
-  thana        String
-  district     String
-  division     String
-  
-  latitude     Float?
-  longitude    Float?
+  district       String?
+  district_en    String?
+
+
+  division       String?
+  division_en    String?
+
+  latitude  Float?
+  longitude Float?
 
   // চেম্বার ভেদে নতুন ও পুরনো রোগীর ভিজিট ফি
-  newPatientFee Float    @default(0)
-  oldPatientFee Float    @default(0)
+  newPatientFee Float @default(0)
+  oldPatientFee Float @default(0)
 
   // Relations
-  schedules    DoctorSchedule[]
+  schedules DoctorSchedule[]
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("chambers")
 }
 
 model DoctorSchedule {
-  id         String    @id @default(uuid())
-  doctorId   String
-  doctor     Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  
+  id       String @id @default(uuid())
+  doctorId String
+  doctor   Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
   hospitalId String?
   hospital   Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  
-  chamberId  String?
-  chamber    Chamber?  @relation(fields: [chamberId], references: [id], onDelete: SetNull)
-  
-  dayOfWeek  DayOfWeek
-  startTime  String
-  endTime    String
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  chamberId String?
+  chamber   Chamber? @relation(fields: [chamberId], references: [id], onDelete: SetNull)
+
+  dayOfWeek DayOfWeek
+  startTime String
+  endTime   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("doctor_schedules")
 }
 
 model PendingAppointment {
-  id              String   @id @default(uuid())
-  phoneNumber     String   @default("") // sender WhatsApp number (session owner); website bookings reuse contactPhone
-  doctorId        String
-  doctor          Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  doctorName      String?
+  id          String  @id @default(uuid())
+  phoneNumber String  @default("") // sender WhatsApp number (session owner); website bookings reuse contactPhone
+  doctorId    String
+  doctor      Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorName  String?
 
   // কোন হাসপাতালের চেম্বারের জন্য অনুরোধ (chamber.hospitalId থেকে বসে; সরাসরি ডাক্তার-চেম্বার হলে null)।
   // এতে ডাক্তার-ভিত্তিক ও হাসপাতাল-ভিত্তিক ফিল্টার দুটোই সম্ভব।
-  hospitalId      String?
-  hospital        Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
-  hospitalName    String?
+  hospitalId   String?
+  hospital     Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  hospitalName String?
 
-  problem         String   // 'আপনার সমস্যা কী?' — saved to memory
+  problem         String // 'আপনার সমস্যা কী?' — saved to memory
   appointmentDate DateTime // WhatsApp: today/tomorrow; website: running day within 30 days
-  dayLabel        String?  // e.g. "আজকে — বৃহস্পতিবার, ১১ সেপ্টেম্বর"
+  dayLabel        String? // e.g. "আজকে — বৃহস্পতিবার, ১১ সেপ্টেম্বর"
 
-  chamberId       String?  // selected chamber
-  chamberName     String?
+  chamberId   String? // selected chamber
+  chamberName String?
 
-  patientName     String
-  patientType     String   @default("NEW") // NEW (নতুন রোগী) | RENEW (পুরনো রোগী)
-  patientAge      Int?
-  patientWeight   Float?
-  patientArea     String?  // user's area
-  contactPhone    String   // typed number or sender number via button
+  patientName   String
+  patientType   String  @default("NEW") // NEW (নতুন রোগী) | RENEW (পুরনো রোগী)
+  patientAge    Int?
+  patientWeight Float?
+  patientArea   String? // user's area
+  contactPhone  String // typed number or sender number via button
 
-  source          String   @default("whatsapp") // whatsapp | website
-  status          String   @default("PENDING")
+  source String @default("whatsapp") // whatsapp | website
+  status String @default("PENDING")
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   confirmedAppointments ConfirmedAppointment[]
 
@@ -304,49 +326,49 @@ model PendingAppointment {
 //   (transactionId, orderId, paymentUserId, paymentAmount, currency,
 //   paymentStatus, paymentMethod, gatewayResponse, paidAt)।
 model ConfirmedAppointment {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
   // মূল pending অনুরোধের লিংক (ঐচ্ছিক — সরাসরি confirmed এন্ট্রিও হতে পারে)।
   pendingAppointmentId String?
   pendingAppointment   PendingAppointment? @relation(fields: [pendingAppointmentId], references: [id], onDelete: SetNull)
 
-  phoneNumber     String   @default("")
-  doctorId        String
-  doctor          Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  doctorName      String?
+  phoneNumber String  @default("")
+  doctorId    String
+  doctor      Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorName  String?
 
-  hospitalId      String?
-  hospital        Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
-  hospitalName    String?
+  hospitalId   String?
+  hospital     Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  hospitalName String?
 
   problem         String
   appointmentDate DateTime
   dayLabel        String?
 
-  chamberId       String?
-  chamberName     String?
+  chamberId   String?
+  chamberName String?
 
-  patientName     String
-  patientType     String   @default("NEW") // NEW (নতুন রোগী) | RENEW (পুরনো রোগী)
-  patientAge      Int?
-  patientWeight   Float?
-  patientArea     String?
-  contactPhone    String
+  patientName   String
+  patientType   String  @default("NEW") // NEW (নতুন রোগী) | RENEW (পুরনো রোগী)
+  patientAge    Int?
+  patientWeight Float?
+  patientArea   String?
+  contactPhone  String
 
-  source          String   @default("whatsapp") // whatsapp | website
-  status          String   @default("CONFIRMED")
+  source String @default("whatsapp") // whatsapp | website
+  status String @default("CONFIRMED")
 
   // কোন স্টাফ/ডাক্তার বুকিংটি নিয়েছে (cash tracking) — local walk-in এ বসে,
   // অনলাইন/সিস্টেম বুকিংয়ে null থাকে।
-  createdBy       String?
-  createdByName   String?
+  createdBy     String?
+  createdByName String?
 
   // বুকিং ধরন: OFFLINE (সরাসরি/ক্যাশ) | ONLINE (পেমেন্ট গেটওয়ে)।
-  bookingType     BookingType @default(OFFLINE)
+  bookingType BookingType @default(OFFLINE)
 
   // দৈনিক সিরিয়াল: প্রতি ডাক্তারের প্রতি দিন (appointmentDate) রাত ১২টায়
   // নতুন করে ১ থেকে শুরু। @@unique দিয়ে একই দিনে ডুপ্লিকেট আটকানো হয়।
-  serial          Int         @default(0)
+  serial Int @default(0)
 
   // OFFLINE আদায়: সরাসরি সংগৃহীত টাকা।
   collectionAmount Float?
@@ -354,13 +376,13 @@ model ConfirmedAppointment {
   // ---- ONLINE পেমেন্ট গেটওয়ে হিস্ট্রি / অডিটিং ----
   // গেটওয়ে (bKash/SSLCommerz/Shurjopay...) থেকে পাওয়া ইউনিক ট্রানজেকশন আইডি —
   // ভেরিফিকেশন ও রিফান্ডের জন্য সবচেয়ে গুরুত্বপূর্ণ।
-  transactionId   String?  @unique
+  transactionId   String?        @unique
   // সিস্টেমের নিজস্ব অর্ডার/রেফারেন্স আইডি — নিজেদের অর্ডারের সাথে মেলানোর জন্য।
-  orderId         String?  @unique
+  orderId         String?        @unique
   // কোন ইউজার অ্যাকাউন্টের বিপরীতে পেমেন্ট এসেছে (ডাক্তারের doctorId তো আছেই)।
   paymentUserId   String?
   paymentAmount   Float?
-  currency        String   @default("BDT")
+  currency        String         @default("BDT")
   paymentStatus   PaymentStatus?
   // মাধ্যম/প্রোভাইডার: bKash, Nagad, Visa Card, Mastercard...
   paymentMethod   String?
@@ -369,15 +391,15 @@ model ConfirmedAppointment {
   // পেমেন্ট সফলের সঠিক সময়।
   paidAt          DateTime?
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@unique([doctorId, appointmentDate, serial])
   @@index([doctorId, status])
   @@index([hospitalId, status])
   @@index([bookingType])
   @@index([paymentUserId])
   @@index([createdBy])
-  @@unique([doctorId, appointmentDate, serial])
   @@map("confirmed_appointments")
 }
 
@@ -426,26 +448,26 @@ model CancelledAppointmentLocal {
 // সেবা সম্পন্ন (served) বুকিংয়ের স্থায়ী হিসাব — "সেবা সম্পন্ন" চাপ দিলে
 // confirmed সারি এখানে move হয়। বক্স, মাসিক পেজ ও হিরো সব এখান থেকে পড়ে।
 model ServedAppointment {
-  id              String      @id @default(uuid())
-  appointmentId   String      @unique
-  doctorId        String
-  doctorName      String?
-  patientName     String
-  patientType     String      @default("NEW")
-  contactPhone    String
-  appointmentDate DateTime
-  serial          Int         @default(0)
-  chamberId       String?
-  chamberName     String?
-  bookingType     BookingType @default(OFFLINE)
+  id               String      @id @default(uuid())
+  appointmentId    String      @unique
+  doctorId         String
+  doctorName       String?
+  patientName      String
+  patientType      String      @default("NEW")
+  contactPhone     String
+  appointmentDate  DateTime
+  serial           Int         @default(0)
+  chamberId        String?
+  chamberName      String?
+  bookingType      BookingType @default(OFFLINE)
   collectionAmount Float?
   paymentAmount    Float?
-  servedBy        String
-  servedAt        DateTime    @default(now())
+  servedBy         String
+  servedAt         DateTime    @default(now())
   // বুকিংটি মূলত কে নিয়েছিল (confirmed থেকে কপি হয়) — cash tracking।
-  createdBy       String?
-  createdByName   String?
-  createdAt       DateTime    @default(now())
+  createdBy        String?
+  createdByName    String?
+  createdAt        DateTime    @default(now())
 
   @@index([doctorId, appointmentDate])
   @@index([createdBy])
@@ -458,13 +480,14 @@ model ServedAppointment {
 // - timeline:  [{ year, title }] → "যোগ্যতা ও অভিজ্ঞতা / একটি দীর্ঘ পথের প্রতিফলন"
 // দুটোই Json array — অবজেক্ট সংখ্যা নির্দিষ্ট নয়, যত খুশি যোগ করা যাবে।
 model DoctorInformation {
-  id        String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  doctorId  String   @unique
-  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorId String @unique
+  doctor   Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 
-  expertise Json     @default("[]")
-  timeline  Json     @default("[]")
+  expertise    Json  @default("[]")
+  expertise_en Json? @default("[]")
+  timeline     Json  @default("[]")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -478,33 +501,33 @@ model DoctorInformation {
 // - পাবলিক সাইটে শুধু PUBLISHED ব্লগ দেখায়; ডাক্তারের প্রোফাইল পেজে
 //   তার নিজের ব্লগগুলো "স্বাস্থ্য নিয়ে কিছু জরুরি কথা" সেকশনে আসে।
 model Blog {
-  id            String          @id @default(uuid())
-  slug          String          @unique
+  id            String   @id @default(uuid())
+  slug          String   @unique
   title         String
   excerpt       String?
   content       String
   coverImage    String?
-  coverGradient String          @default("from-emerald-500 to-teal-700")
-  coverSymbol   String          @default("✿")
-  category      String          @default("স্বাস্থ্য টিপস")
-  tags          String[]        @default([])
+  coverGradient String   @default("from-emerald-500 to-teal-700")
+  coverSymbol   String   @default("✿")
+  category      String   @default("স্বাস্থ্য টিপস")
+  tags          String[] @default([])
 
-  authorType    BlogAuthorType  @default(DOCTOR)
-  authorName    String?
-  authorUserId  String?
+  authorType   BlogAuthorType @default(DOCTOR)
+  authorName   String?
+  authorUserId String?
 
-  doctorId      String?
-  doctor        Doctor?         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorId String?
+  doctor   Doctor? @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 
-  hospitalId    String?
-  hospital      Hospital?       @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  hospitalId String?
+  hospital   Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
 
-  status        BlogStatus      @default(DRAFT)
-  publishedAt   DateTime?
-  views         Int             @default(0)
+  status      BlogStatus @default(DRAFT)
+  publishedAt DateTime?
+  views       Int        @default(0)
 
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status, publishedAt])
   @@index([doctorId, status])
@@ -516,24 +539,24 @@ model Blog {
 // - doctorId বসলে ডাক্তারের রিভিউ, hospitalId বসলে হাসপাতালের রিভিউ (ঠিক একটি)।
 // - ভিজিটররা পাবলিক ফর্মে লিখে (PENDING), অনুমোদনের পর (APPROVED) সাইটে দেখায়।
 model Review {
-  id           String       @id @default(uuid())
-  rating       Int          @default(5)
-  reviewerName String
+  id            String  @id @default(uuid())
+  rating        Int     @default(5)
+  reviewerName  String
   reviewerPhone String?
-  title        String?
-  comment      String
+  title         String?
+  comment       String
 
-  doctorId     String?
-  doctor       Doctor?      @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorId String?
+  doctor   Doctor? @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 
-  hospitalId   String?
-  hospital     Hospital?    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  hospitalId String?
+  hospital   Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
 
-  status       ReviewStatus @default(PENDING)
-  source       String       @default("website")
+  status ReviewStatus @default(PENDING)
+  source String       @default("website")
 
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([doctorId, status])
   @@index([hospitalId, status])

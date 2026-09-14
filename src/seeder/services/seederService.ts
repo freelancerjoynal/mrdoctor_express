@@ -5,25 +5,34 @@
 // so no inline auth check is needed here.
 import bcrypt from 'bcrypt';
 import { prisma } from '../../lib/prisma.js';
-import { buildExpertiseForSpeciality, buildTimelineForDoctor } from './doctorInformationContent.js';
+import {
+  buildExpertiseForSpeciality,
+  buildExpertiseEnForSpeciality,
+  buildTimelineForDoctor,
+} from './doctorInformationContent.js';
 import { BLOG_SEEDS } from './blogSeedContent.js';
 import { buildDoctorPoolSeeds, buildHospitalPoolSeeds } from './blogPoolContent.js';
 import { buildDummyReviews } from './reviewSeedContent.js';
 
 // ================================================================
-// 10 HOSPITALS
+// 10 HOSPITALS — bangla fields + _en (english mirror)
 // ================================================================
+const DIVISION = 'রংপুর';
+const DIVISION_EN = 'Rangpur';
+const DISTRICT = 'নীলফামারী';
+const DISTRICT_EN = 'Nilphamari';
+
 const HOSPITALS = [
-  { slug: 'nilphamari-sadar-hospital',       name: 'নীলফামারী সদর হাসপাতাল (২৫০ শয্যা)',  address: 'সদর, নীলফামারী',         phone: '0551-61333',  establishedYear: 1982, thana: 'নীলফামারী সদর' },
-  { slug: 'nilphamari-medical-college',       name: 'নীলফামারী মেডিকেল কলেজ ও হাসপাতাল',   address: 'নীলফামারী সদর, নীলফামারী', phone: '0551-61888',  establishedYear: 2018, thana: 'নীলফামারী সদর' },
-  { slug: 'ar-general-hospital',              name: 'এ আর জেনারেল হাসপাতাল',              address: 'স্টেশন রোড, নীলফামারী সদর', phone: '01733077000', establishedYear: 2005, thana: 'নীলফামারী সদর' },
-  { slug: 'saidpur-100-bed-hospital',         name: 'সৈয়দপুর ১০০ শয্যা বিশিষ্ট হাসপাতাল',  address: 'সৈয়দপুর, নীলফামারী',     phone: '05526-72222', establishedYear: 1975, thana: 'সৈয়দপুর' },
-  { slug: 'saidpur-modern-hospital',          name: 'সৈয়দপুর আধুনিক হাসপাতাল',             address: 'সৈয়দপুর, নীলফামারী',     phone: '01717000004', establishedYear: 2010, thana: 'সৈয়দপুর' },
-  { slug: 'shahid-dr-shamsul-haque-hospital', name: 'শহীদ ডাক্তার শামসুল হক হসপিটাল',       address: 'সৈয়দপুর, নীলফামারী',     phone: '01717000001', establishedYear: 2008, thana: 'সৈয়দপুর' },
-  { slug: 'domar-health-complex',             name: 'ডোমার উপজেলা স্বাস্থ্য কমপ্লেক্স',      address: 'ডোমার, নীলফামারী',         phone: '05524-56022', establishedYear: 1995, thana: 'ডোমার' },
-  { slug: 'jaldhaka-health-complex',          name: 'জলঢাকা উপজেলা স্বাস্থ্য কমপ্লেক্স',     address: 'জলঢাকা, নীলফামারী',       phone: '05523-56033', establishedYear: 1990, thana: 'জলঢাকা' },
-  { slug: 'kishoreganj-health-complex',       name: 'কিশোরগঞ্জ উপজেলা স্বাস্থ্য কমপ্লেক্স',  address: 'কিশোরগঞ্জ, নীলফামারী',    phone: '05522-56044', establishedYear: 1992, thana: 'কিশোরগঞ্জ' },
-  { slug: 'dimla-health-complex',             name: 'ডিমলা উপজেলা স্বাস্থ্য কমপ্লেক্স',      address: 'ডিমলা, নীলফামারী',         phone: '05525-56055', establishedYear: 1998, thana: 'ডিমলা' },
+  { slug: 'nilphamari-sadar-hospital',       name: 'নীলফামারী সদর হাসপাতাল (২৫০ শয্যা)',  name_en: 'Nilphamari Sadar Hospital (250 Bed)',      addressLine: 'সদর, নীলফামারী',         addressLine_en: 'Sadar, Nilphamari',         phone: '0551-61333',   establishedYear: 1982, thana: 'নীলফামারী সদর', thana_en: 'Nilphamari Sadar' },
+  { slug: 'nilphamari-medical-college',       name: 'নীলফামারী মেডিকেল কলেজ ও হাসপাতাল',   name_en: 'Nilphamari Medical College & Hospital',     addressLine: 'নীলফামারী সদর, নীলফামারী', addressLine_en: 'Nilphamari Sadar, Nilphamari', phone: '0551-61888',   establishedYear: 2018, thana: 'নীলফামারী সদর', thana_en: 'Nilphamari Sadar' },
+  { slug: 'ar-general-hospital',              name: 'এ আর জেনারেল হাসপাতাল',              name_en: 'AR General Hospital',                       addressLine: 'স্টেশন রোড, নীলফামারী সদর', addressLine_en: 'Station Road, Nilphamari Sadar', phone: '01733077000', establishedYear: 2005, thana: 'নীলফামারী সদর', thana_en: 'Nilphamari Sadar' },
+  { slug: 'saidpur-100-bed-hospital',         name: 'সৈয়দপুর ১০০ শয্যা বিশিষ্ট হাসপাতাল',  name_en: 'Saidpur 100 Bed Hospital',                  addressLine: 'সৈয়দপুর, নীলফামারী',     addressLine_en: 'Saidpur, Nilphamari',         phone: '05526-72222', establishedYear: 1975, thana: 'সৈয়দপুর',       thana_en: 'Saidpur' },
+  { slug: 'saidpur-modern-hospital',          name: 'সৈয়দপুর আধুনিক হাসপাতাল',             name_en: 'Saidpur Modern Hospital',                   addressLine: 'সৈয়দপুর, নীলফামারী',     addressLine_en: 'Saidpur, Nilphamari',         phone: '01717000004', establishedYear: 2010, thana: 'সৈয়দপুর',       thana_en: 'Saidpur' },
+  { slug: 'shahid-dr-shamsul-haque-hospital', name: 'শহীদ ডাক্তার শামসুল হক হসপিটাল',       name_en: 'Shaheed Dr. Shamsul Haque Hospital',        addressLine: 'সৈয়দপুর, নীলফামারী',     addressLine_en: 'Saidpur, Nilphamari',         phone: '01717000001', establishedYear: 2008, thana: 'সৈয়দপুর',       thana_en: 'Saidpur' },
+  { slug: 'domar-health-complex',             name: 'ডোমার উপজেলা স্বাস্থ্য কমপ্লেক্স',      name_en: 'Domar Upazila Health Complex',              addressLine: 'ডোমার, নীলফামারী',         addressLine_en: 'Domar, Nilphamari',           phone: '05524-56022', establishedYear: 1995, thana: 'ডোমার',         thana_en: 'Domar' },
+  { slug: 'jaldhaka-health-complex',          name: 'জলঢাকা উপজেলা স্বাস্থ্য কমপ্লেক্স',     name_en: 'Jaldhaka Upazila Health Complex',           addressLine: 'জলঢাকা, নীলফামারী',       addressLine_en: 'Jaldhaka, Nilphamari',        phone: '05523-56033', establishedYear: 1990, thana: 'জলঢাকা',        thana_en: 'Jaldhaka' },
+  { slug: 'kishoreganj-health-complex',       name: 'কিশোরগঞ্জ উপজেলা স্বাস্থ্য কমপ্লেক্স',  name_en: 'Kishoreganj Upazila Health Complex',        addressLine: 'কিশোরগঞ্জ, নীলফামারী',    addressLine_en: 'Kishoreganj, Nilphamari',     phone: '05522-56044', establishedYear: 1992, thana: 'কিশোরগঞ্জ',      thana_en: 'Kishoreganj' },
+  { slug: 'dimla-health-complex',             name: 'ডিমলা উপজেলা স্বাস্থ্য কমপ্লেক্স',      name_en: 'Dimla Upazila Health Complex',              addressLine: 'ডিমলা, নীলফামারী',         addressLine_en: 'Dimla, Nilphamari',           phone: '05525-56055', establishedYear: 1998, thana: 'ডিমলা',         thana_en: 'Dimla' },
 ];
 
 // ================================================================
@@ -58,6 +67,38 @@ const FIRST_NAMES_F = [
   'রুনা লায়লা', 'কানিজ ফাতেমা', 'সুমাইয়া ইয়াসমিন', 'তানজিনা আক্তার',
   'নুসরাত জাহান', 'সাদিয়া ইসলাম', 'মেহেরুন নেসা', 'জান্নাতুল ফেরদৌস',
   'রাবেয়া বেগম', 'সাবিহা সুলতানা',
+];
+
+// English mirrors (same order as above) — used for *_en fields.
+const FIRST_NAMES_M_EN = [
+  'Md. Samiur Rahman', 'Syed Hasan', 'Md. Moniruzzaman', 'Md. Rezaul Karim',
+  'Md. Minhaz Uddin', 'Md. Moynul Haque', 'Rupayan Das', 'Ansar Ali',
+  'Muhammad Liton', 'Md. Mohiminul Islam', 'A.K.M. Wazed', 'Md. Mostafizur',
+  'Biplob Kumar', 'Md. Golam Mostofa', 'K. M. Rezaul', 'Abdullah Al Mamun',
+  'Md. Shahidul Islam', 'Suman Kumar Das', 'Md. Shahjahan', 'Md. Abdul Kader',
+  'Md. Farhad Hossain', 'Md. Abu Bakkar', 'Md. Rafiqul Islam', 'Md. Ismail Hossain',
+  'Md. Nazrul Islam', 'Md. Abdul Mannan', 'Md. Abul Kalam', 'Md. Shahidullah',
+  'Md. Enamul Haque', 'Md. Abdur Rahim', 'Md. Saiful Islam', 'Md. Abu Hena',
+  'Md. Abdur Rauf', 'Md. Delwar Hossain', 'Md. Jahangir Alam', 'Md. Ibrahim Khalil',
+  'Md. Abdus Samad', 'Md. Nurul Islam', 'Md. Monowar Hossain', 'Md. Habibur Rahman',
+  'Md. Shafiqul Islam', 'Md. Anwar Hossain', 'Md. Jasim Uddin', 'Md. Alamgir Hossain',
+  'Md. Sirajul Islam', 'Md. Kamrul Hasan', 'Md. Fazlul Haque', 'Md. Shamsul Alam',
+  'Md. Tajul Islam', 'Md. Rashedul Islam',
+];
+const FIRST_NAMES_F_EN = [
+  'Mst. Hasina Banu', 'Selina Parvin', 'Shahanaz Parvin', 'Nazma Akter',
+  'Roksana Khatun', 'Fatema Begum', 'Marina Sultana', 'Mosammat Nasima',
+  'Hosne Ara Begum', 'Laila Khanam', 'Parvin Sultana', 'Saleha Khatun',
+  'Suraiya Begum', 'Nahida Begum', 'Afroza Begum', 'Shamima Nasrin',
+  'Nurjahan Begum', 'Rashida Khatun', 'Akhtarun Nesa', 'Salma Akter',
+  'Rehana Parvin', 'Mahmuda Khatun', 'Farida Yasmin', 'Nasrin Sultana',
+  'Shahida Begum', 'Rubina Akter', 'Sabina Yasmin', 'Jesmin Akter',
+  'Lutfun Nahar', 'Taslima Begum', 'Monira Khatun', 'Shirina Akter',
+  'Rowshan Ara', 'Hafiza Khatun', 'Morzina Begum', 'Asma Akter',
+  'Firoza Begum', 'Nazmun Nahar', 'Shahnaz Begum', 'Parul Akter',
+  'Runa Laila', 'Kaniz Fatema', 'Sumaiya Yasmin', 'Tanzina Akter',
+  'Nusrat Jahan', 'Sadia Islam', 'Meherun Nesa', 'Jannatul Ferdous',
+  'Rabeya Begum', 'Sabiha Sultana',
 ];
 
 const DEGREES = [
@@ -96,6 +137,25 @@ const SPECIALITY_FEES: Record<string, [number, number]> = {
   'ডেন্টাল সার্জন':                      [600,  500],
 };
 
+// Bangla speciality → English mirror (for speciality_en / tagline_en).
+const SPECIALITY_EN: Record<string, string> = {
+  'মেডিসিন বিশেষজ্ঞ': 'Medicine Specialist',
+  'হৃদরোগ বিশেষজ্ঞ': 'Cardiology Specialist',
+  'জেনারেল ও ল্যাপারোস্কোপিক সার্জন': 'General & Laparoscopic Surgeon',
+  'অর্থোপেডিক ও ট্রমা সার্জন': 'Orthopedic & Trauma Surgeon',
+  'স্ত্রী রোগ ও প্রসূতিবিদ্যা বিশেষজ্ঞ': 'Gynecology & Obstetrics Specialist',
+  'শিশু রোগ বিশেষজ্ঞ': 'Pediatrics Specialist',
+  'নাক, কান ও গলা বিশেষজ্ঞ': 'ENT Specialist',
+  'চর্ম ও যৌন রোগ বিশেষজ্ঞ': 'Skin & VD Specialist',
+  'বক্ষব্যাধি বিশেষজ্ঞ': 'Chest Disease Specialist',
+  'ডায়াবেটিস ও মেডিসিন বিশেষজ্ঞ': 'Diabetes & Medicine Specialist',
+  'কিডনি রোগ বিশেষজ্ঞ': 'Nephrology Specialist',
+  'চক্ষু রোগ বিশেষজ্ঞ': 'Eye Specialist',
+  'প্যাথলজি বিশেষজ্ঞ': 'Pathology Specialist',
+  'গ্যাস্ট্রোএন্টেরোলজি বিশেষজ্ঞ': 'Gastroenterology Specialist',
+  'ডেন্টাল সার্জন': 'Dental Surgeon',
+};
+
 const SPECIALITIES = Object.keys(SPECIALITY_FEES);
 
 const MORNING_SHIFT   = { start: '09:00', end: '13:00' };
@@ -118,16 +178,22 @@ function feeForChamber(base: [number, number], ci: number): [number, number] {
 
 interface DoctorSeed {
   name: string;
+  name_en: string;
   username: string;
   email: string;
   degree: string;
+  degree_en: string;
   speciality: string;
+  speciality_en: string;
   tagline: string;
+  tagline_en: string;
   bio: string;
+  bio_en: string;
   phone: string;
   whatsappNumber: string;
   whatsappId: string;
   startedYear: number;
+  gender: 'MALE' | 'FEMALE';
   status: 'APPROVED' | 'PENDING';
   baseFee: [number, number];
   chamberSlugs: string[];
@@ -138,13 +204,19 @@ function buildDoctors(): DoctorSeed[] {
 
   for (let i = 0; i < 100; i++) {
     const isFemale = i % 2 === 1;
+    const poolIdx = Math.floor(i / 2) % FIRST_NAMES_M.length;
     const firstName = isFemale
-      ? FIRST_NAMES_F[Math.floor(i / 2) % FIRST_NAMES_F.length]!
-      : FIRST_NAMES_M[Math.floor(i / 2) % FIRST_NAMES_M.length]!;
+      ? FIRST_NAMES_F[poolIdx % FIRST_NAMES_F.length]!
+      : FIRST_NAMES_M[poolIdx]!;
+    const firstNameEn = isFemale
+      ? FIRST_NAMES_F_EN[poolIdx % FIRST_NAMES_F_EN.length]!
+      : FIRST_NAMES_M_EN[poolIdx]!;
 
     const name = `ডা. ${firstName}`;
+    const name_en = `Dr. ${firstNameEn}`;
     const degree = DEGREES[i % DEGREES.length]!;
     const speciality = SPECIALITIES[i % SPECIALITIES.length]!;
+    const speciality_en = SPECIALITY_EN[speciality] ?? speciality;
     const baseFee = SPECIALITY_FEES[speciality] ?? [700, 600];
 
     const homeIdx = i % HOSPITALS.length;
@@ -168,18 +240,25 @@ function buildDoctors(): DoctorSeed[] {
     const phone = `01733${String(77000 + i).padStart(6, '0').slice(-6)}`;
     const startYear = 1995 + (i % 25);
 
+    const homeHospital = HOSPITALS[homeIdx]!;
     list.push({
       name,
+      name_en,
       username: slug,
       email: `${slug}@doctors.com`,
       degree,
+      degree_en: degree,
       speciality,
+      speciality_en,
       tagline: speciality,
-      bio: `${HOSPITALS[homeIdx]!.name} — ${HOSPITALS[homeIdx]!.thana}, নীলফামারী`,
+      tagline_en: speciality_en,
+      bio: `${homeHospital.name} — ${homeHospital.thana}, নীলফামারী`,
+      bio_en: `${homeHospital.name_en} — ${homeHospital.thana_en}, Nilphamari`,
       phone,
       whatsappNumber: phone,
       whatsappId: `${slug}.wa`,
       startedYear: startYear,
+      gender: isFemale ? 'FEMALE' : 'MALE',
       status: i < 95 ? 'APPROVED' : 'PENDING',
       baseFee,
       chamberSlugs,
@@ -211,7 +290,13 @@ export const runSeedAll = async () => {
   console.log('🏥 Seeding hospitals...');
   const hospitalMap = new Map<
     string,
-    { id: string; name: string; thana: string }
+    {
+      id: string;
+      name: string;
+      name_en: string;
+      thana: string;
+      thana_en: string;
+    }
   >();
 
   for (const h of HOSPITALS) {
@@ -233,15 +318,31 @@ export const runSeedAll = async () => {
       update: {
         userId: hospitalUser.id,
         name: h.name,
-        address: h.address,
+        name_en: h.name_en,
+        division: DIVISION,
+        division_en: DIVISION_EN,
+        district: DISTRICT,
+        district_en: DISTRICT_EN,
+        thana: h.thana,
+        thana_en: h.thana_en,
+        addressLine: h.addressLine,
+        addressLine_en: h.addressLine_en,
         phone: h.phone,
         establishedYear: h.establishedYear,
       },
       create: {
         userId: hospitalUser.id,
         name: h.name,
+        name_en: h.name_en,
         slug: h.slug,
-        address: h.address,
+        division: DIVISION,
+        division_en: DIVISION_EN,
+        district: DISTRICT,
+        district_en: DISTRICT_EN,
+        thana: h.thana,
+        thana_en: h.thana_en,
+        addressLine: h.addressLine,
+        addressLine_en: h.addressLine_en,
         phone: h.phone,
         establishedYear: h.establishedYear,
         status: 'APPROVED',
@@ -252,7 +353,9 @@ export const runSeedAll = async () => {
     hospitalMap.set(h.slug, {
       id: created.id,
       name: created.name,
+      name_en: h.name_en,
       thana: h.thana,
+      thana_en: h.thana_en,
     });
   }
   summary.hospitals = hospitalMap.size;
@@ -285,29 +388,41 @@ export const runSeedAll = async () => {
       update: {
         userId: doctorUser.id,
         name: d.name,
+        name_en: d.name_en,
         degree: d.degree,
+        degree_en: d.degree_en,
         speciality: d.speciality,
+        speciality_en: d.speciality_en,
         tagline: d.tagline,
+        tagline_en: d.tagline_en,
         bio: d.bio,
+        bio_en: d.bio_en,
         phone: d.phone,
         whatsappNumber: d.whatsappNumber,
         whatsappId: d.whatsappId,
         startedYear: d.startedYear,
+        gender: d.gender as any,
         status: d.status,
       },
       create: {
         userId: doctorUser.id,
         name: d.name,
+        name_en: d.name_en,
         username: d.username,
         email: d.email,
         degree: d.degree,
+        degree_en: d.degree_en,
         speciality: d.speciality,
+        speciality_en: d.speciality_en,
         tagline: d.tagline,
+        tagline_en: d.tagline_en,
         bio: d.bio,
+        bio_en: d.bio_en,
         phone: d.phone,
         whatsappNumber: d.whatsappNumber,
         whatsappId: d.whatsappId,
         startedYear: d.startedYear,
+        gender: d.gender as any,
         status: d.status,
         templateName: 'template_a',
       },
@@ -333,6 +448,13 @@ export const runSeedAll = async () => {
     'ডে-কেয়ার',
     'কনসালটেশন রুম',
   ];
+  // English mirrors (same order) — used for chamberName_en.
+  const chamberNamePoolEn = [
+    'Chamber',
+    'Specialist Chamber',
+    'Day Care',
+    'Consultation Room',
+  ];
 
   for (const info of doctorMap.values()) {
     for (let ci = 0; ci < info.chamberSlugs.length; ci++) {
@@ -342,10 +464,24 @@ export const runSeedAll = async () => {
 
       const chamberId = `ch-${info.id.slice(0, 8)}-${ci + 1}`;
       const chamberKey = `${info.id}|${hospital.id}|${ci + 1}`;
+      const chamberName = `${hospital.name.split(' ')[0]} ${chamberNamePool[ci % chamberNamePool.length]!}`;
+      const chamberNameEn = `${hospital.name_en.split(' ')[0]} ${chamberNamePoolEn[ci % chamberNamePoolEn.length]!}`;
+      const addressLine = `${hospital.name}, ${hospital.thana}`;
+      const addressLineEn = `${hospital.name_en}, ${hospital.thana_en}`;
 
       const chamber = await prisma.chamber.upsert({
         where: { id: chamberId },
         update: {
+          chamberName,
+          chamberName_en: chamberNameEn,
+          addressLine,
+          addressLine_en: addressLineEn,
+          thana: hospital.thana,
+          thana_en: hospital.thana_en,
+          district: DISTRICT,
+          district_en: DISTRICT_EN,
+          division: DIVISION,
+          division_en: DIVISION_EN,
           newPatientFee: newFee,
           oldPatientFee: oldFee,
         },
@@ -353,11 +489,16 @@ export const runSeedAll = async () => {
           id: chamberId,
           doctorId: info.id,
           hospitalId: hospital.id,
-            chamberName: `${hospital.name.split(' ')[0]} ${chamberNamePool[ci % chamberNamePool.length]!}`,
-          addressLine: `${hospital.name}, ${hospital.thana}`,
+          chamberName,
+          chamberName_en: chamberNameEn,
+          addressLine,
+          addressLine_en: addressLineEn,
           thana: hospital.thana,
-          district: 'নীলফামারী',
-          division: 'রংপুর',
+          thana_en: hospital.thana_en,
+          district: DISTRICT,
+          district_en: DISTRICT_EN,
+          division: DIVISION,
+          division_en: DIVISION_EN,
           latitude: 25.93 + Math.random() * 0.3,
           longitude: 88.85 + Math.random() * 0.15,
           newPatientFee: newFee,
@@ -470,6 +611,7 @@ export const runSeedAll = async () => {
   let infoIndex = 0;
   for (const d of allDoctors) {
     const expertise = buildExpertiseForSpeciality(d.speciality);
+    const expertise_en = buildExpertiseEnForSpeciality(d.speciality);
     const timeline = buildTimelineForDoctor(
       {
         degree: d.degree,
@@ -481,8 +623,8 @@ export const runSeedAll = async () => {
     );
     await prisma.doctorInformation.upsert({
       where: { doctorId: d.id },
-      update: { expertise: expertise as any, timeline: timeline as any },
-      create: { doctorId: d.id, expertise: expertise as any, timeline: timeline as any },
+      update: { expertise: expertise as any, expertise_en: expertise_en as any, timeline: timeline as any },
+      create: { doctorId: d.id, expertise: expertise as any, expertise_en: expertise_en as any, timeline: timeline as any },
     });
     infoCount++;
     infoIndex++;
@@ -609,7 +751,8 @@ export const runSeedAll = async () => {
     }
     poolIndex++;
   }
-  (summary as Record<string, number>).blogs += poolCount;
+  (summary as Record<string, number>).blogs =
+    ((summary as Record<string, number>).blogs ?? 0) + poolCount;
   console.log(`   ✅ ${poolCount} pool blogs ready`);
 
   // ----------------------------------------------------------
@@ -660,7 +803,8 @@ export const runSeedAll = async () => {
     }
     hospPoolIndex++;
   }
-  (summary as Record<string, number>).blogs += hospPoolCount;
+  (summary as Record<string, number>).blogs =
+    ((summary as Record<string, number>).blogs ?? 0) + hospPoolCount;
   console.log(`   ✅ ${hospPoolCount} hospital pool blogs ready`);
 
   // ----------------------------------------------------------
