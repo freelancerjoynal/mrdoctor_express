@@ -88,18 +88,25 @@ function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Today + tomorrow only, keeping ONLY running days. Max one day advance. */
+/** Today only: walk-in (local) bookings are always for the current day. */
 function openDays(schedules: Array<{ dayOfWeek: string }>): Array<{ date: string; dayOfWeek: string; label: string }> {
   const running = new Set(schedules.map((s) => String(s.dayOfWeek).toUpperCase()));
-  const out: Array<{ date: string; dayOfWeek: string; label: string }> = [];
   const now = new Date();
-  for (let offset = 0; offset < 2; offset++) {
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
-    const dayOfWeek = jsDayToEnum(date);
-    if (running.size > 0 && !running.has(dayOfWeek)) continue;
-    out.push({ date: isoDay(date), dayOfWeek, label: dayLabel(date, offset) });
-  }
-  return out;
+  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayOfWeek = jsDayToEnum(date);
+  if (running.size > 0 && !running.has(dayOfWeek)) return [];
+  return [{ date: isoDay(date), dayOfWeek, label: dayLabel(date, 0) }];
+}
+
+/** Chamber that owns a weekday via its own schedules (one day = one chamber). */
+function chamberOwningDay(
+  schedules: Array<{ dayOfWeek: string; chamberId: string | null }>,
+  dayOfWeek: string,
+): string | null {
+  const hit = schedules.find(
+    (s) => s.chamberId && String(s.dayOfWeek).toUpperCase() === dayOfWeek,
+  );
+  return hit?.chamberId ?? null;
 }
 
 /** Who is taking this booking (cash tracking): user id + display name snapshot. */
@@ -154,12 +161,12 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
 
   const collectionAmount = cleanAmount(input.collectionAmount);
 
+  // Walk-in bookings are locked to today — the date is never editable.
   const now = new Date();
-  let appointmentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const appointmentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (input.date !== undefined && input.date !== null && String(input.date).trim() !== '') {
     const parsed = parseDay(input.date);
-    if (!parsed) throw new Error('INVALID_DATE');
-    appointmentDate = parsed;
+    if (!parsed || isoDay(parsed) !== isoDay(appointmentDate)) throw new Error('INVALID_DATE');
   }
 
   let age: number | undefined;
@@ -175,15 +182,34 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
       ? input.problem.trim().slice(0, 500)
       : 'সরাসরি বুকিং';
 
+  // Chamber is resolved from today's availability (one weekday = one chamber).
+  // An explicitly sent chamber must be today's running chamber; otherwise the
+  // request is rejected — the client never picks a chamber by itself.
+  const todayEnum = jsDayToEnum(appointmentDate);
+  const schedules = await prisma.doctorSchedule.findMany({
+    where: { doctorId: doctor.id },
+    select: { dayOfWeek: true, chamberId: true },
+  });
+  const autoChamberId = chamberOwningDay(schedules, todayEnum);
+
+  const requestedChamberId =
+    typeof input.chamberId === 'string' && input.chamberId.trim() ? input.chamberId.trim() : null;
+  if (requestedChamberId && autoChamberId && requestedChamberId.toLowerCase() !== autoChamberId.toLowerCase()) {
+    throw new Error('INVALID_CHAMBER');
+  }
+  if (schedules.length > 0 && !autoChamberId) {
+    const runningToday = schedules.some((s) => String(s.dayOfWeek).toUpperCase() === todayEnum);
+    if (!runningToday) throw new Error('CLOSED_DAY');
+  }
+
   let chamberId: string | null = null;
   let chamberName: string | null = null;
   let chamberText = '';
   let mapLink = '';
-  const requestedChamberId =
-    typeof input.chamberId === 'string' && input.chamberId.trim() ? input.chamberId.trim() : null;
-  const chamber = requestedChamberId
+  const effectiveChamberId = requestedChamberId ?? autoChamberId;
+  const chamber = effectiveChamberId
     ? await prisma.chamber.findUnique({
-        where: { id: requestedChamberId },
+        where: { id: effectiveChamberId },
         select: {
           id: true,
           doctorId: true,
@@ -209,7 +235,7 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
           longitude: true,
         },
       });
-  if (requestedChamberId && (!chamber || chamber.doctorId !== doctor.id)) throw new Error('INVALID_CHAMBER');
+  if (effectiveChamberId && (!chamber || chamber.doctorId !== doctor.id)) throw new Error('INVALID_CHAMBER');
   if (chamber) {
     chamberId = chamber.id;
     chamberName = chamber.chamberName;
@@ -221,25 +247,6 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
       mapLink = `https://www.google.com/maps?q=${chamber.latitude},${chamber.longitude}`;
     } else if (chamberText) {
       mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chamberText)}`;
-    }
-  }
-
-  // Date rule: today + tomorrow only, and only a running day of this chamber
-  // (chamber-bound schedules win, else the doctor's full roster).
-  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diffDays = Math.round((startOf(appointmentDate) - startOf(new Date())) / 86400000);
-  if (diffDays < 0 || diffDays > 1) throw new Error('INVALID_DATE');
-  const schedules = await prisma.doctorSchedule.findMany({
-    where: { doctorId: doctor.id },
-    select: { dayOfWeek: true, chamberId: true },
-  });
-  if (schedules.length > 0) {
-    const own = chamberId
-      ? schedules.filter((s) => (s.chamberId || '').toLowerCase() === chamberId!.toLowerCase())
-      : [];
-    const relevant = own.length > 0 ? own : schedules;
-    if (!relevant.some((s) => String(s.dayOfWeek).toUpperCase() === jsDayToEnum(appointmentDate))) {
-      throw new Error('CLOSED_DAY');
     }
   }
 
@@ -288,7 +295,8 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
 
 /**
  * Booking options for the staff walk-in form: chambers + schedules +
- * the next running days (today + tomorrow max, 2 options max).
+ * today only (walk-ins are locked to the current day). The chamber is
+ * auto-selected from today's availability (one weekday = one chamber).
  */
 export async function getLocalBookingOptions(caller: LocalBookingCaller) {
   if (caller.role !== 'DOCTOR' && caller.role !== 'DOCTOR_STAFF') throw new Error('FORBIDDEN');
@@ -304,6 +312,11 @@ export async function getLocalBookingOptions(caller: LocalBookingCaller) {
       select: { dayOfWeek: true, chamberId: true, startTime: true, endTime: true },
     }),
   ]);
+  const days = openDays(schedules);
+  const today = days[0] ?? null;
+  const todayEnum = today ? today.dayOfWeek : null;
+  const autoChamberId = todayEnum ? chamberOwningDay(schedules, todayEnum) : null;
+  const todayClosed = today === null;
   return {
     chambers: chambers.map((c) => ({
       id: c.id,
@@ -316,6 +329,9 @@ export async function getLocalBookingOptions(caller: LocalBookingCaller) {
       startTime: s.startTime,
       endTime: s.endTime,
     })),
-    days: openDays(schedules),
+    days,
+    today,
+    autoChamberId,
+    todayClosed,
   };
 }

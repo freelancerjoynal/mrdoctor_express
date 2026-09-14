@@ -73,7 +73,13 @@ const PUBLIC_DOCTOR_SELECT = {
   information: {
     select: {
       expertise: true,
+      expertise_en: true,
       timeline: true,
+      highlights: true,
+      highlights_en: true,
+      stats: true,
+      stats_en: true,
+      aboutImage: true,
       updatedAt: true,
     },
   },

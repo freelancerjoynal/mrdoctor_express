@@ -20,6 +20,7 @@ const STAFF_SELECT = {
   role: true,
   isVerified: true,
   canApprove: true,
+  canManageChambers: true,
   createdAt: true,
 } as const;
 
@@ -67,7 +68,7 @@ export async function listStaff(caller: StaffCaller) {
 
 export async function inviteStaff(
   caller: StaffCaller,
-  input: { email?: string; name?: string; canApprove?: unknown },
+  input: { email?: string; name?: string; canApprove?: unknown; canManageChambers?: unknown },
 ) {
   const doctorId = await resolveOwnDoctorId(caller);
   const email = cleanEmail(input.email);
@@ -75,6 +76,10 @@ export async function inviteStaff(
   // Manage-approve option: false = staff can only collect + update,
   // approval (serve/done) stays with the doctor. Default true (full rights).
   const canApprove = input.canApprove === undefined ? true : Boolean(input.canApprove);
+  // Chamber-manage option: true = staff can manage chambers + schedules
+  // (timing / date availability). Default false (doctor only).
+  const canManageChambers =
+    input.canManageChambers === undefined ? false : Boolean(input.canManageChambers);
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) throw new Error('EMAIL_TAKEN');
 
@@ -91,6 +96,7 @@ export async function inviteStaff(
       isVerified: true,
       staffDoctorId: doctorId,
       canApprove,
+      canManageChambers,
     },
     select: STAFF_SELECT,
   });
@@ -106,11 +112,14 @@ export async function inviteStaff(
   return { staff, tempPassword, emailSent };
 }
 
-/** Flip a staff member's approve right (DOCTOR owns, SUPER_ADMIN may). */
+/** Flip a staff member's rights (DOCTOR owns, SUPER_ADMIN may).
+ * - canApprove: approval (serve/done) right.
+ * - canManageChambers: chambers + schedules (timing / date availability) right.
+ */
 export async function updateStaff(
   caller: StaffCaller,
   id: string,
-  input: { canApprove?: unknown },
+  input: { canApprove?: unknown; canManageChambers?: unknown },
 ) {
   if (caller.role !== 'DOCTOR' && caller.role !== 'SUPER_ADMIN') throw new Error('FORBIDDEN');
   const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, staffDoctorId: true } });
@@ -119,10 +128,13 @@ export async function updateStaff(
     const doctorId = await resolveOwnDoctorId(caller);
     if (target.staffDoctorId !== doctorId) throw new Error('FORBIDDEN');
   }
-  if (input.canApprove === undefined) throw new Error('NOTHING_TO_UPDATE');
+  const data: Record<string, boolean> = {};
+  if (input.canApprove !== undefined) data.canApprove = Boolean(input.canApprove);
+  if (input.canManageChambers !== undefined) data.canManageChambers = Boolean(input.canManageChambers);
+  if (Object.keys(data).length === 0) throw new Error('NOTHING_TO_UPDATE');
   return prisma.user.update({
     where: { id },
-    data: { canApprove: Boolean(input.canApprove) },
+    data,
     select: STAFF_SELECT,
   });
 }

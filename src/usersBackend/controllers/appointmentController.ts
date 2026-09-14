@@ -213,9 +213,9 @@ export const createLocalBookingAppointment = async (req: AuthenticatedRequest, r
     if (error.message === 'INVALID_PATIENT_TYPE')
       return res.status(400).json({ error: 'রোগীর ধরন নতুন বা পুরনো হতে হবে।' });
     if (error.message === 'INVALID_AMOUNT') return res.status(400).json({ error: 'সঠিক আদায়ের টাকা দিন।' });
-    if (error.message === 'INVALID_DATE') return res.status(400).json({ error: 'সঠিক তারিখ বেছে নিন (আজ / আগামীকাল)।' });
+    if (error.message === 'INVALID_DATE') return res.status(400).json({ error: 'শুধু আজকের তারিখে বুকিং করা যাবে।' });
     if (error.message === 'CLOSED_DAY')
-      return res.status(400).json({ error: 'ওই দিন চেম্বার বন্ধ থাকে — চালু দিন বেছে নিন।' });
+      return res.status(400).json({ error: 'আজ চেম্বার বন্ধ আছে।' });
     if (error.message === 'INVALID_AGE') return res.status(400).json({ error: 'সঠিক বয়স দিন।' });
     if (error.message === 'INVALID_CHAMBER') return res.status(400).json({ error: 'চেম্বার সঠিক নয়।' });
     return res.status(500).json({ error: 'Failed to create booking' });
@@ -411,8 +411,10 @@ function confirmedActionError(res: Response, error: any) {
   if (msg === 'INVALID_NAME') return res.status(400).json({ error: 'রোগীর নাম দিন (২–৮০ অক্ষর)।' });
   if (msg === 'INVALID_PHONE') return res.status(400).json({ error: 'সঠিক মোবাইল নম্বর দিন (01XXXXXXXXX)।' });
   if (msg === 'INVALID_AMOUNT') return res.status(400).json({ error: 'সঠিক টাকা দিন।' });
-  if (msg === 'INVALID_DATE') return res.status(400).json({ error: 'সঠিক তারিখ বেছে নিন (আজ / আগামীকাল)।' });
+  if (msg === 'INVALID_DATE') return res.status(400).json({ error: 'শুধু আজকের তারিখে বুকিং করা যাবে।' });
   if (msg === 'CLOSED_DAY')
-    return res.status(400).json({ error: 'ওই দিন চেম্বার বন্ধ থাকে — চালু দিন বেছে নিন।' });
+    return res.status(400).json({ error: 'আজ চেম্বার বন্ধ আছে।' });
+  if (msg === 'DATE_IMMUTABLE')
+    return res.status(400).json({ error: 'তারিখ পরিবর্তন করা যাবে না।' });
   return res.status(500).json({ error: 'অনুরোধ ব্যর্থ হয়েছে।' });
 }

@@ -27,6 +27,7 @@ export const inviteUserStaff = async (req: AuthenticatedRequest, res: Response) 
       email: req.body?.email,
       name: req.body?.name,
       canApprove: req.body?.canApprove,
+      canManageChambers: req.body?.canManageChambers,
     });
     return res.status(201).json({
       backend: 'usersBackend',
@@ -50,6 +51,7 @@ export const patchUserStaff = async (req: AuthenticatedRequest, res: Response) =
   try {
     const data = await updateStaff(callerOf(req), req.params.id as string, {
       canApprove: req.body?.canApprove,
+      canManageChambers: req.body?.canManageChambers,
     });
     return res.json({ backend: 'usersBackend', data });
   } catch (error: any) {

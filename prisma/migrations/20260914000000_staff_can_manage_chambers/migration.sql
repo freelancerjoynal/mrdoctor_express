@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "canManageChambers" BOOLEAN NOT NULL DEFAULT false;

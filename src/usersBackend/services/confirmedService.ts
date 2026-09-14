@@ -229,10 +229,6 @@ function cleanRowDay(raw: unknown): Date {
   return dt;
 }
 
-function jsDayToEnum(d: Date): string {
-  return ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][d.getDay()]!;
-}
-
 /** Load one row and enforce the caller's ownership scope. */
 async function ownedRow(caller: ConfirmedCaller, id: string) {
   const owned = await ownershipFilter(caller);
@@ -363,10 +359,16 @@ export interface UpdateConfirmedInput {
   collectionAmount?: unknown;
 }
 
-/** Update name / phone / date / offline amount. Date moves get a fresh daily serial. */
+/** Update name / phone / offline amount. The appointment date is immutable. */
 export async function updateConfirmed(caller: ConfirmedCaller, id: string, input: UpdateConfirmedInput) {
   const row = await ownedRow(caller, id);
   if (row.status === 'CANCELLED') throw new Error('ALREADY_CANCELLED');
+
+  // Date moves are forbidden — walk-ins stay on the day they were booked.
+  if (input.appointmentDate !== undefined && input.appointmentDate !== null && String(input.appointmentDate).trim() !== '') {
+    const newDate = cleanRowDay(input.appointmentDate);
+    if (isoDayOf(newDate) !== isoDayOf(row.appointmentDate)) throw new Error('DATE_IMMUTABLE');
+  }
 
   const data: Record<string, unknown> = {};
   if (input.patientName !== undefined) data.patientName = cleanRowName(input.patientName);
@@ -387,49 +389,6 @@ export async function updateConfirmed(caller: ConfirmedCaller, id: string, input
     data.collectionAmount = Math.round(n * 100) / 100;
   }
 
-  let newDate: Date | null = null;
-  if (input.appointmentDate !== undefined) {
-    newDate = cleanRowDay(input.appointmentDate);
-    // Today + tomorrow only, and only a running day of this chamber.
-    const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-    const diffDays = Math.round((startOf(newDate) - startOf(new Date())) / DAY_MS);
-    if (diffDays < 0 || diffDays > 1) throw new Error('INVALID_DATE');
-    const schedules = await prisma.doctorSchedule.findMany({
-      where: { doctorId: row.doctorId },
-      select: { dayOfWeek: true, chamberId: true },
-    });
-    if (schedules.length > 0) {
-      const own = row.chamberId
-        ? schedules.filter((s) => (s.chamberId || '').toLowerCase() === row.chamberId!.toLowerCase())
-        : [];
-      const relevant = own.length > 0 ? own : schedules;
-      if (!relevant.some((s) => String(s.dayOfWeek).toUpperCase() === jsDayToEnum(newDate!))) {
-        throw new Error('CLOSED_DAY');
-      }
-    }
-  }
-
-  if (newDate && isoDayOf(newDate) !== isoDayOf(row.appointmentDate)) {
-    // New day → next serial of that day (retry on unique-conflict).
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      const last = await prisma.confirmedAppointment.findFirst({
-        where: { doctorId: row.doctorId, appointmentDate: newDate },
-        orderBy: { serial: 'desc' },
-        select: { serial: true },
-      });
-      try {
-        return await prisma.confirmedAppointment.update({
-          where: { id },
-          data: { ...data, appointmentDate: newDate, serial: (last?.serial ?? 0) + 1 },
-        });
-      } catch (error: any) {
-        if (error?.code === 'P2002' && attempt < 5) continue;
-        throw error;
-      }
-    }
-    throw new Error('SERIAL_FAILED');
-  }
-  if (newDate) data.appointmentDate = newDate;
   if (Object.keys(data).length === 0) throw new Error('NOTHING_TO_UPDATE');
   return prisma.confirmedAppointment.update({ where: { id }, data });
 }

@@ -106,6 +106,12 @@ model User {
   // কালেকশন (বুকিং) + আপডেট, অনুমোদন শুধু ডাক্তার দেবেন।
   canApprove Boolean @default(true)
 
+  // স্টাফ চেম্বার + সময়সূচি (চেম্বার, timing, date availability)
+  // পরিচালনা করতে পারবে কি না। ডাক্তার Chambers পেজ / StaffPanel
+  // থেকে চালু করলে true — তখন স্টাফ নিজের ডাক্তারের চেম্বার ও
+  // সিডিউল তৈরি/সম্পাদনা/মুছতে পারে। ডিফল্ট false (শুধু ডাক্তার)।
+  canManageChambers Boolean @default(false)
+
   @@map("users")
 }
 
@@ -478,7 +484,10 @@ model ServedAppointment {
 // Doctor এর সাথে one-to-one রিলেশন (doctorId unique)।
 // - expertise: [{ icon, service, service_details }] → "আমি যেসব চিকিৎসা সক্রিয়ভাবে করি"
 // - timeline:  [{ year, title }] → "যোগ্যতা ও অভিজ্ঞতা / একটি দীর্ঘ পথের প্রতিফলন"
-// দুটোই Json array — অবজেক্ট সংখ্যা নির্দিষ্ট নয়, যত খুশি যোগ করা যাবে।
+// - highlights: [{ icon, text }] → পরিচিতি সেকশনের ✓ তালিকা
+// - stats: [{ value, label }] → হিরো পরিসংখ্যান (যেমন ১২ হাজার+ / সুস্থ রোগী)
+// - aboutImage: পরিচিতি সেকশনের ছবি (খালি থাকলে শুধু তথ্য-বক্স দেখায়)
+// Json array গুলো — অবজেক্ট সংখ্যা নির্দিষ্ট নয়, যত খুশি যোগ করা যাবে।
 model DoctorInformation {
   id String @id @default(uuid())
 
@@ -488,6 +497,12 @@ model DoctorInformation {
   expertise    Json  @default("[]")
   expertise_en Json? @default("[]")
   timeline     Json  @default("[]")
+
+  highlights    Json  @default("[]")
+  highlights_en Json? @default("[]")
+  stats         Json  @default("[]")
+  stats_en      Json? @default("[]")
+  aboutImage    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

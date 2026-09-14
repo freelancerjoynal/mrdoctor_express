@@ -121,17 +121,21 @@ export async function getAppointmentOptions(username: string) {
   });
   if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
 
-  // Today + tomorrow only, keeping ONLY running days (doctor has a schedule).
-  // Max one day advance — never offers anything beyond tomorrow.
-  const days: Array<{ date: string; dayOfWeek: string; dayBn: string; label: string }> = [];
+  // Today + the very next running days (up to 30 days out): the patient picks
+  // today or the next available date — tomorrow, day after, whenever it runs.
+  // Each day carries its owning chamber (one weekday = one chamber) so the
+  // public form shows the chamber for the chosen date with no dropdown.
+  const roster = (doctor.schedules || []).map((s) => String(s.dayOfWeek).toUpperCase());
+  const ownerOf = (dayOfWeek: string): string | null =>
+    doctor.schedules.find((s) => s.chamberId && String(s.dayOfWeek).toUpperCase() === dayOfWeek)?.chamberId ?? null;
+  const days: Array<{ date: string; dayOfWeek: string; dayBn: string; label: string; chamberId: string | null }> = [];
   const now = new Date();
-  for (let offset = 0; offset < 2; offset++) {
+  for (let offset = 0; offset < 30 && days.length < 2; offset++) {
     const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
     const dayOfWeek = jsDayToEnum(date);
-    if (!(doctor.schedules || []).some((s) => String(s.dayOfWeek).toUpperCase() === dayOfWeek)) continue;
+    if (!roster.includes(dayOfWeek)) continue;
     const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    days.push({ date: iso, dayOfWeek, dayBn: DAY_BN[dayOfWeek]!, label: buildDayLabel(date) });
-    if (days.length >= 2) break;
+    days.push({ date: iso, dayOfWeek, dayBn: DAY_BN[dayOfWeek]!, label: buildDayLabel(date), chamberId: ownerOf(dayOfWeek) });
   }
 
   return {
@@ -196,23 +200,8 @@ export async function createAppointment(input: CreateAppointmentInput) {
       ? input.patientArea.trim().slice(0, 120)
       : null;
 
-  // Chamber: explicit pick wins; single-chamber doctors auto-select; hospitalSlug narrows.
-  let chamber = null as null | (typeof doctor.chambers)[number];
-  const slugKey = (input.hospitalSlug || '').trim().toLowerCase();
-  const scoped = slugKey
-    ? doctor.chambers.filter((c) => c.hospital?.slug.toLowerCase() === slugKey)
-    : doctor.chambers;
-  if (typeof input.chamberId === 'string' && input.chamberId.trim()) {
-    chamber = scoped.find((c) => c.id === input.chamberId!.trim()) ?? null;
-    if (!chamber) throw new Error('INVALID_CHAMBER');
-  } else if (scoped.length === 1) {
-    chamber = scoped[0]!;
-  } else if (scoped.length > 1) {
-    throw new Error('CHAMBER_REQUIRED');
-  }
-  if (!doctor.chambers.length) throw new Error('NO_CHAMBER');
-
-  // Date: must be a running day (chamber-bound schedules win, else full roster), max tomorrow.
+  // Date: today or the next running days (up to 30 days out) — tomorrow,
+  // day after, whenever the doctor runs.
   if (typeof input.appointmentDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input.appointmentDate.trim())) {
     throw new Error('INVALID_DATE');
   }
@@ -222,8 +211,39 @@ export async function createAppointment(input: CreateAppointmentInput) {
   const now = new Date();
   const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.round((startOf(appointmentDate) - startOf(now)) / 86400000);
-  if (diffDays < 0 || diffDays > 1) throw new Error('INVALID_DATE');
+  if (diffDays < 0 || diffDays > 30) throw new Error('INVALID_DATE');
   const dayOfWeek = jsDayToEnum(appointmentDate);
+
+  // Chamber: explicit pick wins; otherwise auto-resolve from the chosen date's
+  // weekday (one weekday = one chamber) — the public form has no dropdown.
+  // hospitalSlug narrows the scope for hospital portals.
+  let chamber = null as null | (typeof doctor.chambers)[number];
+  const slugKey = (input.hospitalSlug || '').trim().toLowerCase();
+  const scoped = slugKey
+    ? doctor.chambers.filter((c) => c.hospital?.slug.toLowerCase() === slugKey)
+    : doctor.chambers;
+  const ownerOfDay = (day: string): string | null =>
+    doctor.schedules.find((s) => s.chamberId && String(s.dayOfWeek).toUpperCase() === day)?.chamberId ?? null;
+  if (typeof input.chamberId === 'string' && input.chamberId.trim()) {
+    chamber = scoped.find((c) => c.id === input.chamberId!.trim()) ?? null;
+    if (!chamber) throw new Error('INVALID_CHAMBER');
+  } else if (scoped.length > 0) {
+    // A date owned by another hospital's chamber isn't bookable in this portal.
+    const globalOwner = ownerOfDay(dayOfWeek);
+    if (slugKey && globalOwner && !scoped.some((c) => c.id === globalOwner)) {
+      throw new Error('CLOSED_DAY');
+    }
+    const scopedOwner = doctor.schedules.find(
+      (s) =>
+        s.chamberId &&
+        String(s.dayOfWeek).toUpperCase() === dayOfWeek &&
+        scoped.some((c) => c.id === s.chamberId),
+    )?.chamberId;
+    chamber = (scopedOwner && scoped.find((c) => c.id === scopedOwner)) || scoped[0]!;
+  }
+  if (!doctor.chambers.length) throw new Error('NO_CHAMBER');
+
+  // The date must be a running day (chamber-bound schedules win, else full roster).
   const relevant = chamber
     ? (() => {
         const own = doctor.schedules.filter(

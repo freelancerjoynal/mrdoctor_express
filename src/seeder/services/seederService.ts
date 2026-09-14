@@ -608,6 +608,21 @@ export const runSeedAll = async () => {
     orderBy: { username: 'asc' },
   });
 
+  // Default highlights + hero stat for fresh rows only — re-seeds never
+  // overwrite what the doctor edited from their profile page.
+  const DEFAULT_HIGHLIGHTS = [
+    { icon: '✓', text: 'প্রতিটি রোগীকে পর্যাপ্ত সময় দেওয়া' },
+    { icon: '✓', text: 'রোগ ও চিকিৎসা সহজ ভাষায় বুঝিয়ে বলা' },
+    { icon: '✓', text: 'অপ্রয়োজনীয় টেস্ট ও ওষুধ এড়িয়ে চলা' },
+  ];
+  const DEFAULT_HIGHLIGHTS_EN = [
+    { icon: '✓', text: 'Enough time for every patient' },
+    { icon: '✓', text: 'Disease and treatment explained in simple words' },
+    { icon: '✓', text: 'Avoiding unnecessary tests and medicines' },
+  ];
+  const DEFAULT_STATS = [{ value: '৫ হাজার+', label: 'সুস্থ রোগী' }];
+  const DEFAULT_STATS_EN = [{ value: '5K+', label: 'Recovered patients' }];
+
   let infoIndex = 0;
   for (const d of allDoctors) {
     const expertise = buildExpertiseForSpeciality(d.speciality);
@@ -624,7 +639,16 @@ export const runSeedAll = async () => {
     await prisma.doctorInformation.upsert({
       where: { doctorId: d.id },
       update: { expertise: expertise as any, expertise_en: expertise_en as any, timeline: timeline as any },
-      create: { doctorId: d.id, expertise: expertise as any, expertise_en: expertise_en as any, timeline: timeline as any },
+      create: {
+        doctorId: d.id,
+        expertise: expertise as any,
+        expertise_en: expertise_en as any,
+        timeline: timeline as any,
+        highlights: DEFAULT_HIGHLIGHTS as any,
+        highlights_en: DEFAULT_HIGHLIGHTS_EN as any,
+        stats: DEFAULT_STATS as any,
+        stats_en: DEFAULT_STATS_EN as any,
+      },
     });
     infoCount++;
     infoIndex++;

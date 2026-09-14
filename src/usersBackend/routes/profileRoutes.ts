@@ -15,7 +15,7 @@ usersProfileRouter.get(
   getUserProfile,
 );
 
-// PATCH|PUT /api/users/profile — own name / password only; email is immutable.
+// PATCH|PUT /api/users/profile — own name/password + (DOCTOR) full doctor fields; email/username immutable.
 usersProfileRouter.patch(
   '/',
   protectedRoute(...profileRoles),

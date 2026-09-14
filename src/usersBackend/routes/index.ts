@@ -7,6 +7,7 @@ import blogRouter from './blogRoutes.js';
 import reviewRouter from './reviewRoutes.js';
 import appointmentRouter from './appointmentRoutes.js';
 import staffRouter from './staffRoutes.js';
+import chamberRouter from './chamberRoutes.js';
 
 const usersRouter = express.Router();
 
@@ -27,6 +28,9 @@ usersRouter.use('/appointments', appointmentRouter);
 
 // GET|POST|DELETE /api/users/staff — a doctor's own staff (DOCTOR_STAFF users)
 usersRouter.use('/staff', staffRouter);
+
+// GET|POST|PATCH|DELETE /api/users/chambers — own chambers + weekly schedules
+usersRouter.use('/chambers', chamberRouter);
 
 export { usersRouter };
 export default usersRouter;
