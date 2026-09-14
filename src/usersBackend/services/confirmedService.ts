@@ -4,6 +4,7 @@
 //   today | tomorrow | last30 × all | online | offline.
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { advanceSerialLiveAfterServe } from './serialLiveService.js';
 
 export interface ConfirmedCaller {
   userId: string;
@@ -309,6 +310,8 @@ export async function completeConfirmed(caller: ConfirmedCaller, id: string) {
     }),
     prisma.confirmedAppointment.delete({ where: { id } }),
   ]);
+  // Live board follows the serve: next serial shows "get in" (best-effort).
+  await advanceSerialLiveAfterServe(row.doctorId, row.serial);
   return served;
 }
 

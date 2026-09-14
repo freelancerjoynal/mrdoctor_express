@@ -159,6 +159,75 @@ export async function getAppointmentOptions(username: string) {
   };
 }
 
+// Live serial scoreboard board data (public — polled by /live/<username>).
+// When the board is off, only the flag + doctor identity are returned.
+export async function getSerialLiveBoard(username: string) {
+  const key = (username || '').trim();
+  if (!key) throw new Error('DOCTOR_NOT_FOUND');
+  const doctor = await prisma.doctor.findFirst({
+    where: { username: key, status: 'APPROVED' },
+    select: {
+      id: true,
+      username: true,
+      name: true,
+      speciality: true,
+      profilePicture: true,
+      serialLive: true,
+      liveCurrentSerial: true,
+      liveUpdatedAt: true,
+    },
+  });
+  if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
+  const base = {
+    live: doctor.serialLive,
+    doctor: {
+      username: doctor.username,
+      name: doctor.name,
+      speciality: doctor.speciality,
+      profilePicture: doctor.profilePicture,
+    },
+    liveUpdatedAt: doctor.liveUpdatedAt,
+  };
+  if (!doctor.serialLive) return { ...base, current: null, next: null, upcoming: [], waitingCount: 0, totalToday: 0 };
+
+  const now = new Date();
+  const gte = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const [rows, chambers] = await Promise.all([
+    prisma.confirmedAppointment.findMany({
+      where: { doctorId: doctor.id, appointmentDate: { gte, lt: new Date(gte.getTime() + 86400000) }, status: { not: 'CANCELLED' } },
+      select: { serial: true, patientName: true, chamberId: true, chamberName: true, bookingType: true },
+      orderBy: { serial: 'asc' },
+    }),
+    prisma.chamber.findMany({
+      where: { doctorId: doctor.id },
+      select: { id: true, hospital: { select: { name: true } } },
+    }),
+  ]);
+  const hospitalOf = new Map(chambers.map((c) => [c.id, c.hospital?.name ?? null]));
+  const queue = rows.map((r) => ({
+    serial: r.serial,
+    patientName: r.patientName,
+    chamberName: r.chamberName,
+    hospitalName: (r.chamberId && hospitalOf.get(r.chamberId)) || null,
+    bookingType: r.bookingType as 'ONLINE' | 'OFFLINE',
+  }));
+  const pinned =
+    doctor.liveCurrentSerial != null
+      ? (queue.find((q) => q.serial === doctor.liveCurrentSerial) ?? null)
+      : null;
+  const current = pinned ?? queue[0] ?? null;
+  const next = current ? (queue.find((q) => q.serial > current.serial) ?? null) : null;
+  return {
+    ...base,
+    current,
+    next,
+    upcoming: current ? queue.filter((q) => q.serial > current.serial).slice(0, 8) : [],
+    // Whoever is inside is NOT counted as waiting.
+    waitingCount: current ? queue.filter((q) => q.serial > current.serial).length : queue.length,
+    totalToday: queue.length,
+  };
+}
+
 // Website submission — validates like the WhatsApp intake, then saves PENDING.
 export async function createAppointment(input: CreateAppointmentInput) {
   const doctorKey = (input.doctorUsername || '').trim();

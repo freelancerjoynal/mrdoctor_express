@@ -1,7 +1,7 @@
 // Thin public controllers for website appointment intake.
 // POST is open (lands as PENDING); options serve chambers/schedules/running days.
 import type { Request, Response } from 'express';
-import { createAppointment, getAppointmentOptions } from '../services/appointmentService.js';
+import { createAppointment, getAppointmentOptions, getSerialLiveBoard } from '../services/appointmentService.js';
 
 export const showAppointmentOptions = async (req: Request, res: Response) => {
   try {
@@ -10,6 +10,16 @@ export const showAppointmentOptions = async (req: Request, res: Response) => {
   } catch (error: any) {
     if (error?.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'Doctor not found' });
     return res.status(500).json({ error: 'Failed to load appointment options' });
+  }
+};
+
+export const showSerialLiveBoard = async (req: Request, res: Response) => {
+  try {
+    const board = await getSerialLiveBoard(req.params.username as string);
+    return res.json({ backend: 'publicWebsite', data: board });
+  } catch (error: any) {
+    if (error?.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'Doctor not found' });
+    return res.status(500).json({ error: 'Failed to load live serial' });
   }
 };
 

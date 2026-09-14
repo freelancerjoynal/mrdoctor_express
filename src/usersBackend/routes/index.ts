@@ -8,6 +8,7 @@ import reviewRouter from './reviewRoutes.js';
 import appointmentRouter from './appointmentRoutes.js';
 import staffRouter from './staffRoutes.js';
 import chamberRouter from './chamberRoutes.js';
+import serialLiveRouter from './serialLiveRoutes.js';
 
 const usersRouter = express.Router();
 
@@ -31,6 +32,9 @@ usersRouter.use('/staff', staffRouter);
 
 // GET|POST|PATCH|DELETE /api/users/chambers — own chambers + weekly schedules
 usersRouter.use('/chambers', chamberRouter);
+
+// GET|POST /api/users/serial-live — live serial scoreboard controls
+usersRouter.use('/serial-live', serialLiveRouter);
 
 export { usersRouter };
 export default usersRouter;
