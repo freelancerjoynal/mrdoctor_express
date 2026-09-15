@@ -108,7 +108,6 @@ function snapshot(
   const pinned = liveCurrentSerial != null ? (queue.find((q) => q.serial === liveCurrentSerial) ?? null) : null;
   const current = pinned ?? queue[0] ?? null;
   const next = current ? (queue.find((q) => q.serial > current.serial) ?? null) : null;
-  const upcoming = current ? queue.filter((q) => q.serial > current.serial).slice(0, 8) : [];
   // Missed ("not present") serials: unserved rows below the current one, plus
   // explicitly skipped rows still in the queue. They wait until recalled/served.
   const seen = new Set<number>();
@@ -116,6 +115,16 @@ function snapshot(
     .filter((q) => (seen.has(q.serial) ? false : (seen.add(q.serial), true)))
     .sort((a, b) => a.serial - b.serial)
     .map((q) => ({ ...q, skippedAt: skipMap[String(q.serial)] ?? null }));
+  // Board reached the tail (≤2 serials ahead) but missed patients are still
+  // waiting: bring them onto the waiting (upcoming) list automatically so the
+  // flow continues instead of stalling at the end.
+  const ahead = current ? queue.filter((q) => q.serial > current.serial) : [];
+  const upcoming = [
+    ...ahead.slice(0, 8),
+    ...(current && ahead.length <= 2
+      ? missed.filter((q) => q.serial !== current.serial).slice(0, Math.max(0, 8 - ahead.length))
+      : []),
+  ];
   return {
     live,
     current,
@@ -137,7 +146,14 @@ export async function getSerialLiveStatus(caller: SerialLiveCaller) {
   });
   if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
   const queue = await todayQueue(doctorId);
-  return { doctorId: doctor.id, ...snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue, parseSkipMap(doctor.liveSkippedAt)) };
+  let skipMap = parseSkipMap(doctor.liveSkippedAt);
+  let snap = snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue, skipMap);
+  const released = await autoReleaseIfFewLeft(doctor.id, doctor.serialLive, queue, skipMap, snap.missed.length);
+  if (released !== skipMap) {
+    skipMap = released;
+    snap = snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue, skipMap);
+  }
+  return { doctorId: doctor.id, ...snap };
 }
 
 export async function startSerialLive(caller: SerialLiveCaller) {
@@ -209,6 +225,32 @@ export async function skipCurrentSerial(caller: SerialLiveCaller) {
     skipped: { ...current, skippedAt: pruned[String(current.serial)] ?? null },
     ...snapshot(updated.serialLive, updated.liveCurrentSerial, updated.liveUpdatedAt, queue, pruned),
   };
+}
+
+/**
+ * Few-left release: while the board is live and at most 2 active (non-missed)
+ * bookings remain, outstanding skip clocks are wiped — no matter how much
+ * punishment time is left — so missed serials rejoin the waiting flow.
+ * Anything above that keeps the normal 20-minute rule. One write per
+ * transition (afterwards the map is already clean, so polls stay read-only).
+ */
+async function autoReleaseIfFewLeft(
+  doctorId: string,
+  live: boolean,
+  queue: LiveEntry[],
+  skipMap: Record<string, string>,
+  missedCount: number,
+): Promise<Record<string, string>> {
+  if (!live || missedCount === 0) return skipMap;
+  if (queue.length - missedCount > 2) return skipMap;
+  const inQueue = new Set(queue.map((q) => String(q.serial)));
+  const pruned: Record<string, string> = {};
+  for (const [k, v] of Object.entries(skipMap)) {
+    if (!inQueue.has(k)) pruned[k] = v;
+  }
+  if (Object.keys(pruned).length === Object.keys(skipMap).length) return skipMap;
+  await prisma.doctor.update({ where: { id: doctorId }, data: { liveSkippedAt: pruned } });
+  return pruned;
 }
 
 /**

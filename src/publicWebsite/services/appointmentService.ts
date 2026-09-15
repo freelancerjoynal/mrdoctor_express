@@ -241,13 +241,42 @@ export async function getSerialLiveBoard(username: string) {
     .filter((q) => (seen.has(q.serial) ? false : (seen.add(q.serial), true)))
     .sort((a, b) => a.serial - b.serial)
     .map((q) => ({ ...q, skippedAt: skipMap[String(q.serial)] ?? null }));
+  // Few-left release (mirrors usersBackend serialLiveService): while live and
+  // at most 2 active bookings remain, outstanding skip clocks are wiped —
+  // no matter how much punishment is left — so missed rejoin the flow.
+  let liveMissed = missed;
+  if (doctor.serialLive && missed.length > 0 && queue.length - missed.length <= 2) {
+    const inQueue = new Set(queue.map((q) => String(q.serial)));
+    const pruned: Record<string, string> = {};
+    for (const [k, v] of Object.entries(skipMap)) {
+      if (!inQueue.has(k)) pruned[k] = v;
+    }
+    if (Object.keys(pruned).length !== Object.keys(skipMap).length) {
+      await prisma.doctor.update({ where: { id: doctor.id }, data: { liveSkippedAt: pruned } });
+      const seen2 = new Set<number>();
+      liveMissed = [...queue.filter((q) => !!current && q.serial < current.serial), ...queue.filter((q) => pruned[String(q.serial)] != null)]
+        .filter((q) => (seen2.has(q.serial) ? false : (seen2.add(q.serial), true)))
+        .sort((a, b) => a.serial - b.serial)
+        .map((q) => ({ ...q, skippedAt: pruned[String(q.serial)] ?? null }));
+    }
+  }
+  // Board reached the tail (≤2 serials ahead) but missed patients are still
+  // waiting: bring them onto the waiting (upcoming) list automatically so the
+  // flow continues instead of stalling at the end.
+  const ahead = current ? queue.filter((q) => q.serial > current.serial) : [];
+  const upcoming = [
+    ...ahead.slice(0, 8),
+    ...(current && ahead.length <= 2
+      ? liveMissed.filter((q) => q.serial !== current.serial).slice(0, Math.max(0, 8 - ahead.length))
+      : []),
+  ];
   return {
     ...base,
     current,
     next,
-    upcoming: current ? queue.filter((q) => q.serial > current.serial).slice(0, 8) : [],
+    upcoming,
     // Skipped ("not present") serials — asked to wait, served when they return.
-    missed,
+    missed: liveMissed,
     // Whoever is inside is NOT counted as waiting — everyone else (ahead + missed) is.
     waitingCount: current ? queue.length - 1 : queue.length,
     totalToday: queue.length,

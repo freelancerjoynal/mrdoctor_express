@@ -404,7 +404,7 @@ function confirmedActionError(res: Response, error: any) {
   if (msg === 'FUTURE_SERVE')
     return res.status(400).json({ error: 'আগামী দিনের বুকিং আজ সেবা সম্পন্ন করা যাবে না।' });
   if (msg === 'APPROVE_FORBIDDEN')
-    return res.status(403).json({ error: 'অনুমতি নেই — শুধু ডাক্তার অনুমোদন/ডিলিট করতে পারবেন।' });
+    return res.status(403).json({ error: 'অনুমতি নেই — সেবা সম্পন্ন শুধু ডাক্তার করবেন।' });
   if (msg === 'NOT_OWNER')
     return res.status(403).json({ error: 'এই বুকিং অন্যজন যোগ করেছেন — শুধু তিনি ডিলিট করতে পারবেন।' });
   if (msg === 'AMOUNT_NOT_EDITABLE')

@@ -241,17 +241,13 @@ async function ownedRow(caller: ConfirmedCaller, id: string) {
 }
 
 /**
- * Approval gate: a restricted staffer (canApprove=false) may collect
- * (book) and update, but only the doctor may serve/done or delete.
- * Cancel-requests stay open — they still need approval by design.
+ * Serve gate: only the doctor may mark service-done. Staff (regardless of
+ * the canApprove flag) may book, update, skip/recall on the live board and
+ * delete only their own bookings — never serve.
+ * Cancel-requests stay open to every operator — they still need approval.
  */
-async function assertCanApprove(caller: ConfirmedCaller): Promise<void> {
-  if (caller.role !== 'DOCTOR_STAFF') return;
-  const own = await prisma.user.findUnique({
-    where: { id: caller.userId },
-    select: { canApprove: true },
-  });
-  if (own && own.canApprove === false) throw new Error('APPROVE_FORBIDDEN');
+async function assertCanServe(caller: ConfirmedCaller): Promise<void> {
+  if (caller.role === 'DOCTOR_STAFF') throw new Error('APPROVE_FORBIDDEN');
 }
 
 function snapshotOf(row: {
@@ -281,7 +277,7 @@ function snapshotOf(row: {
 
 /** Service done: move the row to served_appointments (snapshot + remove). */
 export async function completeConfirmed(caller: ConfirmedCaller, id: string) {
-  await assertCanApprove(caller);
+  await assertCanServe(caller);
   const row = await ownedRow(caller, id);
   if (row.status === 'CANCELLED') throw new Error('ALREADY_CANCELLED');
   // Same-day only: tomorrow's booking can't be served today.
