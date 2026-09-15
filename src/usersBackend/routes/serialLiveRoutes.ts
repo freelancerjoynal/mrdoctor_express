@@ -6,6 +6,8 @@ import {
   showSerialLiveStatus,
   runSerialLiveStart,
   runSerialLiveStop,
+  runSerialLiveSkip,
+  runSerialLiveRecall,
 } from '../controllers/serialLiveController.js';
 
 const serialLiveRouter = express.Router();
@@ -15,5 +17,7 @@ const OPERATORS = ['DOCTOR', 'DOCTOR_STAFF'] as const;
 serialLiveRouter.get('/status', protectedRoute(...OPERATORS), showSerialLiveStatus);
 serialLiveRouter.post('/start', protectedRoute(...OPERATORS), runSerialLiveStart);
 serialLiveRouter.post('/stop', protectedRoute(...OPERATORS), runSerialLiveStop);
+serialLiveRouter.post('/skip', protectedRoute(...OPERATORS), runSerialLiveSkip);
+serialLiveRouter.post('/recall', protectedRoute(...OPERATORS), runSerialLiveRecall);
 
 export default serialLiveRouter;

@@ -159,6 +159,23 @@ export async function getAppointmentOptions(username: string) {
   };
 }
 
+// Skip-clock parser (mirrors usersBackend serialLiveService.parseSkipMap — kept
+// local so the public module never imports the operator backend).
+function parseSkipMap(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const now = new Date();
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!/^\d+$/.test(k) || typeof v !== 'string') continue;
+    const t = new Date(v);
+    if (Number.isNaN(t.getTime())) continue;
+    if (t.getFullYear() !== now.getFullYear() || t.getMonth() !== now.getMonth() || t.getDate() !== now.getDate())
+      continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 // Live serial scoreboard board data (public — polled by /live/<username>).
 // When the board is off, only the flag + doctor identity are returned.
 export async function getSerialLiveBoard(username: string) {
@@ -175,6 +192,7 @@ export async function getSerialLiveBoard(username: string) {
       serialLive: true,
       liveCurrentSerial: true,
       liveUpdatedAt: true,
+      liveSkippedAt: true,
     },
   });
   if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
@@ -188,7 +206,7 @@ export async function getSerialLiveBoard(username: string) {
     },
     liveUpdatedAt: doctor.liveUpdatedAt,
   };
-  if (!doctor.serialLive) return { ...base, current: null, next: null, upcoming: [], waitingCount: 0, totalToday: 0 };
+  if (!doctor.serialLive) return { ...base, current: null, next: null, upcoming: [], missed: [], waitingCount: 0, totalToday: 0 };
 
   const now = new Date();
   const gte = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -217,13 +235,21 @@ export async function getSerialLiveBoard(username: string) {
       : null;
   const current = pinned ?? queue[0] ?? null;
   const next = current ? (queue.find((q) => q.serial > current.serial) ?? null) : null;
+  const skipMap = parseSkipMap(doctor.liveSkippedAt);
+  const seen = new Set<number>();
+  const missed = [...queue.filter((q) => !!current && q.serial < current.serial), ...queue.filter((q) => skipMap[String(q.serial)] != null)]
+    .filter((q) => (seen.has(q.serial) ? false : (seen.add(q.serial), true)))
+    .sort((a, b) => a.serial - b.serial)
+    .map((q) => ({ ...q, skippedAt: skipMap[String(q.serial)] ?? null }));
   return {
     ...base,
     current,
     next,
     upcoming: current ? queue.filter((q) => q.serial > current.serial).slice(0, 8) : [],
-    // Whoever is inside is NOT counted as waiting.
-    waitingCount: current ? queue.filter((q) => q.serial > current.serial).length : queue.length,
+    // Skipped ("not present") serials — asked to wait, served when they return.
+    missed,
+    // Whoever is inside is NOT counted as waiting — everyone else (ahead + missed) is.
+    waitingCount: current ? queue.length - 1 : queue.length,
     totalToday: queue.length,
   };
 }

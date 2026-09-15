@@ -35,6 +35,7 @@ export const updateUserProfile = async (req: AuthenticatedRequest, res: Response
         name: req.body?.name,
         currentPassword: req.body?.currentPassword,
         newPassword: req.body?.newPassword,
+        profilePicture: req.body?.profilePicture,
         email: req.body?.email ?? req.body?.doctor?.email,
         username: req.body?.username ?? req.body?.doctor?.username,
         status: req.body?.status ?? req.body?.doctor?.status,
@@ -61,6 +62,9 @@ export const updateUserProfile = async (req: AuthenticatedRequest, res: Response
     }
     if (error.message === 'INVALID_DOCTOR_FIELD') {
       return res.status(400).json({ error: 'Invalid doctor field. Check lengths/formats (phone 6–20 chars, year 1950–present, gender MALE/FEMALE).' });
+    }
+    if (error.message === 'INVALID_PICTURE') {
+      return res.status(400).json({ error: 'ছবির URL সঠিক নয় (সর্বোচ্চ ৫০০ অক্ষর)।' });
     }
     if (error.message === 'INVALID_PASSWORD') {
       return res.status(400).json({ error: 'Current password is incorrect or the new password is too short (min 6 characters).' });

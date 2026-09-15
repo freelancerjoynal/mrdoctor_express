@@ -28,6 +28,7 @@ export async function getProfileData(caller: ProfileCaller, targetUserId?: strin
       id: true,
       email: true,
       name: true,
+      profilePicture: true,
       role: true,
       isVerified: true,
       canApprove: true,
@@ -89,6 +90,8 @@ export interface UpdateProfileInput {
   name?: unknown;
   currentPassword?: unknown;
   newPassword?: unknown;
+  /** Profile photo URL (all roles — staff upload it like the doctor does). */
+  profilePicture?: unknown;
   /** Email is immutable — accepted only to reject it explicitly. */
   email?: unknown;
   /** Username is immutable — accepted only to reject it explicitly. */
@@ -227,6 +230,7 @@ export async function updateProfileData(caller: ProfileCaller, input: UpdateProf
   const wantsName = input.name !== undefined;
   const wantsPassword = input.currentPassword !== undefined || input.newPassword !== undefined;
   const wantsDoctor = input.doctor !== undefined && input.doctor !== null;
+  const wantsPicture = input.profilePicture !== undefined;
 
   let doctorData: Record<string, string | number | null> = {};
   if (wantsDoctor) {
@@ -234,12 +238,17 @@ export async function updateProfileData(caller: ProfileCaller, input: UpdateProf
     doctorData = parseDoctorPayload(input.doctor);
   }
 
-  if (!wantsName && !wantsPassword && Object.keys(doctorData).length === 0) {
+  if (!wantsName && !wantsPassword && !wantsPicture && Object.keys(doctorData).length === 0) {
     throw new Error('NOTHING_TO_UPDATE');
   }
 
   let name: string | undefined;
   if (wantsName) name = cleanName(input.name);
+
+  // Profile photo for roles without a dedicated profile table (staff etc.).
+  // Same rules as the doctor's picture: URL or empty (clear), max 500 chars.
+  let picture: string | null | undefined;
+  if (wantsPicture) picture = cleanOptionalText(input.profilePicture, 500, 'INVALID_PICTURE') ?? null;
 
   let hashedPassword: string | undefined;
   if (wantsPassword) {
@@ -268,6 +277,7 @@ export async function updateProfileData(caller: ProfileCaller, input: UpdateProf
       data: {
         ...(effectiveUserName !== undefined ? { name: effectiveUserName } : {}),
         ...(hashedPassword ? { password: hashedPassword } : {}),
+        ...(picture !== undefined ? { profilePicture: picture } : {}),
       },
     });
 

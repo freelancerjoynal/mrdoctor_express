@@ -403,12 +403,20 @@ function isoDayOf(d: Date): string {
 /**
  * Delete a walk-in (OFFLINE) booking: snapshot to cancelled_appointments_local,
  * then remove the row. ONLINE rows can never be deleted — use a cancel request.
+ * Owner-only: nobody may delete a booking they didn't add — not even the
+ * doctor, and the canApprove gate does NOT apply here. Only the adder
+ * (createdBy) may delete; rows without createdBy (legacy) stay deletable.
  * After removal the day's serials are rearranged 1..N so no gap remains.
  */
 export async function deleteOfflineBooking(caller: ConfirmedCaller, id: string, reason?: unknown) {
-  await assertCanApprove(caller);
   const row = await ownedRow(caller, id);
   if (row.bookingType !== 'OFFLINE') throw new Error('ONLINE_DELETE_FORBIDDEN');
+  // Owner-only delete: nobody may delete a booking they didn't add — not even
+  // the doctor. Only the staffer/doctor who added it (createdBy) may delete it.
+  // Rows without createdBy (legacy, no owner recorded) stay deletable by anyone.
+  if (row.createdBy && row.createdBy !== caller.userId) {
+    throw new Error('NOT_OWNER');
+  }
   const cleanReason =
     typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 500) : null;
   await prisma.cancelledAppointmentLocal.create({

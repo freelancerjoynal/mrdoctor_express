@@ -83,6 +83,9 @@ model User {
   // Display name for roles without a dedicated profile table
   // (DOCTOR_STAFF, HOSPITAL_STAFF, BUSINESS_OWNER). Email is immutable.
   name         String?
+  // Profile photo for roles without a dedicated profile table
+  // (staff upload it from profile update, like the doctor's).
+  profilePicture String?
   isVerified   Boolean   @default(false)
   otp          String?
   otpExpiry    DateTime?
@@ -180,6 +183,9 @@ model Doctor {
   serialLive        Boolean   @default(false)
   liveCurrentSerial Int?
   liveUpdatedAt     DateTime?
+  // Skip timestamps ("not present" punishment clock): { "<serial>": "<ISO time>" }.
+  // A skipped serial can be recalled to the board only 20 minutes after its skip.
+  liveSkippedAt     Json?
 
   chambers              Chamber[]
   schedules             DoctorSchedule[]
