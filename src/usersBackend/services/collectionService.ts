@@ -60,7 +60,11 @@ function startOfWeekMonday(now: Date): Date {
 }
 
 /** Resolve the doctor behind this call plus their joining date. */
-async function resolveDoctor(caller: CollectionCaller, doctorUsername?: string): Promise<{ id: string; joinedAt: Date }> {
+async function resolveDoctor(
+  caller: CollectionCaller,
+  doctorUsername?: string,
+  doctorId?: string,
+): Promise<{ id: string; joinedAt: Date }> {
   if (caller.role === 'SUPER_ADMIN') {
     if (!doctorUsername?.trim()) throw new Error('DOCTOR_REQUIRED');
     const doctor = await prisma.doctor.findFirst({
@@ -98,10 +102,55 @@ async function resolveDoctor(caller: CollectionCaller, doctorUsername?: string):
     if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
     return { id: doctor.id, joinedAt: doctor.createdAt };
   }
+  if (caller.role === 'HOSPITAL' || caller.role === 'HOSPITAL_STAFF') {
+    // Hospital desk has no single doctor — collection boxes aggregate every
+    // doctor of the hospital (chambers + schedules). The hospital itself is
+    // the scope, so joinedAt falls back to the hospital's creation date.
+    const own = await prisma.user.findUnique({
+      where: { id: caller.userId },
+      select: { hospitalProfile: { select: { id: true, createdAt: true } }, staffHospitalId: true },
+    });
+    const hospitalId =
+      caller.role === 'HOSPITAL'
+        ? (own as { hospitalProfile?: { id: string; createdAt: Date } | null } | null)?.hospitalProfile?.id
+        : (own as { staffHospitalId?: string | null } | null)?.staffHospitalId;
+    if (!hospitalId) throw new Error('NO_HOSPITAL_PROFILE');
+    const [hospital, chambers, schedules] = await Promise.all([
+      prisma.hospital.findUnique({ where: { id: hospitalId }, select: { createdAt: true } }),
+      prisma.chamber.findMany({ where: { hospitalId }, select: { doctorId: true } }),
+      prisma.doctorSchedule.findMany({ where: { hospitalId }, select: { doctorId: true } }),
+    ]);
+    if (!hospital) throw new Error('NO_HOSPITAL_PROFILE');
+    const ids = new Set<string>();
+    for (const c of chambers) if (c.doctorId) ids.add(c.doctorId);
+    for (const s of schedules) if ((s as { doctorId?: string | null }).doctorId) {
+      ids.add((s as { doctorId: string }).doctorId);
+    }
+    // Single-doctor view (hospital dropdown): validate membership, then narrow.
+    const narrow = doctorId?.trim();
+    if (narrow) {
+      if (!ids.has(narrow)) {
+        const doctor = await prisma.doctor.findUnique({ where: { id: narrow }, select: { id: true, createdAt: true } });
+        if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
+        throw new Error('DOCTOR_NOT_IN_HOSPITAL');
+      }
+      const one = await prisma.doctor.findUnique({ where: { id: narrow }, select: { id: true, createdAt: true } });
+      return { id: narrow, joinedAt: one?.createdAt ?? hospital.createdAt };
+    }
+    // No doctors yet — return an empty scope (all boxes zero, never 404).
+    const first = [...ids][0];
+    if (!first) return { id: '__none__', joinedAt: hospital.createdAt };
+    // Multi-doctor scope is encoded as a sentinel the bucket reader expands.
+    // Single-doctor hospitals keep the fast path.
+    if (ids.size === 1) return { id: first as string, joinedAt: hospital.createdAt };
+    return { id: `hospital:${hospitalId}`, joinedAt: hospital.createdAt };
+  }
   throw new Error('FORBIDDEN');
 }
 
-/** Merge one range: ONLINE + OFFLINE channels, from either ledger. */
+/** Merge one range: ONLINE + OFFLINE channels, from either ledger.
+ * doctorId may be a `hospital:<id>` sentinel (multi-doctor hospital scope)
+ * or `__none__` (hospital without doctors yet → zero box). */
 async function rangeBucket(
   doctorId: string,
   source: 'served' | 'confirmed',
@@ -111,8 +160,29 @@ async function rangeBucket(
   const dateFilter =
     gte || lt ? { appointmentDate: { ...(gte ? { gte } : {}), ...(lt ? { lt } : {}) } } : {};
   const model = source === 'served' ? prisma.servedAppointment : prisma.confirmedAppointment;
+  let doctorFilter: Record<string, unknown>;
+  if (doctorId === '__none__') {
+    return { total: 0, count: 0, online: { total: 0, count: 0 }, offline: { total: 0, count: 0 } };
+  } else if (doctorId.startsWith('hospital:')) {
+    const hospitalId = doctorId.slice('hospital:'.length);
+    const [chambers, schedules] = await Promise.all([
+      prisma.chamber.findMany({ where: { hospitalId }, select: { doctorId: true } }),
+      prisma.doctorSchedule.findMany({ where: { hospitalId }, select: { doctorId: true } }),
+    ]);
+    const ids = new Set<string>();
+    for (const c of chambers) if (c.doctorId) ids.add(c.doctorId);
+    for (const s of schedules) if ((s as { doctorId?: string | null }).doctorId) {
+      ids.add((s as { doctorId: string }).doctorId);
+    }
+    if (ids.size === 0) {
+      return { total: 0, count: 0, online: { total: 0, count: 0 }, offline: { total: 0, count: 0 } };
+    }
+    doctorFilter = { doctorId: { in: [...ids] } };
+  } else {
+    doctorFilter = { doctorId };
+  }
   const rows = await (model as typeof prisma.servedAppointment).findMany({
-    where: { doctorId, ...dateFilter },
+    where: { ...doctorFilter, ...dateFilter },
     select: { bookingType: true, collectionAmount: true, paymentAmount: true },
   });
   const bucket = (type: string): ChannelBucket => {
@@ -155,6 +225,22 @@ export interface CollectionSummary {
   month: { year: number; month: number; name: string; from: string; to: string } & CollectionBucket | null;
   /** Joining-date → now box. Doctor only (null for staff). */
   lifetime: { joinedAt: string } & CollectionBucket | null;
+  /** Explicit calendar day (served + confirmed) — hospital dashboard date picker. Null unless `date` is passed. */
+  day: ({ date: string } & CollectionBucket) | null;
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Parse an explicit calendar day (yyyy-mm-dd). Null when missing/invalid. */
+function parseDay(value: unknown): Date | null {
+  if (typeof value !== 'string' || !DATE_RE.test(value.trim())) return null;
+  const [y, m, d] = value.trim().split('-').map(Number);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return null;
+  if (y! < 2000 || y! > 2100 || m! < 1 || m! > 12 || d! < 1 || d! > 31) return null;
+  const dt = new Date(y!, m! - 1, d!);
+  if (Number.isNaN(dt.getTime())) return null;
+  if (dt.getFullYear() !== y || dt.getMonth() !== m! - 1 || dt.getDate() !== d) return null;
+  return dt;
 }
 
 function combineBuckets(a: CollectionBucket, b: CollectionBucket): CollectionBucket {
@@ -168,9 +254,9 @@ function combineBuckets(a: CollectionBucket, b: CollectionBucket): CollectionBuc
 
 export async function getCollectionSummary(
   caller: CollectionCaller,
-  opts: { doctorUsername?: string } = {},
+  opts: { doctorUsername?: string; doctorId?: string; date?: string } = {},
 ): Promise<CollectionSummary> {
-  const doctor = await resolveDoctor(caller, opts.doctorUsername);
+  const doctor = await resolveDoctor(caller, opts.doctorUsername, opts.doctorId);
 
   const today = startOfToday();
   const tomorrow = new Date(today.getTime() + DAY_MS);
@@ -179,16 +265,25 @@ export async function getCollectionSummary(
   const nextMonday = new Date(monday.getTime() + 7 * DAY_MS);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  // Explicit calendar day (hospital dashboard date picker).
+  const picked = parseDay(opts.date);
+  const pickedNext = picked ? new Date(picked.getTime() + DAY_MS) : null;
 
-  const [todayServed, todayConfirmed, tomorrowServed, tomorrowConfirmed, weekBox, monthBox, lifetimeBox] =
+  const [todayServed, todayConfirmed, tomorrowServed, tomorrowConfirmed, weekBox, monthBox, lifetimeBox, dayServed, dayConfirmed] =
     await Promise.all([
       rangeBucket(doctor.id, 'served', today, tomorrow),
       rangeBucket(doctor.id, 'confirmed', today, tomorrow),
       rangeBucket(doctor.id, 'served', tomorrow, dayAfter),
       rangeBucket(doctor.id, 'confirmed', tomorrow, dayAfter),
       rangeBucket(doctor.id, 'served', monday, nextMonday),
-      caller.role === 'DOCTOR_STAFF' ? Promise.resolve(null) : rangeBucket(doctor.id, 'served', monthStart, nextMonthStart),
-      caller.role === 'DOCTOR_STAFF' ? Promise.resolve(null) : rangeBucket(doctor.id, 'served'),
+      caller.role === 'DOCTOR_STAFF' || caller.role === 'HOSPITAL_STAFF'
+        ? Promise.resolve(null)
+        : rangeBucket(doctor.id, 'served', monthStart, nextMonthStart),
+      caller.role === 'DOCTOR_STAFF' || caller.role === 'HOSPITAL_STAFF'
+        ? Promise.resolve(null)
+        : rangeBucket(doctor.id, 'served'),
+      picked && pickedNext ? rangeBucket(doctor.id, 'served', picked, pickedNext) : Promise.resolve(null),
+      picked && pickedNext ? rangeBucket(doctor.id, 'confirmed', picked, pickedNext) : Promise.resolve(null),
     ]);
 
   const monthIdx = today.getMonth();
@@ -201,6 +296,7 @@ export async function getCollectionSummary(
     tomorrowBox: tomorrowServed,
     tomorrowConfirmed,
     tomorrowTotal: combineBuckets(tomorrowServed, tomorrowConfirmed),
+    day: picked && dayServed && dayConfirmed ? { date: isoDay(picked), ...combineBuckets(dayServed, dayConfirmed) } : null,
     week: { from: isoDay(monday), to: isoDay(new Date(nextMonday.getTime() - DAY_MS)), ...weekBox },
     month: monthBox
       ? {
@@ -326,7 +422,7 @@ export async function getMonthDays(
   caller: CollectionCaller,
   opts: { year?: unknown; month?: unknown; doctorUsername?: string } = {},
 ): Promise<MonthDays> {
-  if (caller.role === 'DOCTOR_STAFF') throw new Error('FORBIDDEN');
+  if (caller.role === 'DOCTOR_STAFF' || caller.role === 'HOSPITAL_STAFF') throw new Error('FORBIDDEN');
   const doctor = await resolveDoctor(caller, opts.doctorUsername);
 
   const now = new Date();

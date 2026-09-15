@@ -21,6 +21,8 @@ export interface LocalBookingInput {
   area?: unknown;
   chamberId?: unknown;
   problem?: unknown;
+  /** Hospital desk: which doctor of this hospital to book (required for HOSPITAL / HOSPITAL_STAFF). */
+  doctorId?: unknown;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -149,10 +151,87 @@ async function resolveDoctor(caller: LocalBookingCaller): Promise<{ id: string; 
   throw new Error('FORBIDDEN');
 }
 
-export async function createLocalBooking(caller: LocalBookingCaller, input: LocalBookingInput) {
-  if (caller.role !== 'DOCTOR' && caller.role !== 'DOCTOR_STAFF') throw new Error('FORBIDDEN');
+/** Hospital behind a HOSPITAL / HOSPITAL_STAFF call. */
+async function resolveHospital(caller: LocalBookingCaller): Promise<{ id: string; name: string }> {
+  if (caller.role === 'HOSPITAL') {
+    const own = await prisma.user.findUnique({
+      where: { id: caller.userId },
+      select: { hospitalProfile: { select: { id: true, name: true } } },
+    });
+    const hospital = (own as { hospitalProfile?: { id: string; name: string } | null } | null)?.hospitalProfile;
+    if (!hospital) throw new Error('NO_HOSPITAL_PROFILE');
+    return hospital;
+  }
+  if (caller.role === 'HOSPITAL_STAFF') {
+    const own = await prisma.user.findUnique({
+      where: { id: caller.userId },
+      select: { staffHospital: { select: { id: true, name: true } } },
+    });
+    const hospital = (own as { staffHospital?: { id: string; name: string } | null } | null)?.staffHospital;
+    if (!hospital) throw new Error('NO_HOSPITAL_PROFILE');
+    return hospital;
+  }
+  throw new Error('FORBIDDEN');
+}
 
-  const doctor = await resolveDoctor(caller);
+/** Hospital desk: validate the chosen doctor belongs to this hospital. */
+async function resolveHospitalDoctor(
+  hospitalId: string,
+  rawDoctorId: unknown,
+): Promise<{ id: string; name: string }> {
+  const doctorId = typeof rawDoctorId === 'string' ? rawDoctorId.trim() : '';
+  if (!doctorId) throw new Error('DOCTOR_REQUIRED');
+  const doctor = await prisma.doctor.findUnique({
+    where: { id: doctorId },
+    select: { id: true, name: true },
+  });
+  if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
+  const [chamberHit, scheduleHit] = await Promise.all([
+    prisma.chamber.findFirst({ where: { doctorId, hospitalId }, select: { id: true } }),
+    prisma.doctorSchedule.findFirst({ where: { doctorId, hospitalId }, select: { id: true } }),
+  ]);
+  if (!chamberHit && !scheduleHit) throw new Error('DOCTOR_NOT_IN_HOSPITAL');
+  return doctor;
+}
+
+/** Doctors of one hospital running TODAY (chamber or schedule linked + weekday roster). */
+export async function hospitalDoctorsToday(hospitalId: string) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnum = jsDayToEnum(today);
+  // Doctor ids linked to this hospital via chambers or schedules.
+  const [chambers, schedules] = await Promise.all([
+    prisma.chamber.findMany({ where: { hospitalId }, select: { doctorId: true } }),
+    prisma.doctorSchedule.findMany({ where: { hospitalId }, select: { doctorId: true, dayOfWeek: true } }),
+  ]);
+  const linked = new Set<string>();
+  for (const c of chambers) if (c.doctorId) linked.add(c.doctorId);
+  for (const s of schedules) if (s.doctorId) linked.add(s.doctorId);
+  if (linked.size === 0) return [];
+  const runningToday = new Set(
+    schedules
+      .filter((s) => s.doctorId && String(s.dayOfWeek).toUpperCase() === todayEnum)
+      .map((s) => s.doctorId as string),
+  );
+  const doctors = await prisma.doctor.findMany({
+    where: { id: { in: [...linked] } },
+    select: { id: true, name: true, speciality: true, degree: true },
+    orderBy: { name: 'asc' },
+  });
+  return doctors.map((d) => ({ ...d, availableToday: runningToday.has(d.id) }));
+}
+
+export async function createLocalBooking(caller: LocalBookingCaller, input: LocalBookingInput) {
+  const isHospitalDesk = caller.role === 'HOSPITAL' || caller.role === 'HOSPITAL_STAFF';
+  if (caller.role !== 'DOCTOR' && caller.role !== 'DOCTOR_STAFF' && !isHospitalDesk) {
+    throw new Error('FORBIDDEN');
+  }
+
+  // Hospital desk books for any doctor of that hospital (doctorId required).
+  const hospital = isHospitalDesk ? await resolveHospital(caller) : null;
+  const doctor = isHospitalDesk
+    ? await resolveHospitalDoctor(hospital!.id, input.doctorId)
+    : await resolveDoctor(caller);
   const patientName = cleanName(input.patientName);
   const phone = cleanPhone(input.phone);
 
@@ -185,9 +264,10 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
   // Chamber is resolved from today's availability (one weekday = one chamber).
   // An explicitly sent chamber must be today's running chamber; otherwise the
   // request is rejected — the client never picks a chamber by itself.
+  // Hospital desk: schedules/chambers are scoped to this hospital.
   const todayEnum = jsDayToEnum(appointmentDate);
   const schedules = await prisma.doctorSchedule.findMany({
-    where: { doctorId: doctor.id },
+    where: isHospitalDesk ? { doctorId: doctor.id, hospitalId: hospital!.id } : { doctorId: doctor.id },
     select: { dayOfWeek: true, chamberId: true },
   });
   const autoChamberId = chamberOwningDay(schedules, todayEnum);
@@ -206,6 +286,8 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
   let chamberName: string | null = null;
   let chamberText = '';
   let mapLink = '';
+  let hospitalId: string | null = null;
+  let resolvedHospitalName: string | null = null;
   const effectiveChamberId = requestedChamberId ?? autoChamberId;
   const chamber = effectiveChamberId
     ? await prisma.chamber.findUnique({
@@ -213,6 +295,8 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
         select: {
           id: true,
           doctorId: true,
+          hospitalId: true,
+          hospital: { select: { name: true } },
           chamberName: true,
           addressLine: true,
           thana: true,
@@ -222,11 +306,13 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
         },
       })
     : await prisma.chamber.findFirst({
-        where: { doctorId: doctor.id },
+        where: isHospitalDesk ? { doctorId: doctor.id, hospitalId: hospital!.id } : { doctorId: doctor.id },
         orderBy: { createdAt: 'asc' },
         select: {
           id: true,
           doctorId: true,
+          hospitalId: true,
+          hospital: { select: { name: true } },
           chamberName: true,
           addressLine: true,
           thana: true,
@@ -236,9 +322,13 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
         },
       });
   if (effectiveChamberId && (!chamber || chamber.doctorId !== doctor.id)) throw new Error('INVALID_CHAMBER');
+  // Hospital desk: the chamber must belong to this hospital.
+  if (isHospitalDesk && chamber && chamber.hospitalId !== hospital!.id) throw new Error('INVALID_CHAMBER');
   if (chamber) {
     chamberId = chamber.id;
     chamberName = chamber.chamberName;
+    hospitalId = chamber.hospitalId ?? (isHospitalDesk ? hospital!.id : null);
+    resolvedHospitalName = chamber.hospital?.name ?? (isHospitalDesk ? hospital!.name : null);
     chamberText = [chamber.chamberName, chamber.addressLine, chamber.thana, chamber.district]
       .filter(Boolean)
       .join(', ');
@@ -250,11 +340,19 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
     }
   }
 
+  // Hospital desk without a chamber row (schedule-only link): still tag the hospital.
+  if (isHospitalDesk && !hospitalId) {
+    hospitalId = hospital!.id;
+    resolvedHospitalName = hospital!.name;
+  }
+
   const taker = await resolveTaker(caller);
   const booking = await createConfirmedWithSerial({
     doctorId: doctor.id,
     appointmentDate,
     doctorName: doctor.name,
+    hospitalId,
+    hospitalName: resolvedHospitalName,
     phoneNumber: phone,
     problem,
     dayLabel: bnDate(appointmentDate),
@@ -297,8 +395,59 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
  * Booking options for the staff walk-in form: chambers + schedules +
  * today only (walk-ins are locked to the current day). The chamber is
  * auto-selected from today's availability (one weekday = one chamber).
+ * Hospital desk (HOSPITAL / HOSPITAL_STAFF): returns `doctors` — every doctor
+ * linked to this hospital plus an `availableToday` flag — so the desk can
+ * pick which doctor to book. Single-doctor callers keep the old shape.
  */
 export async function getLocalBookingOptions(caller: LocalBookingCaller) {
+  if (caller.role === 'HOSPITAL' || caller.role === 'HOSPITAL_STAFF') {
+    const hospital = await resolveHospital(caller);
+    const doctors = await hospitalDoctorsToday(hospital.id);
+    const todayDoctors = doctors.filter((d) => d.availableToday);
+    // Default chamber context comes from the first available doctor so the
+    // form still shows today's date label even before a doctor is picked.
+    const firstId = todayDoctors[0]?.id ?? doctors[0]?.id ?? null;
+    let chambers: Array<{ id: string; name: string; area: string }> = [];
+    let schedules: Array<{ dayOfWeek: string; chamberId: string | null; startTime: string; endTime: string }> = [];
+    if (firstId) {
+      const [chRows, scRows] = await Promise.all([
+        prisma.chamber.findMany({
+          where: { doctorId: firstId, hospitalId: hospital.id },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, chamberName: true, addressLine: true, thana: true, district: true },
+        }),
+        prisma.doctorSchedule.findMany({
+          where: { doctorId: firstId, hospitalId: hospital.id },
+          select: { dayOfWeek: true, chamberId: true, startTime: true, endTime: true },
+        }),
+      ]);
+      chambers = chRows.map((c) => ({
+        id: c.id,
+        name: c.chamberName || c.addressLine || 'চেম্বার',
+        area: [c.thana, c.district].filter(Boolean).join(', '),
+      }));
+      schedules = scRows.map((s) => ({
+        dayOfWeek: String(s.dayOfWeek),
+        chamberId: s.chamberId,
+        startTime: s.startTime,
+        endTime: s.endTime,
+      }));
+    }
+    const days = openDays(schedules.length > 0 ? schedules : [{ dayOfWeek: jsDayToEnum(new Date()) }]);
+    // Hospital desk with no roster at all: still allow today (doctors list drives availability).
+    const today = days[0] ?? null;
+    const todayEnum = today ? today.dayOfWeek : null;
+    const autoChamberId = todayEnum ? chamberOwningDay(schedules, todayEnum) : null;
+    return {
+      doctors,
+      chambers,
+      schedules,
+      days,
+      today,
+      autoChamberId,
+      todayClosed: doctors.length > 0 && todayDoctors.length === 0,
+    };
+  }
   if (caller.role !== 'DOCTOR' && caller.role !== 'DOCTOR_STAFF') throw new Error('FORBIDDEN');
   const doctor = await resolveDoctor(caller);
   const [chambers, schedules] = await Promise.all([

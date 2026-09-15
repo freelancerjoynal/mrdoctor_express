@@ -124,17 +124,19 @@ export const showLocalBookingOptions = async (req: AuthenticatedRequest, res: Re
     return res.json({ backend: 'usersBackend', data: options });
   } catch (error: any) {
     if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
-    if (error.message === 'NO_DOCTOR_PROFILE')
-      return res.status(404).json({ error: 'No doctor linked to this account' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this account' });
     return res.status(500).json({ error: 'Failed to load booking options' });
   }
 };
 
-// GET /api/users/appointments/collection/summary[?doctorUsername=] — today/week/month/lifetime boxes.
+// GET /api/users/appointments/collection/summary[?doctorUsername=][&doctorId=][&date=yyyy-mm-dd] — today/week/month/lifetime boxes + explicit `day` box.
 export const showCollectionSummary = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const data = await getCollectionSummary(callerOf(req), {
       doctorUsername: parseOptional(req, 'doctorUsername'),
+      doctorId: parseOptional(req, 'doctorId'),
+      date: parseOptional(req, 'date'),
     });
     return res.json({ backend: 'usersBackend', data });
   } catch (error: any) {
@@ -143,6 +145,8 @@ export const showCollectionSummary = async (req: AuthenticatedRequest, res: Resp
       return res.status(404).json({ error: 'No profile linked to this user' });
     if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
       return res.status(404).json({ error: 'Doctor not found' });
+    if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
+      return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
     return res.status(500).json({ error: 'Failed to load collection' });
   }
 };
@@ -197,6 +201,7 @@ export const createLocalBookingAppointment = async (req: AuthenticatedRequest, r
       area: req.body?.area,
       chamberId: req.body?.chamberId,
       problem: req.body?.problem,
+      doctorId: req.body?.doctorId,
     });
     return res.status(201).json({
       backend: 'usersBackend',
@@ -206,8 +211,12 @@ export const createLocalBookingAppointment = async (req: AuthenticatedRequest, r
     });
   } catch (error: any) {
     if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
-    if (error.message === 'NO_DOCTOR_PROFILE')
-      return res.status(404).json({ error: 'No doctor linked to this account' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this account' });
+    if (error.message === 'DOCTOR_REQUIRED') return res.status(400).json({ error: 'ডাক্তার বেছে নিন।' });
+    if (error.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'ডাক্তার পাওয়া যায়নি।' });
+    if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
+      return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
     if (error.message === 'INVALID_NAME') return res.status(400).json({ error: 'রোগীর নাম দিন (২–৮০ অক্ষর)।' });
     if (error.message === 'INVALID_PHONE') return res.status(400).json({ error: 'সঠিক মোবাইল নম্বর দিন (01XXXXXXXXX)।' });
     if (error.message === 'INVALID_PATIENT_TYPE')
@@ -222,7 +231,7 @@ export const createLocalBookingAppointment = async (req: AuthenticatedRequest, r
   }
 };
 
-// GET /api/users/appointments/confirmed?range=today|tomorrow|last30&bookingType=ALL|ONLINE|OFFLINE
+// GET /api/users/appointments/confirmed?range=today|tomorrow|last30&bookingType=ALL|ONLINE|OFFLINE[&doctorId=]
 export const listConfirmedAppointments = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const rawRange = parseOptional(req, 'range');
@@ -233,6 +242,7 @@ export const listConfirmedAppointments = async (req: AuthenticatedRequest, res: 
       range,
       bookingType,
       doctorUsername: parseOptional(req, 'doctorUsername'),
+      doctorId: parseOptional(req, 'doctorId'),
       ...parsePaging(req),
     });
     return res.json({ backend: 'usersBackend', ...result });
@@ -241,34 +251,48 @@ export const listConfirmedAppointments = async (req: AuthenticatedRequest, res: 
     if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
       return res.status(404).json({ error: 'No profile linked to this user' });
     if (error.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'Doctor not found' });
+    if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
+      return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
     return res.status(500).json({ error: 'Failed to load confirmed appointments' });
   }
 };
 
-// GET /api/users/appointments/confirmed/counts[?doctorUsername=] — tab counters, one round trip.
+// GET /api/users/appointments/confirmed/counts[?doctorUsername=][&doctorId=] — tab counters, one round trip.
 export const showConfirmedCounts = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const data = await getConfirmedCounts(callerOf(req), parseOptional(req, 'doctorUsername'));
+    const data = await getConfirmedCounts(
+      callerOf(req),
+      parseOptional(req, 'doctorUsername'),
+      parseOptional(req, 'doctorId'),
+    );
     return res.json({ backend: 'usersBackend', data });
   } catch (error: any) {
     if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
     if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
       return res.status(404).json({ error: 'No profile linked to this user' });
     if (error.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'Doctor not found' });
+    if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
+      return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
     return res.status(500).json({ error: 'Failed to load counts' });
   }
 };
 
-// GET /api/users/appointments/served/counts[?doctorUsername=] — served-tab counters.
+// GET /api/users/appointments/served/counts[?doctorUsername=][&doctorId=] — served-tab counters.
 export const showServedCounts = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const data = await getServedCounts(callerOf(req), parseOptional(req, 'doctorUsername'));
+    const data = await getServedCounts(
+      callerOf(req),
+      parseOptional(req, 'doctorUsername'),
+      parseOptional(req, 'doctorId'),
+    );
     return res.json({ backend: 'usersBackend', data });
   } catch (error: any) {
     if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
     if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
       return res.status(404).json({ error: 'No profile linked to this user' });
     if (error.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'Doctor not found' });
+    if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
+      return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
     return res.status(500).json({ error: 'Failed to load counts' });
   }
 };
@@ -322,7 +346,7 @@ export const postCancelRequest = async (req: AuthenticatedRequest, res: Response
   }
 };
 
-// GET /api/users/appointments/served?range=today|tomorrow|last30&bookingType=ALL|ONLINE|OFFLINE
+// GET /api/users/appointments/served?range=today|tomorrow|last30&bookingType=ALL|ONLINE|OFFLINE[&doctorId=]
 export const listServedAppointments = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const rawRange = parseOptional(req, 'range');
@@ -333,6 +357,7 @@ export const listServedAppointments = async (req: AuthenticatedRequest, res: Res
       range,
       bookingType,
       doctorUsername: parseOptional(req, 'doctorUsername'),
+      doctorId: parseOptional(req, 'doctorId'),
       ...parsePaging(req),
     });
     return res.json({ backend: 'usersBackend', ...result });
@@ -341,20 +366,25 @@ export const listServedAppointments = async (req: AuthenticatedRequest, res: Res
     if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
       return res.status(404).json({ error: 'No profile linked to this user' });
     if (error.message === 'DOCTOR_NOT_FOUND') return res.status(404).json({ error: 'Doctor not found' });
+    if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
+      return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
     return res.status(500).json({ error: 'Failed to load served appointments' });
   }
 };
 
-// GET /api/users/appointments/staff-collections?range=today|tomorrow|last30
+// GET /api/users/appointments/staff-collections?range=today|yesterday|tomorrow|last30[&date=yyyy-mm-dd][&doctorId=]
 // Per-taker OFFLINE (cash) totals — confirmed + served combined.
+// `date` narrows to one explicit calendar day (hospital dashboard date picker).
 export const showStaffCollections = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const rawRange = parseOptional(req, 'range');
     const range: StaffCollectionRange =
-      rawRange === 'tomorrow' || rawRange === 'last30' ? rawRange : 'today';
+      rawRange === 'tomorrow' || rawRange === 'yesterday' || rawRange === 'last30' ? rawRange : 'today';
     const data = await getStaffCollections(callerOf(req), {
       range,
+      date: parseOptional(req, 'date'),
       doctorUsername: parseOptional(req, 'doctorUsername'),
+      doctorId: parseOptional(req, 'doctorId'),
     });
     return res.json({ backend: 'usersBackend', data });
   } catch (error: any) {
@@ -363,21 +393,25 @@ export const showStaffCollections = async (req: AuthenticatedRequest, res: Respo
       return res.status(404).json({ error: 'No profile linked to this user' });
     if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
       return res.status(404).json({ error: 'Doctor not found' });
+    if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
+      return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
     return res.status(500).json({ error: 'Failed to load staff collections' });
   }
 };
 
-// GET /api/users/appointments/staff-collections/rows?range=&userId=
+// GET /api/users/appointments/staff-collections/rows?range=&userId=[&date=yyyy-mm-dd][&doctorId=]
 // OFFLINE rows taken by one staff (confirmed + served).
 export const showStaffCollectionRows = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const rawRange = parseOptional(req, 'range');
     const range: StaffCollectionRange =
-      rawRange === 'tomorrow' || rawRange === 'last30' ? rawRange : 'today';
+      rawRange === 'tomorrow' || rawRange === 'yesterday' || rawRange === 'last30' ? rawRange : 'today';
     const data = await listStaffRows(callerOf(req), {
       range,
       userId: parseOptional(req, 'userId') ?? 'unknown',
+      date: parseOptional(req, 'date'),
       doctorUsername: parseOptional(req, 'doctorUsername'),
+      doctorId: parseOptional(req, 'doctorId'),
       limit: parseOptional(req, 'limit'),
     });
     return res.json({ backend: 'usersBackend', data });
@@ -387,6 +421,8 @@ export const showStaffCollectionRows = async (req: AuthenticatedRequest, res: Re
       return res.status(404).json({ error: 'No profile linked to this user' });
     if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
       return res.status(404).json({ error: 'Doctor not found' });
+    if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
+      return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
     return res.status(500).json({ error: 'Failed to load staff rows' });
   }
 };
@@ -406,7 +442,7 @@ function confirmedActionError(res: Response, error: any) {
   if (msg === 'APPROVE_FORBIDDEN')
     return res.status(403).json({ error: 'অনুমতি নেই — সেবা সম্পন্ন শুধু ডাক্তার করবেন।' });
   if (msg === 'NOT_OWNER')
-    return res.status(403).json({ error: 'এই বুকিং অন্যজন যোগ করেছেন — শুধু তিনি ডিলিট করতে পারবেন।' });
+    return res.status(403).json({ error: 'এই বুকিং অন্যজন যোগ করেছেন — শুধু তিনি এডিট/ডিলিট করতে পারবেন।' });
   if (msg === 'AMOUNT_NOT_EDITABLE')
     return res.status(400).json({ error: 'অনলাইন পেমেন্টের টাকা এখানে বদলানো যাবে না।' });
   if (msg === 'NOTHING_TO_UPDATE') return res.status(400).json({ error: 'বদলানোর মতো কিছু নেই।' });

@@ -72,6 +72,15 @@ async function ownershipFilter(caller: AppointmentCaller): Promise<Record<string
     if (!hospitalId) throw new Error('NO_HOSPITAL_PROFILE');
     return { hospitalId };
   }
+  if (caller.role === 'HOSPITAL_STAFF') {
+    const own = await prisma.user.findUnique({
+      where: { id: caller.userId },
+      select: { staffHospitalId: true },
+    });
+    const hospitalId = (own as { staffHospitalId?: string | null } | null)?.staffHospitalId;
+    if (!hospitalId) throw new Error('NO_HOSPITAL_PROFILE');
+    return { hospitalId };
+  }
   throw new Error('FORBIDDEN');
 }
 

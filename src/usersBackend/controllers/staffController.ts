@@ -15,8 +15,8 @@ export const listUserStaff = async (req: AuthenticatedRequest, res: Response) =>
     return res.json({ backend: 'usersBackend', data });
   } catch (error: any) {
     if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
-    if (error.message === 'NO_DOCTOR_PROFILE')
-      return res.status(404).json({ error: 'No doctor profile linked to this user' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
     return res.status(500).json({ error: 'Failed to load staff' });
   }
 };
@@ -38,8 +38,8 @@ export const inviteUserStaff = async (req: AuthenticatedRequest, res: Response) 
     });
   } catch (error: any) {
     if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
-    if (error.message === 'NO_DOCTOR_PROFILE')
-      return res.status(404).json({ error: 'No doctor profile linked to this user' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
     if (error.message === 'EMAIL_TAKEN') return res.status(409).json({ error: 'এই ইমেইলে ইতিমধ্যে অ্যাকাউন্ট আছে।' });
     if (error.message === 'INVALID_EMAIL') return res.status(400).json({ error: 'সঠিক ইমেইল ঠিকানা দিন।' });
     if (error.message === 'INVALID_NAME') return res.status(400).json({ error: 'স্টাফের নাম দিন (২–৮০ অক্ষর)।' });
@@ -69,8 +69,8 @@ export const removeUserStaff = async (req: AuthenticatedRequest, res: Response) 
   } catch (error: any) {
     if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
     if (error.message === 'STAFF_NOT_FOUND') return res.status(404).json({ error: 'Staff not found' });
-    if (error.message === 'NO_DOCTOR_PROFILE')
-      return res.status(404).json({ error: 'No doctor profile linked to this user' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
     return res.status(500).json({ error: 'Failed to remove staff' });
   }
 };

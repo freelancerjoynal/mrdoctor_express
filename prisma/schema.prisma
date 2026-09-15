@@ -104,6 +104,11 @@ model User {
   staffDoctorId String?
   staffDoctor   Doctor? @relation("DoctorStaff", fields: [staffDoctorId], references: [id], onDelete: Cascade)
 
+  // HOSPITAL_STAFF কোন হাসপাতালের অধীনে কাজ করে (হাসপাতাল মালিকই স্টাফ যোগ করে)।
+  // হাসপাতাল-স্টাফ যেকোনো ডাক্তারের (ওই হাসপাতালের) বুকিং নিতে পারে।
+  staffHospitalId String?
+  staffHospital   Hospital? @relation("HospitalStaff", fields: [staffHospitalId], references: [id], onDelete: Cascade)
+
   // স্টাফ সেবা-সম্পন্ন (approve) / ডিলিট করতে পারবে কি না।
   // ডাক্তার StaffPanel থেকে সীমাবদ্ধ করলে false — তখন শুধু
   // কালেকশন (বুকিং) + আপডেট, অনুমোদন শুধু ডাক্তার দেবেন।
@@ -231,6 +236,7 @@ model Hospital {
   reviews               Review[]
   pendingAppointments   PendingAppointment[]
   confirmedAppointments ConfirmedAppointment[]
+  staffMembers          User[]                 @relation("HospitalStaff")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

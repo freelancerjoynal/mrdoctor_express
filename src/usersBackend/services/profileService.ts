@@ -54,6 +54,10 @@ export async function getProfileData(caller: ProfileCaller, targetUserId?: strin
           username: true,
         },
       },
+      // Which hospital this hospital-staff user works under (null for others).
+      staffHospital: {
+        select: { id: true, name: true, slug: true },
+      },
     },
   });
 }

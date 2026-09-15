@@ -18,6 +18,8 @@ export interface ConfirmedFilters {
   range: ConfirmedRange;
   bookingType: ConfirmedTypeFilter;
   doctorUsername?: string;
+  /** Hospital desk: narrow the hospital scope to one specific doctor. */
+  doctorId?: string;
   page: number;
   limit: number;
 }
@@ -82,7 +84,49 @@ async function ownershipFilter(
     if (!hospitalId) throw new Error('NO_HOSPITAL_PROFILE');
     return { hospitalId };
   }
+  if (caller.role === 'HOSPITAL_STAFF') {
+    const own = await prisma.user.findUnique({
+      where: { id: caller.userId },
+      select: { staffHospitalId: true },
+    });
+    const hospitalId = (own as { staffHospitalId?: string | null } | null)?.staffHospitalId;
+    if (!hospitalId) throw new Error('NO_HOSPITAL_PROFILE');
+    return { hospitalId };
+  }
   throw new Error('FORBIDDEN');
+}
+
+/**
+ * Hospital desk: narrow the hospital-wide scope to one specific doctor.
+ * Validates the doctor belongs to the hospital (chamber or schedule link).
+ * SUPER_ADMIN may narrow to any existing doctor. Doctor roles keep own scope.
+ */
+async function applyDoctorIdFilter(
+  caller: ConfirmedCaller,
+  owned: Record<string, unknown>,
+  doctorId?: string,
+): Promise<Record<string, unknown>> {
+  const id = doctorId?.trim();
+  if (!id) return owned;
+  if (caller.role === 'HOSPITAL' || caller.role === 'HOSPITAL_STAFF') {
+    const hospitalId = (owned as { hospitalId?: string }).hospitalId;
+    if (!hospitalId) throw new Error('NO_HOSPITAL_PROFILE');
+    const doctor = await prisma.doctor.findUnique({ where: { id }, select: { id: true } });
+    if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
+    const [chamberHit, scheduleHit] = await Promise.all([
+      prisma.chamber.findFirst({ where: { doctorId: id, hospitalId }, select: { id: true } }),
+      prisma.doctorSchedule.findFirst({ where: { doctorId: id, hospitalId }, select: { id: true } }),
+    ]);
+    if (!chamberHit && !scheduleHit) throw new Error('DOCTOR_NOT_IN_HOSPITAL');
+    return { ...owned, doctorId: id };
+  }
+  if (caller.role === 'SUPER_ADMIN') {
+    const doctor = await prisma.doctor.findUnique({ where: { id }, select: { id: true } });
+    if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
+    return { ...owned, doctorId: id };
+  }
+  // DOCTOR / DOCTOR_STAFF: fixed to own doctor — ignore foreign filter.
+  return owned;
 }
 
 /**
@@ -120,7 +164,8 @@ async function ownershipFilter(
 }
 
 export async function listConfirmed(caller: ConfirmedCaller, filters: ConfirmedFilters) {
-  const owned = await ownershipFilter(caller, filters.doctorUsername);
+  const baseOwned = await ownershipFilter(caller, filters.doctorUsername);
+  const owned = await applyDoctorIdFilter(caller, baseOwned, filters.doctorId);
   const { gte, lt } = rangeBounds(filters.range);
   const where: Record<string, any> = { ...owned, appointmentDate: { gte, lt } };
   if (filters.bookingType === 'ONLINE' || filters.bookingType === 'OFFLINE') {
@@ -166,8 +211,9 @@ export async function listConfirmed(caller: ConfirmedCaller, filters: ConfirmedF
   };
 }
 /** Tab counters only (today / tomorrow / last30, bookingType ALL). One round trip. */
-export async function getConfirmedCounts(caller: ConfirmedCaller, doctorUsername?: string) {
-  const owned = await ownershipFilter(caller, doctorUsername);
+export async function getConfirmedCounts(caller: ConfirmedCaller, doctorUsername?: string, doctorId?: string) {
+  const baseOwned = await ownershipFilter(caller, doctorUsername);
+  const owned = await applyDoctorIdFilter(caller, baseOwned, doctorId);
   const today = startOfToday();
   const day = (offset: number) => ({
     gte: new Date(today.getTime() + offset * DAY_MS),
@@ -182,9 +228,26 @@ export async function getConfirmedCounts(caller: ConfirmedCaller, doctorUsername
   return { today: cToday, tomorrow: cTomorrow, last30: cLast30 };
 }
 
-/** Served-tab counters (today / tomorrow / last30). Doctor + staff scope. */
-export async function getServedCounts(caller: ConfirmedCaller, doctorUsername?: string) {
-  const owned = await ownershipFilter(caller, doctorUsername);
+/** Served-tab counters (today / tomorrow / last30). Doctor + staff + hospital scope. */
+export async function getServedCounts(caller: ConfirmedCaller, doctorUsername?: string, doctorId?: string) {
+  const baseOwned = await ownershipFilter(caller, doctorUsername);
+  const owned = await applyDoctorIdFilter(caller, baseOwned, doctorId);
+  // served_appointments has no hospitalId column — hospital scope maps to its
+  // doctors via chambers (same as listServed).
+  let scope: Record<string, unknown> = { ...owned };
+  if ((owned as { hospitalId?: string }).hospitalId) {
+    const narrowedDoctorId = (owned as { doctorId?: string }).doctorId;
+    if (narrowedDoctorId) {
+      scope = { doctorId: narrowedDoctorId };
+    } else {
+      const chambers = await prisma.chamber.findMany({
+        where: { hospitalId: (owned as { hospitalId: string }).hospitalId },
+        select: { doctorId: true },
+      });
+      const doctorIds = [...new Set(chambers.map((c) => c.doctorId).filter(Boolean) as string[])];
+      scope = { doctorId: { in: doctorIds.length ? doctorIds : ['__none__'] } };
+    }
+  }
   const today = startOfToday();
   const day = (offset: number) => ({
     gte: new Date(today.getTime() + offset * DAY_MS),
@@ -192,9 +255,9 @@ export async function getServedCounts(caller: ConfirmedCaller, doctorUsername?: 
   });
   const last30 = { gte: new Date(today.getTime() - 29 * DAY_MS), lt: new Date(today.getTime() + DAY_MS) };
   const [cToday, cTomorrow, cLast30] = await prisma.$transaction([
-    prisma.servedAppointment.count({ where: { ...owned, appointmentDate: day(0) } }),
-    prisma.servedAppointment.count({ where: { ...owned, appointmentDate: day(1) } }),
-    prisma.servedAppointment.count({ where: { ...owned, appointmentDate: last30 } }),
+    prisma.servedAppointment.count({ where: { ...scope, appointmentDate: day(0) } }),
+    prisma.servedAppointment.count({ where: { ...scope, appointmentDate: day(1) } }),
+    prisma.servedAppointment.count({ where: { ...scope, appointmentDate: last30 } }),
   ]);
   return { today: cToday, tomorrow: cTomorrow, last30: cLast30 };
 }
@@ -241,13 +304,14 @@ async function ownedRow(caller: ConfirmedCaller, id: string) {
 }
 
 /**
- * Serve gate: only the doctor may mark service-done. Staff (regardless of
- * the canApprove flag) may book, update, skip/recall on the live board and
- * delete only their own bookings — never serve.
+ * Serve gate: ONLY the doctor may mark service-done (plus SUPER_ADMIN override).
+ * - DOCTOR_STAFF: never (regardless of canApprove — they book/update/delete-own only).
+ * - HOSPITAL / HOSPITAL_STAFF: never — hospital has no approve right at all.
  * Cancel-requests stay open to every operator — they still need approval.
  */
 async function assertCanServe(caller: ConfirmedCaller): Promise<void> {
-  if (caller.role === 'DOCTOR_STAFF') throw new Error('APPROVE_FORBIDDEN');
+  if (caller.role === 'DOCTOR' || caller.role === 'SUPER_ADMIN') return;
+  throw new Error('APPROVE_FORBIDDEN');
 }
 
 function snapshotOf(row: {
@@ -316,21 +380,30 @@ export async function listServed(
   caller: ConfirmedCaller,
   filters: ConfirmedFilters,
 ) {
-  const owned = await ownershipFilter(caller, filters.doctorUsername);
+  const baseOwned = await ownershipFilter(caller, filters.doctorUsername);
+  const owned = await applyDoctorIdFilter(caller, baseOwned, filters.doctorId);
   const { gte, lt } = rangeBounds(filters.range);
   let where: Record<string, any> = { ...owned, appointmentDate: { gte, lt } };
   if (filters.bookingType === 'ONLINE' || filters.bookingType === 'OFFLINE') {
     where.bookingType = filters.bookingType;
   }
   if ((owned as { hospitalId?: string }).hospitalId) {
-    const chambers = await prisma.chamber.findMany({
-      where: { hospitalId: (owned as { hospitalId: string }).hospitalId },
-      select: { doctorId: true },
-    });
-    const doctorIds = [...new Set((chambers.map((c) => c.doctorId).filter(Boolean) as string[]))];
-    const { hospitalId: _drop, ...rest } = where;
-    void _drop;
-    where = { ...rest, doctorId: { in: doctorIds.length ? doctorIds : ['__none__'] } };
+    const narrowedDoctorId = (owned as { doctorId?: string }).doctorId;
+    if (narrowedDoctorId) {
+      // Single-doctor view: served table has no hospitalId — drop it, keep doctorId.
+      const { hospitalId: _drop, ...rest } = where;
+      void _drop;
+      where = rest;
+    } else {
+      const chambers = await prisma.chamber.findMany({
+        where: { hospitalId: (owned as { hospitalId: string }).hospitalId },
+        select: { doctorId: true },
+      });
+      const doctorIds = [...new Set((chambers.map((c) => c.doctorId).filter(Boolean) as string[]))];
+      const { hospitalId: _drop, ...rest } = where;
+      void _drop;
+      where = { ...rest, doctorId: { in: doctorIds.length ? doctorIds : ['__none__'] } };
+    }
   }
 
   const page = Math.max(1, filters.page || 1);
@@ -358,10 +431,20 @@ export interface UpdateConfirmedInput {
   collectionAmount?: unknown;
 }
 
-/** Update name / phone / offline amount. The appointment date is immutable. */
+/** Update name / phone / offline amount. The appointment date is immutable.
+ * Hospital desk: only the user who added the booking (createdBy) may update
+ * it — same owner-only rule as delete. Legacy rows without createdBy stay
+ * editable by anyone in the hospital scope. */
 export async function updateConfirmed(caller: ConfirmedCaller, id: string, input: UpdateConfirmedInput) {
   const row = await ownedRow(caller, id);
   if (row.status === 'CANCELLED') throw new Error('ALREADY_CANCELLED');
+  if (
+    (caller.role === 'HOSPITAL' || caller.role === 'HOSPITAL_STAFF') &&
+    row.createdBy &&
+    row.createdBy !== caller.userId
+  ) {
+    throw new Error('NOT_OWNER');
+  }
 
   // Date moves are forbidden — walk-ins stay on the day they were booked.
   if (input.appointmentDate !== undefined && input.appointmentDate !== null && String(input.appointmentDate).trim() !== '') {
