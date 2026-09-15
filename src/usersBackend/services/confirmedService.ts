@@ -5,6 +5,7 @@
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
 import { advanceSerialLiveAfterServe } from './serialLiveService.js';
+import { notifyAppointments, notifyLive } from '../../realtime/notify.js';
 
 export interface ConfirmedCaller {
   userId: string;
@@ -372,6 +373,8 @@ export async function completeConfirmed(caller: ConfirmedCaller, id: string) {
   ]);
   // Live board follows the serve: next serial shows "get in" (best-effort).
   await advanceSerialLiveAfterServe(row.doctorId, row.serial);
+  notifyAppointments({ doctorId: row.doctorId, hospitalId: row.hospitalId });
+  notifyLive(row.doctorId);
   return served;
 }
 
@@ -472,7 +475,9 @@ export async function updateConfirmed(caller: ConfirmedCaller, id: string, input
   }
 
   if (Object.keys(data).length === 0) throw new Error('NOTHING_TO_UPDATE');
-  return prisma.confirmedAppointment.update({ where: { id }, data });
+  const updated = await prisma.confirmedAppointment.update({ where: { id }, data });
+  notifyAppointments({ doctorId: row.doctorId, hospitalId: row.hospitalId });
+  return updated;
 }
 
 function isoDayOf(d: Date): string {
@@ -503,6 +508,7 @@ export async function deleteOfflineBooking(caller: ConfirmedCaller, id: string, 
   });
   await prisma.confirmedAppointment.delete({ where: { id } });
   await rearrangeDaySerials(row.doctorId, row.appointmentDate);
+  notifyAppointments({ doctorId: row.doctorId, hospitalId: row.hospitalId });
   return { deleted: true };
 }
 
@@ -547,5 +553,6 @@ export async function requestOnlineCancel(caller: ConfirmedCaller, id: string, r
   await prisma.cancelledAppointmentOnline.create({
     data: { ...snapshotOf(row), reason: cleanReason, requestedBy: caller.userId },
   });
+  notifyAppointments({ doctorId: row.doctorId, hospitalId: row.hospitalId });
   return { requested: true };
 }

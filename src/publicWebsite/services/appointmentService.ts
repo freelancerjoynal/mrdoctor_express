@@ -3,6 +3,7 @@
 // hospitalId is derived from the selected chamber (chamber.hospitalId) so every row
 // stays filterable by doctor AND by hospital.
 import { prisma } from '../../lib/prisma.js';
+import { notifyAppointments } from '../../realtime/notify.js';
 
 export const DAY_BN: Record<string, string> = {
   SATURDAY: 'শনিবার',
@@ -410,6 +411,8 @@ export async function createAppointment(input: CreateAppointmentInput) {
     },
     select: { id: true, dayLabel: true, appointmentDate: true },
   });
+
+  notifyAppointments({ doctorId: doctor.id, hospitalId });
 
   return {
     id: row.id,

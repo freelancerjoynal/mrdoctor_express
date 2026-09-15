@@ -7,6 +7,7 @@ import {
 import { BACK_HINT, MENU_BUTTON, withNav } from "../../lib/navButtons.js";
 import { saveConnectSession } from "../../lib/chatSession.js";
 import { prisma } from "../../../lib/prisma.js";
+import { notifyAppointments } from "../../../realtime/notify.js";
 import { getButtonId } from "../../lib/session.js";
 import {
     DOCTOR_TEXTS,
@@ -87,7 +88,7 @@ async function savePendingAppointment(phoneNumber: string, data: any) {
     const appointmentDate: Date = data.appointmentDate instanceof Date
         ? data.appointmentDate
         : new Date(data.appointmentDate);
-    return prisma.pendingAppointment.create({
+    const created = await prisma.pendingAppointment.create({
         data: {
             phoneNumber,
             doctorId: data.doctorId,
@@ -105,6 +106,8 @@ async function savePendingAppointment(phoneNumber: string, data: any) {
             status: "PENDING",
         },
     });
+    notifyAppointments({ doctorId: data.doctorId ?? null, chamberId: data.chamberId ?? null });
+    return created;
 }
 
 export async function handleGetDoctorFlow(

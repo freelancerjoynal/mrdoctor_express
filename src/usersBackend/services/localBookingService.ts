@@ -4,6 +4,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { singleMessage } from '../../lib/sms.js';
 import { createConfirmedWithSerial } from './confirmedService.js';
+import { notifyAppointments } from '../../realtime/notify.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
 
 export interface LocalBookingCaller {
@@ -388,6 +389,7 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
     console.error(`[LocalBooking] SMS failed to=${phone}:`, error?.message ?? error);
   }
 
+  notifyAppointments({ doctorId: doctor.id, hospitalId, chamberId });
   return { booking, smsSent };
 }
 

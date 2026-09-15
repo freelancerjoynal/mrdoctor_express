@@ -8,6 +8,7 @@
 // income) | CANCELLED (dropped from collection).
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { notifyAppointments } from '../../realtime/notify.js';
 
 export interface AppointmentCaller {
   userId: string;
@@ -440,5 +441,7 @@ export async function updateAppointmentStatus(caller: AppointmentCaller, id: str
   if (!existing) throw new Error('APPOINTMENT_NOT_FOUND');
   const denied = Object.entries(owned).some(([key, value]) => (existing as any)[key] !== value);
   if (denied) throw new Error('FORBIDDEN');
-  return prisma.pendingAppointment.update({ where: { id }, data: { status } });
+  const updated = await prisma.pendingAppointment.update({ where: { id }, data: { status } });
+  notifyAppointments({ doctorId: existing.doctorId, hospitalId: existing.hospitalId });
+  return updated;
 }

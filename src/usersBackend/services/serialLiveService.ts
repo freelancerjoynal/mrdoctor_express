@@ -8,6 +8,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { Prisma } from '../../../generated/prisma/client.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { notifyLive } from '../../realtime/notify.js';
 
 /** Punishment clock: a skipped serial returns to the board after 20 minutes. */
 export const RECALL_COOLDOWN_MS = 20 * 60 * 1000;
@@ -170,6 +171,7 @@ export async function startSerialLive(caller: SerialLiveCaller) {
     },
     select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true },
   });
+  notifyLive(doctor.id);
   return { doctorId: doctor.id, ...snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue) };
 }
 
@@ -181,6 +183,7 @@ export async function stopSerialLive(caller: SerialLiveCaller) {
     select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true },
   });
   const queue = await todayQueue(doctorId);
+  notifyLive(doctor.id);
   return { doctorId: doctor.id, ...snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue) };
 }
 
@@ -220,6 +223,7 @@ export async function skipCurrentSerial(caller: SerialLiveCaller) {
     data: { liveCurrentSerial: next.serial, liveUpdatedAt: new Date(), liveSkippedAt: pruned },
     select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true },
   });
+  notifyLive(updated.id);
   return {
     doctorId: updated.id,
     skipped: { ...current, skippedAt: pruned[String(current.serial)] ?? null },
@@ -301,6 +305,7 @@ export async function recallSerial(caller: SerialLiveCaller, serialRaw: unknown)
     data: { liveCurrentSerial: serial, liveUpdatedAt: new Date(), liveSkippedAt: pruned },
     select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true },
   });
+  notifyLive(updated.id);
   return {
     doctorId: updated.id,
     recalled: target,

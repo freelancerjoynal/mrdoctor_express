@@ -3,6 +3,7 @@
 // Mounted by websiteRoutes at /api/website.
 import express from 'express';
 import { postAppointment, showAppointmentOptions, showSerialLiveBoard } from '../controllers/appointmentController.js';
+import { handlePublicLiveStream } from '../../realtime/streamController.js';
 
 const appointmentRouter = express.Router();
 
@@ -12,5 +13,7 @@ appointmentRouter.post('/appointments', postAppointment);
 appointmentRouter.get('/doctors/:username/appointment-options', showAppointmentOptions);
 // GET /api/website/doctors/:username/serial-live — public scoreboard snapshot
 appointmentRouter.get('/doctors/:username/serial-live', showSerialLiveBoard);
+// GET /api/website/doctors/:username/stream — public live-board push (live frames only)
+appointmentRouter.get('/doctors/:username/stream', handlePublicLiveStream);
 
 export default appointmentRouter;
