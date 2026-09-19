@@ -238,6 +238,7 @@ model Doctor {
   gender              Gender?
   religion            String?
   startedYear         Int?
+  bmdcNumber          String?
   status              DoctorStatus @default(PENDING)
 
   // Live serial scoreboard ("doctor-serial-live"): doctor/staff start-stop it

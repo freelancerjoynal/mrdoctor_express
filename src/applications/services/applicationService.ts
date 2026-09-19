@@ -38,6 +38,54 @@ function optional(raw: unknown, max = 500): string | null {
   return v;
 }
 
+/** Optional long text (bio): keeps newlines, collapses blank lines. */
+function optionalLong(raw: unknown, max = 5000): string | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'string') throw new Error('INVALID_INPUT');
+  const v = raw.trim().replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+  if (!v) return null;
+  if (v.length > max) throw new Error('INVALID_INPUT');
+  return v;
+}
+
+/** Optional phone: undefined/null/'' = null, else validated like cleanPhone. */
+function optionalPhone(raw: unknown): string | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'string') throw new Error('INVALID_INPUT');
+  const v = raw.trim().replace(/[\s-]/g, '');
+  if (!v) return null;
+  if (!/^\+?[0-9]{6,16}$/.test(v)) throw new Error('INVALID_PHONE');
+  return v;
+}
+
+/** Optional gender: ''/null = null, else MALE | FEMALE. */
+function parseGender(raw: unknown): 'MALE' | 'FEMALE' | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'string') throw new Error('INVALID_INPUT');
+  const g = raw.trim().toUpperCase();
+  if (!g) return null;
+  if (g !== 'MALE' && g !== 'FEMALE') throw new Error('INVALID_INPUT');
+  return g;
+}
+
+/** Optional year: ''/null = null, else integer within range. */
+function parseYear(raw: unknown, min = 1950): number | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === 'number' && Number.isInteger(raw)) {
+    const y = raw;
+    const cur = new Date().getFullYear();
+    if (y < min || y > cur) throw new Error('INVALID_INPUT');
+    return y;
+  }
+  if (typeof raw !== 'string') throw new Error('INVALID_INPUT');
+  const v = raw.trim();
+  if (!v) return null;
+  const y = Number(v);
+  const cur = new Date().getFullYear();
+  if (!Number.isInteger(y) || y < min || y > cur) throw new Error('INVALID_INPUT');
+  return y;
+}
+
 /** URL-safe handle: lowercase latin/digits + hyphens. */
 export function slugify(raw: string): string {
   return raw
@@ -203,6 +251,23 @@ async function createDoctorAccountFromData(data: {
   speciality: string;
   username: string;
   tempPassword: string;
+  // Full Doctor-table mirrors (all optional — admin can fill at creation time)
+  name_en?: string | null;
+  degree_en?: string | null;
+  speciality_en?: string | null;
+  tagline?: string | null;
+  tagline_en?: string | null;
+  bio?: string | null;
+  bio_en?: string | null;
+  whatsappNumber?: string | null;
+  whatsappAccessToken?: string | null;
+  whatsappId?: string | null;
+  templateName?: string;
+  profilePicture?: string | null;
+  gender?: 'MALE' | 'FEMALE' | null;
+  religion?: string | null;
+  startedYear?: number | null;
+  bmdcNumber?: string | null;
 }) {
   await assertEmailFree(data.email);
   const hashedPassword = await bcrypt.hash(data.tempPassword, 10);
@@ -213,14 +278,28 @@ async function createDoctorAccountFromData(data: {
     data: {
       userId: user.id,
       name: data.name,
+      name_en: data.name_en ?? undefined,
       username: data.username,
       email: data.email,
       phone: data.phone,
       degree: data.degree,
+      degree_en: data.degree_en ?? undefined,
       speciality: data.speciality,
-      tagline: data.speciality,
+      speciality_en: data.speciality_en ?? undefined,
+      tagline: data.tagline ?? data.speciality,
+      tagline_en: data.tagline_en ?? undefined,
+      bio: data.bio ?? undefined,
+      bio_en: data.bio_en ?? undefined,
+      whatsappNumber: data.whatsappNumber ?? undefined,
+      whatsappAccessToken: data.whatsappAccessToken ?? undefined,
+      whatsappId: data.whatsappId ?? undefined,
+      profilePicture: data.profilePicture ?? undefined,
+      gender: (data.gender ?? undefined) as never,
+      religion: data.religion ?? undefined,
+      startedYear: data.startedYear ?? undefined,
+      bmdcNumber: data.bmdcNumber ?? undefined,
       status: 'APPROVED',
-      templateName: 'template_a',
+      templateName: data.templateName || 'template_a',
     },
   });
   return { user, doctor };
@@ -236,6 +315,14 @@ async function createHospitalAccountFromData(data: {
   thana: string;
   addressLine: string | null;
   tempPassword: string;
+  // Full Hospital-table mirrors (all optional)
+  name_en?: string | null;
+  templateName?: string;
+  division_en?: string | null;
+  district_en?: string | null;
+  thana_en?: string | null;
+  addressLine_en?: string | null;
+  establishedYear?: number | null;
 }) {
   await assertEmailFree(data.email);
   const hashedPassword = await bcrypt.hash(data.tempPassword, 10);
@@ -246,14 +333,20 @@ async function createHospitalAccountFromData(data: {
     data: {
       userId: user.id,
       name: data.hospitalName,
+      name_en: data.name_en ?? undefined,
       slug: data.slug,
       division: data.division,
+      division_en: data.division_en ?? undefined,
       district: data.district,
+      district_en: data.district_en ?? undefined,
       thana: data.thana,
+      thana_en: data.thana_en ?? undefined,
       addressLine: data.addressLine,
+      addressLine_en: data.addressLine_en ?? undefined,
       phone: data.phone,
+      establishedYear: data.establishedYear ?? undefined,
       status: 'APPROVED',
-      templateName: 'template_a',
+      templateName: data.templateName || 'template_a',
     },
   });
   return { user, hospital };
@@ -348,6 +441,12 @@ export async function rejectApplication(id: string, reviewerId: string) {
 export async function createDoctor(input: {
   name?: unknown; email?: unknown; password?: unknown; phone?: unknown;
   degree?: unknown; speciality?: unknown; username?: unknown;
+  // Full Doctor-table mirrors (all optional)
+  name_en?: unknown; degree_en?: unknown; speciality_en?: unknown;
+  tagline?: unknown; tagline_en?: unknown; bio?: unknown; bio_en?: unknown;
+  whatsappNumber?: unknown; whatsappAccessToken?: unknown; whatsappId?: unknown;
+  templateName?: unknown; profilePicture?: unknown; gender?: unknown;
+  religion?: unknown; startedYear?: unknown; bmdcNumber?: unknown;
 }) {
   const name = required(input.name, 'INVALID_NAME');
   const email = cleanEmail(input.email);
@@ -357,6 +456,23 @@ export async function createDoctor(input: {
   const usernameRaw = required(input.username, 'INVALID_USERNAME', 3, 60);
   const username = slugify(usernameRaw);
   if (username.length < 3) throw new Error('INVALID_USERNAME');
+
+  const name_en = optional(input.name_en, 80);
+  const degree_en = optional(input.degree_en, 200);
+  const speciality_en = optional(input.speciality_en, 120);
+  const tagline = optional(input.tagline, 200);
+  const tagline_en = optional(input.tagline_en, 200);
+  const bio = optionalLong(input.bio, 5000);
+  const bio_en = optionalLong(input.bio_en, 5000);
+  const whatsappNumber = optionalPhone(input.whatsappNumber);
+  const whatsappId = optional(input.whatsappId, 100);
+  const whatsappAccessToken = optional(input.whatsappAccessToken, 1000);
+  const profilePicture = optional(input.profilePicture, 500);
+  const religion = optional(input.religion, 50);
+  const bmdcNumber = optional(input.bmdcNumber, 50);
+  const templateName = optional(input.templateName, 50) ?? 'template_a';
+  const gender = parseGender(input.gender);
+  const startedYear = parseYear(input.startedYear);
 
   let tempPassword: string;
   if (input.password === undefined || input.password === null || input.password === '') {
@@ -371,6 +487,9 @@ export async function createDoctor(input: {
 
   const { user, doctor } = await createDoctorAccountFromData({
     name, email, phone, degree, speciality, username, tempPassword,
+    name_en, degree_en, speciality_en, tagline, tagline_en, bio, bio_en,
+    whatsappNumber, whatsappId, whatsappAccessToken, profilePicture,
+    religion, templateName, gender, startedYear, bmdcNumber,
   });
   const emailSent = input.password ? true : await notifyCredentials(email, tempPassword, 'MrDoctor');
   return { user: safeUser(user as unknown as Record<string, unknown>), doctor, tempPassword: input.password ? undefined : tempPassword, emailSent };
@@ -379,6 +498,10 @@ export async function createDoctor(input: {
 export async function createHospital(input: {
   hospitalName?: unknown; email?: unknown; password?: unknown; phone?: unknown;
   slug?: unknown; division?: unknown; district?: unknown; thana?: unknown; addressLine?: unknown;
+  // Full Hospital-table mirrors (all optional)
+  name_en?: unknown; templateName?: unknown;
+  division_en?: unknown; district_en?: unknown; thana_en?: unknown;
+  addressLine_en?: unknown; establishedYear?: unknown;
 }) {
   const hospitalName = required(input.hospitalName, 'INVALID_NAME');
   const email = cleanEmail(input.email);
@@ -390,6 +513,14 @@ export async function createHospital(input: {
   const slug = slugify(slugRaw);
   if (slug.length < 3) throw new Error('INVALID_SLUG');
   const addressLine = optional(input.addressLine, 300);
+
+  const name_en = optional(input.name_en, 120);
+  const templateName = optional(input.templateName, 50) ?? 'template_a';
+  const division_en = optional(input.division_en, 120);
+  const district_en = optional(input.district_en, 120);
+  const thana_en = optional(input.thana_en, 120);
+  const addressLine_en = optional(input.addressLine_en, 300);
+  const establishedYear = parseYear(input.establishedYear, 1800);
 
   let tempPassword: string;
   if (input.password === undefined || input.password === null || input.password === '') {
@@ -404,6 +535,7 @@ export async function createHospital(input: {
 
   const { user, hospital } = await createHospitalAccountFromData({
     hospitalName, email, phone, slug, division, district, thana, addressLine, tempPassword,
+    name_en, templateName, division_en, district_en, thana_en, addressLine_en, establishedYear,
   });
   const emailSent = input.password ? true : await notifyCredentials(email, tempPassword, hospitalName);
   return { user: safeUser(user as unknown as Record<string, unknown>), hospital, tempPassword: input.password ? undefined : tempPassword, emailSent };

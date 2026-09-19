@@ -83,6 +83,7 @@ export interface DoctorProfileUpdateInput {
   gender?: unknown;
   religion?: unknown;
   startedYear?: unknown;
+  bmdcNumber?: unknown;
   /** Immutable — accepted only to reject explicitly. */
   email?: unknown;
   username?: unknown;
@@ -187,6 +188,7 @@ function parseDoctorPayload(input: unknown): Record<string, string | number | nu
   if (d.templateName !== undefined) out.templateName = cleanRequiredText(d.templateName, 1, 50);
   if (d.profilePicture !== undefined) out.profilePicture = cleanOptionalText(d.profilePicture, 500) ?? null;
   if (d.religion !== undefined) out.religion = cleanOptionalText(d.religion, 50) ?? null;
+  if (d.bmdcNumber !== undefined) out.bmdcNumber = cleanOptionalText(d.bmdcNumber, 50) ?? null;
 
   if (d.gender !== undefined) {
     if (d.gender === null) out.gender = null;

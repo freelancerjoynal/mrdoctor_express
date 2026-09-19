@@ -211,6 +211,7 @@ export const getDoctorOverview = async (id: string) => {
       phone: true,
       status: true,
       profilePicture: true,
+      bmdcNumber: true,
       user: { select: { email: true } },
       chambers: {
         select: {
