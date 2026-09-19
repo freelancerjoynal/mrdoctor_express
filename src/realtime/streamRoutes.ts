@@ -8,7 +8,7 @@ const streamRouter = express.Router();
 
 streamRouter.get(
   '/',
-  protectedRoute('SUPER_ADMIN', 'DOCTOR', 'DOCTOR_STAFF', 'HOSPITAL', 'HOSPITAL_STAFF', 'BUSINESS_OWNER'),
+  protectedRoute('SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'DOCTOR_STAFF', 'HOSPITAL', 'HOSPITAL_STAFF', 'BUSINESS_OWNER'),
   handleUserStream,
 );
 

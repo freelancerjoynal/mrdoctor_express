@@ -10,52 +10,9 @@ import { sendOTPEmail, sendNewPasswordEmail } from '../lib/mailer.js';
 import { generateTokens, generateOTP, getOTPExpiry } from '../services/authService.js';
 import { prisma } from '../../lib/prisma.js';
 
-// 1. User Registration (Role সহ সাইনআপ হ্যান্ডেল করা)
-export const signup = async (req: Request, res: Response) => {
-  const { email, password, role } = req.body;
-
-  try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const otp = generateOTP();
-    const otpExpiry = getOTPExpiry();
-
-    // 1. Check if user already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
-    }
-
-    // 2. Prisma Transaction (রোল পাঠানো না হলে ডিফল্ট BUSINESS_OWNER থাকবে)
-    await prisma.$transaction(async (tx) => {
-      await tx.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          role: role || 'DOCTOR',
-          otp,
-          otpExpiry
-        }
-      });
-
-      try {
-        await sendOTPEmail(email, otp);
-      } catch (emailError) {
-        console.error("User creation aborted. Mail server error details:", emailError);
-        throw new Error("OTP_SEND_FAILED");
-      }
-    });
-
-    return res.status(201).json({ message: 'Signup successful! Verification OTP has been sent to your email.' });
-
-  } catch (error: any) {
-    if (error.message === "OTP_SEND_FAILED") {
-      return res.status(500).json({ error: 'Failed to send verification email. Account creation rolled back.' });
-    }
-
-    console.error("Actual Signup Error:", error);
-    return res.status(500).json({ error: error.message || 'An unexpected error occurred during signup.' });
-  }
-};
+// 1. [REMOVED] Public self-registration is disabled — doctors/hospitals
+// apply via POST /api/applications/doctor|hospital and SUPER_ADMIN creates
+// their accounts. POST /api/auth/signup now returns 410 (see authRoutes).
 
 // 2. Verify OTP and Automatic Login
 export const verifyOTP = async (req: Request, res: Response) => {

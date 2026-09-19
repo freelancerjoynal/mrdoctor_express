@@ -9,6 +9,7 @@ datasource db {
 
 enum Role {
   SUPER_ADMIN
+  ADMIN_MANAGER
   DOCTOR
   DOCTOR_STAFF
   BUSINESS_OWNER
@@ -61,6 +62,63 @@ enum ReviewStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum JoinRequestType {
+  DOCTOR
+  HOSPITAL
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Join requests — public application form submissions (no account needed).
+// A doctor or hospital applies from the website to JOIN the platform;
+// SUPER_ADMIN / ADMIN_MANAGER reviews the queue and approves (creates
+// User + Doctor/Hospital on their behalf) or rejects.
+// Direct self-registration is disabled.
+model JoinRequest {
+  id     String           @id @default(uuid())
+  type   JoinRequestType
+  status JoinRequestStatus @default(PENDING)
+
+  // Contact (both types)
+  email String
+  phone String
+
+  // Doctor join-request fields
+  name       String?
+  degree     String?
+  speciality String?
+  username   String?
+
+  // Hospital join-request fields
+  hospitalName String?
+  slug         String?
+
+  // Location (required for HOSPITAL, optional for DOCTOR)
+  division     String?
+  district     String?
+  thana        String?
+  addressLine  String?
+
+  // Where did you find us? / Why do you want to join? (both types)
+  foundUs    String?
+  joinReason String?
+
+  note       String?
+  reviewedBy String?
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([type, status])
+  @@map("join_requests")
 }
 
 enum BookingType {
@@ -236,6 +294,9 @@ model Hospital {
   reviews               Review[]
   pendingAppointments   PendingAppointment[]
   confirmedAppointments ConfirmedAppointment[]
+  servedAppointments    ServedAppointment[]
+  payouts               HospitalPayout[]
+  onlineDays            HospitalOnlineDay[]
   staffMembers          User[]                 @relation("HospitalStaff")
 
   createdAt DateTime @default(now())
@@ -472,11 +533,15 @@ model CancelledAppointmentLocal {
 
 // সেবা সম্পন্ন (served) বুকিংয়ের স্থায়ী হিসাব — "সেবা সম্পন্ন" চাপ দিলে
 // confirmed সারি এখানে move হয়। বক্স, মাসিক পেজ ও হিরো সব এখান থেকে পড়ে।
+// hospitalId: নতুন সারিতে confirmed থেকে কপি হয়। পুরনো সারিতে null থাকতে
+// পারে — তখন hospital scope doctorIds mapping দিয়ে পড়া হয় (fallback)।
 model ServedAppointment {
   id               String      @id @default(uuid())
   appointmentId    String      @unique
   doctorId         String
   doctorName       String?
+  hospitalId       String?
+  hospital         Hospital?   @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
   patientName      String
   patientType      String      @default("NEW")
   contactPhone     String
@@ -495,8 +560,54 @@ model ServedAppointment {
   createdAt        DateTime    @default(now())
 
   @@index([doctorId, appointmentDate])
+  @@index([hospitalId, appointmentDate])
+  @@index([hospitalId, bookingType])
   @@index([createdBy])
   @@map("served_appointments")
+}
+
+// হাসপাতালের অনলাইন ব্যালেন্স লেজার (শুধু ONLINE সেবা-আয়)।
+// প্রতি তারিখ বদলে (রাত ১২টা) আগের দিনের অনলাইন সেবা-আয় এখানে close হয়:
+// - OPENING: প্রথমবার একবারই তৈরি হয় — তার আগের সব পুরনো অনলাইন আয় এক
+//   সারিতে জমা থাকে (যাতে বছরের পর বছর served টেবিল স্ক্যান না লাগে)।
+// - DAILY: প্রতিটি পূর্ণ দিনের (00:00–24:00) অনলাইন সেবা-আয়ের snapshot।
+// আজকের (এখনো শেষ না হওয়া) দিন সবসময় live হিসাব হয়, close হয় পরের দিন।
+// currentBalance = SUM(ledger.onlineTotal) + todayLiveOnline − SUM(payouts)।
+// OFFLINE (ডেস্ক ক্যাশ) এখানে থাকে না — ওটা হাসপাতালের হাতের টাকা।
+model HospitalOnlineDay {
+  id          String   @id @default(uuid())
+  hospitalId  String
+  hospital    Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  // ওই দিনের স্থানীয় মধ্যরাত (server-local 00:00)। OPENING সারিতে যোগদানের তারিখ।
+  date        DateTime
+  kind        String   @default("DAILY") // OPENING | DAILY
+  onlineTotal Float    @default(0)
+  onlineCount Int      @default(0)
+  closedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@unique([hospitalId, date])
+  @@index([hospitalId, date])
+  @@map("hospital_online_days")
+}
+
+// হাসপাতাল পেআউট লেজার — সুপার-অ্যাডমিন অনলাইন ব্যালেন্স থেকে হাসপাতালকে
+// টাকা পাঠালে এখানে একটি সারি বসে। currentBalance = lifetimeOnlineServed - lifetimePayout।
+// OFFLINE (ডেস্ক ক্যাশ) কখনো পেআউটে কমে না — ওটা হাসপাতালের হাতেই থাকে।
+model HospitalPayout {
+  id         String   @id @default(uuid())
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  amount     Float
+  method     String? // bKash / Nagad / Bank / Cash...
+  note       String?
+  paidBy     String // super-admin userId
+  paidByName String?
+  paidAt     DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([hospitalId, paidAt])
+  @@map("hospital_payouts")
 }
 
 // ডাক্তারের পাবলিক ওয়েবসাইটের ডাইনামিক সেকশনগুলোর জন্য অতিরিক্ত তথ্য।

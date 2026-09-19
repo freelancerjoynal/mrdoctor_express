@@ -3,6 +3,7 @@
 // SUPER_ADMIN may write as any authorType (optionally linked to a doctor/hospital).
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 
 export interface BlogCaller {
   userId: string;
@@ -110,7 +111,7 @@ async function ensureHospitalExists(id: string) {
 
 // Which blog rows may this caller see/edit? Returns a Prisma where clause.
 async function ownershipFilter(caller: BlogCaller): Promise<Record<string, unknown> | null> {
-  if (caller.role === 'SUPER_ADMIN') return null; // everything
+  if (isAdminRole(caller.role)) return null; // everything
   if (caller.role === 'DOCTOR') {
     try {
       const doctorId = await resolveOwnDoctorId(caller);
@@ -153,7 +154,7 @@ export async function getBlog(caller: BlogCaller, id: string) {
 }
 
 export async function createBlog(caller: BlogCaller, input: BlogInput) {
-  if (!['DOCTOR', 'HOSPITAL', 'SUPER_ADMIN'].includes(caller.role)) throw new Error('FORBIDDEN');
+  if (!['DOCTOR', 'HOSPITAL', 'SUPER_ADMIN', 'ADMIN_MANAGER'].includes(caller.role)) throw new Error('FORBIDDEN');
 
   const title = cleanText(input.title, 5, TITLE_MAX, 'TITLE');
   const content = cleanContent(input.content);
@@ -233,7 +234,7 @@ export async function updateBlog(caller: BlogCaller, id: string, input: BlogInpu
   if (input.authorName !== undefined) data.authorName = cleanOptional(input.authorName, 120, 'AUTHOR') ?? null;
 
   // SUPER_ADMIN may re-assign linkage; owners may not move a post to someone else.
-  if (caller.role === 'SUPER_ADMIN') {
+  if (isAdminRole(caller.role)) {
     if (input.doctorId !== undefined) {
       if (input.doctorId && String(input.doctorId).trim()) {
         await ensureDoctorExists(String(input.doctorId).trim());
@@ -260,7 +261,7 @@ export async function updateBlog(caller: BlogCaller, id: string, input: BlogInpu
       data.publishedAt = null;
     }
   }
-  if (input.slug !== undefined && caller.role === 'SUPER_ADMIN') {
+  if (input.slug !== undefined && isAdminRole(caller.role)) {
     const next = String(input.slug).trim().toLowerCase();
     if (!SLUG_RE.test(next) || next.length < 3 || next.length > 80) throw new Error('INVALID_SLUG');
     const clash = await prisma.blog.findUnique({ where: { slug: next }, select: { id: true } });

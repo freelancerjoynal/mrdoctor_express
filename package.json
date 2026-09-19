@@ -7,6 +7,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/server.ts",
+    "seed:superadmin": "tsx src/seeder/seed.superadmin.ts",
+    "seed:admin-manager": "tsx src/seeder/seed.superadmin.ts manager@mrdoctor.com Manager123! \"Admin Manager\" ADMIN_MANAGER",
     "tunnel": "cloudflared tunnel run --url http://localhost:8000 mrdoctor"
   },
   "keywords": [],

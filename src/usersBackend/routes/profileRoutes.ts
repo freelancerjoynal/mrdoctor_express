@@ -7,7 +7,7 @@ import { getUserProfile, updateUserProfile } from '../controllers/profileControl
 
 const usersProfileRouter = express.Router();
 
-const profileRoles = ['SUPER_ADMIN', 'DOCTOR', 'DOCTOR_STAFF', 'BUSINESS_OWNER', 'HOSPITAL', 'HOSPITAL_STAFF'] as const;
+const profileRoles = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'DOCTOR_STAFF', 'BUSINESS_OWNER', 'HOSPITAL', 'HOSPITAL_STAFF'] as const;
 
 usersProfileRouter.get(
   '/',

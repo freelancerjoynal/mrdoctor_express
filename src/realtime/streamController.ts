@@ -4,6 +4,7 @@
 // proxies from closing idle connections.
 import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from '../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../authentication/middleware/authMiddleware.js';
 import { prisma } from '../lib/prisma.js';
 import { subscribe, doctorChannel, hospitalChannel, GLOBAL_CHANNEL, type RealtimeEvent } from './events.js';
 
@@ -53,7 +54,7 @@ export const handleUserStream = async (req: AuthenticatedRequest, res: Response)
   const userId = req.user!.userId;
   try {
     let channels: string[] = [];
-    if (role === 'SUPER_ADMIN') {
+    if (isAdminRole(role)) {
       channels = [GLOBAL_CHANNEL];
     } else if (role === 'DOCTOR') {
       const own = await prisma.user.findUnique({

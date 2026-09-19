@@ -12,12 +12,12 @@ import {
 
 const blogRouter = express.Router();
 
-const WRITERS = ['SUPER_ADMIN', 'DOCTOR', 'HOSPITAL', 'DOCTOR_STAFF', 'HOSPITAL_STAFF'] as const;
+const WRITERS = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'HOSPITAL', 'DOCTOR_STAFF', 'HOSPITAL_STAFF'] as const;
 
 blogRouter.get('/', protectedRoute(...WRITERS), listUserBlogs);
 blogRouter.get('/:id', protectedRoute(...WRITERS), showUserBlog);
-blogRouter.post('/', protectedRoute('SUPER_ADMIN', 'DOCTOR', 'HOSPITAL'), storeUserBlog);
-blogRouter.put('/:id', protectedRoute('SUPER_ADMIN', 'DOCTOR', 'HOSPITAL'), modifyUserBlog);
-blogRouter.delete('/:id', protectedRoute('SUPER_ADMIN', 'DOCTOR', 'HOSPITAL'), removeUserBlog);
+blogRouter.post('/', protectedRoute('SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'HOSPITAL'), storeUserBlog);
+blogRouter.put('/:id', protectedRoute('SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'HOSPITAL'), modifyUserBlog);
+blogRouter.delete('/:id', protectedRoute('SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'HOSPITAL'), removeUserBlog);
 
 export default blogRouter;

@@ -6,10 +6,10 @@ import { listUserReviews, moderateUserReview, removeUserReview } from '../contro
 
 const reviewRouter = express.Router();
 
-const OWNERS = ['SUPER_ADMIN', 'DOCTOR', 'HOSPITAL'] as const;
+const OWNERS = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'HOSPITAL'] as const;
 
 reviewRouter.get('/', protectedRoute(...OWNERS), listUserReviews);
-reviewRouter.put('/:id', protectedRoute('SUPER_ADMIN'), moderateUserReview);
+reviewRouter.put('/:id', protectedRoute('SUPER_ADMIN', 'ADMIN_MANAGER'), moderateUserReview);
 reviewRouter.delete('/:id', protectedRoute(...OWNERS), removeUserReview);
 
 export default reviewRouter;

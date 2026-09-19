@@ -41,7 +41,24 @@ export const sendStaffCredentialsEmail = async (email: string, tempPassword: str
   });
 };
 
-// function to send newly generated password to the user
+// function to send newly created account credentials (super-admin creates
+// doctor/hospital accounts on their behalf or approves an application)
+export const sendAccountCredentialsEmail = async (email: string, tempPassword: string, orgName: string): Promise<void> => {
+  await transporter.sendMail({
+    from: '"MrDoctor" <no-reply@mrdoctor.com>',
+    to: email,
+    subject: "আপনার MrDoctor লগইন তথ্য",
+    text: `${orgName} — আপনার অ্যাকাউন্ট তৈরি হয়েছে।\n\nইমেইল: ${email}\nপাসওয়ার্ড: ${tempPassword}\n\nএই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।`,
+    html: `
+      <h3>${orgName} — আপনার অ্যাকাউন্ট তৈরি হয়েছে</h3>
+      <p>ইমেইল: <b>${email}</b></p>
+      <p>পাসওয়ার্ড: <b>${tempPassword}</b></p>
+      <p>এই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।</p>
+    `
+  });
+};
+
+ // function to send newly generated password to the user
 export const sendNewPasswordEmail = async (email: string, newPassword: string): Promise<void> => {
   await transporter.sendMail({
     from: '"Auth System" <no-reply@example.com>',

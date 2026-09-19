@@ -3,6 +3,7 @@
 // status changes (APPROVED / REJECTED) are SUPER_ADMIN-only.
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 
 export interface ReviewCaller {
   userId: string;
@@ -10,7 +11,7 @@ export interface ReviewCaller {
 }
 
 async function ownershipFilter(caller: ReviewCaller): Promise<Record<string, unknown> | null> {
-  if (caller.role === 'SUPER_ADMIN') return null;
+  if (isAdminRole(caller.role)) return null;
   if (caller.role === 'DOCTOR') {
     const own = await prisma.user.findUnique({
       where: { id: caller.userId },
@@ -55,7 +56,7 @@ export async function listReviews(
 }
 
 export async function moderateReview(caller: ReviewCaller, id: string, status: string) {
-  if (caller.role !== 'SUPER_ADMIN') throw new Error('FORBIDDEN');
+  if (!isAdminRole(caller.role)) throw new Error('FORBIDDEN');
   if (status !== 'APPROVED' && status !== 'REJECTED' && status !== 'PENDING') {
     throw new Error('INVALID_STATUS');
   }

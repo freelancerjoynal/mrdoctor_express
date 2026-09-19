@@ -9,11 +9,11 @@ const doctorInformationRouter = express.Router();
 // GET /api/users/doctor-information[?doctorId=]
 doctorInformationRouter.get(
   '/',
-  protectedRoute('SUPER_ADMIN', 'DOCTOR', 'DOCTOR_STAFF', 'BUSINESS_OWNER', 'HOSPITAL', 'HOSPITAL_STAFF'),
+  protectedRoute('SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'DOCTOR_STAFF', 'BUSINESS_OWNER', 'HOSPITAL', 'HOSPITAL_STAFF'),
   showDoctorInformation,
 );
 
 // PUT /api/users/doctor-information
-doctorInformationRouter.put('/', protectedRoute('DOCTOR', 'SUPER_ADMIN'), saveDoctorInformation);
+doctorInformationRouter.put('/', protectedRoute('DOCTOR', 'SUPER_ADMIN', 'ADMIN_MANAGER'), saveDoctorInformation);
 
 export default doctorInformationRouter;

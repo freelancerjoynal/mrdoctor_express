@@ -17,7 +17,7 @@ import {
 
 const chamberRouter = express.Router();
 
-const MANAGERS = ['SUPER_ADMIN', 'DOCTOR', 'DOCTOR_STAFF'] as const;
+const MANAGERS = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'DOCTOR_STAFF'] as const;
 
 // Fixed paths first so they never collide with "/:id".
 chamberRouter.get('/hospitals/options', protectedRoute(...MANAGERS), listUserHospitalOptions);

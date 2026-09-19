@@ -9,6 +9,8 @@ import appointmentRouter from './appointmentRoutes.js';
 import staffRouter from './staffRoutes.js';
 import chamberRouter from './chamberRoutes.js';
 import serialLiveRouter from './serialLiveRoutes.js';
+import hospitalBalanceRouter from './hospitalBalanceRoutes.js';
+import incomeRouter from './incomeRoutes.js';
 import streamRouter from '../../realtime/streamRoutes.js';
 
 const usersRouter = express.Router();
@@ -36,6 +38,12 @@ usersRouter.use('/chambers', chamberRouter);
 
 // GET|POST /api/users/serial-live — live serial scoreboard controls
 usersRouter.use('/serial-live', serialLiveRouter);
+
+// GET /api/users/hospital-balance/summary|payouts — online balance ledger (hospital owner + super-admin)
+usersRouter.use('/hospital-balance', hospitalBalanceRouter);
+
+// GET /api/users/income/overview — platform-wide doctor/hospital income (super-admin only)
+usersRouter.use('/income', incomeRouter);
 
 // GET /api/users/stream — websocket-style SSE push (scoped channels)
 usersRouter.use('/stream', streamRouter);

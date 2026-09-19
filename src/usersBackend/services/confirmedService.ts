@@ -4,7 +4,9 @@
 //   today | tomorrow | last30 × all | online | offline.
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 import { advanceSerialLiveAfterServe } from './serialLiveService.js';
+import { recordOnlineServe } from './hospitalBalanceService.js';
 import { notifyAppointments, notifyLive } from '../../realtime/notify.js';
 
 export interface ConfirmedCaller {
@@ -47,7 +49,7 @@ async function ownershipFilter(
   caller: ConfirmedCaller,
   doctorUsername?: string,
 ): Promise<Record<string, unknown>> {
-  if (caller.role === 'SUPER_ADMIN') {
+  if (isAdminRole(caller.role)) {
     if (doctorUsername?.trim()) {
       const doctor = await prisma.doctor.findFirst({
         where: { username: doctorUsername.trim() },
@@ -121,7 +123,7 @@ async function applyDoctorIdFilter(
     if (!chamberHit && !scheduleHit) throw new Error('DOCTOR_NOT_IN_HOSPITAL');
     return { ...owned, doctorId: id };
   }
-  if (caller.role === 'SUPER_ADMIN') {
+  if (isAdminRole(caller.role)) {
     const doctor = await prisma.doctor.findUnique({ where: { id }, select: { id: true } });
     if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
     return { ...owned, doctorId: id };
@@ -311,7 +313,7 @@ async function ownedRow(caller: ConfirmedCaller, id: string) {
  * Cancel-requests stay open to every operator — they still need approval.
  */
 async function assertCanServe(caller: ConfirmedCaller): Promise<void> {
-  if (caller.role === 'DOCTOR' || caller.role === 'SUPER_ADMIN') return;
+  if (caller.role === 'DOCTOR' || isAdminRole(caller.role)) return;
   throw new Error('APPROVE_FORBIDDEN');
 }
 
@@ -354,6 +356,7 @@ export async function completeConfirmed(caller: ConfirmedCaller, id: string) {
         appointmentId: row.id,
         doctorId: row.doctorId,
         doctorName: row.doctorName,
+        hospitalId: row.hospitalId,
         patientName: row.patientName,
         patientType: row.patientType,
         contactPhone: row.contactPhone,
@@ -373,6 +376,15 @@ export async function completeConfirmed(caller: ConfirmedCaller, id: string) {
   ]);
   // Live board follows the serve: next serial shows "get in" (best-effort).
   await advanceSerialLiveAfterServe(row.doctorId, row.serial);
+  // Online ledger hook: today's ONLINE serve counts in the balance at once;
+  // a late (backdated) serve increments its frozen DAILY row (best-effort).
+  await recordOnlineServe({
+    hospitalId: row.hospitalId,
+    doctorId: row.doctorId,
+    appointmentDate: row.appointmentDate,
+    bookingType: row.bookingType,
+    amount: Number(row.collectionAmount ?? row.paymentAmount ?? 0) || 0,
+  }).catch(() => {});
   notifyAppointments({ doctorId: row.doctorId, hospitalId: row.hospitalId });
   notifyLive(row.doctorId);
   return served;

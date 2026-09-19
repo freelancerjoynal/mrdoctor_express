@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../../lib/prisma.js';
 import { PROFILE_VISIBILITY } from '../policies/profilePolicy.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 
 export interface ProfileCaller {
   userId: string;
@@ -300,7 +301,7 @@ export async function updateProfileData(caller: ProfileCaller, input: UpdateProf
     } else if (effectiveUserName !== undefined) {
       if (caller.role === 'HOSPITAL') {
         await tx.hospital.updateMany({ where: { userId: caller.userId }, data: { name: effectiveUserName } });
-      } else if (caller.role === 'SUPER_ADMIN') {
+      } else if (isAdminRole(caller.role)) {
         await tx.superAdminProfile.upsert({
           where: { userId: caller.userId },
           create: { userId: caller.userId, name: effectiveUserName },

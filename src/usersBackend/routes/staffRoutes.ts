@@ -6,9 +6,9 @@ import { listUserStaff, inviteUserStaff, removeUserStaff, patchUserStaff } from 
 
 const staffRouter = express.Router();
 
-staffRouter.get('/', protectedRoute('SUPER_ADMIN', 'DOCTOR', 'HOSPITAL'), listUserStaff);
+staffRouter.get('/', protectedRoute('SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'HOSPITAL'), listUserStaff);
 staffRouter.post('/', protectedRoute('DOCTOR', 'HOSPITAL'), inviteUserStaff);
-staffRouter.patch('/:id', protectedRoute('SUPER_ADMIN', 'DOCTOR', 'HOSPITAL'), patchUserStaff);
-staffRouter.delete('/:id', protectedRoute('SUPER_ADMIN', 'DOCTOR', 'HOSPITAL'), removeUserStaff);
+staffRouter.patch('/:id', protectedRoute('SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'HOSPITAL'), patchUserStaff);
+staffRouter.delete('/:id', protectedRoute('SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'HOSPITAL'), removeUserStaff);
 
 export default staffRouter;

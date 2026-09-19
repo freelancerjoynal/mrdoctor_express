@@ -8,6 +8,7 @@
 // accept the same shape in English.
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 import { PROFILE_VISIBILITY } from '../policies/profilePolicy.js';
 
 export interface ProfileCaller {
@@ -149,7 +150,7 @@ export async function upsertDoctorInformation(
     aboutImage?: unknown;
   },
 ) {
-  if (caller.role !== 'DOCTOR' && caller.role !== 'SUPER_ADMIN') {
+  if (caller.role !== 'DOCTOR' && !isAdminRole(caller.role)) {
     throw new Error('FORBIDDEN');
   }
   const doctorId = await resolveTargetDoctorId(caller, input.doctorId);

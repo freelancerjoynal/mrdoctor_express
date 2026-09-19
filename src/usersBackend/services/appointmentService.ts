@@ -8,6 +8,7 @@
 // income) | CANCELLED (dropped from collection).
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 import { notifyAppointments } from '../../realtime/notify.js';
 
 export interface AppointmentCaller {
@@ -60,7 +61,7 @@ async function resolveDoctorId(caller: AppointmentCaller): Promise<string> {
 }
 
 async function ownershipFilter(caller: AppointmentCaller): Promise<Record<string, unknown>> {
-  if (caller.role === 'SUPER_ADMIN') return {};
+  if (isAdminRole(caller.role)) return {};
   if (caller.role === 'DOCTOR' || caller.role === 'DOCTOR_STAFF') {
     return { doctorId: await resolveDoctorId(caller) };
   }
@@ -330,7 +331,7 @@ export async function getAppointmentSummary(
   const owned = await ownershipFilter(caller);
   let doctorId = owned.doctorId as string | undefined;
   if (opts.doctorUsername?.trim()) {
-    if (caller.role !== 'SUPER_ADMIN') throw new Error('FORBIDDEN');
+    if (!isAdminRole(caller.role)) throw new Error('FORBIDDEN');
     const doctor = await prisma.doctor.findFirst({
       where: { username: opts.doctorUsername.trim() },
       select: { id: true },

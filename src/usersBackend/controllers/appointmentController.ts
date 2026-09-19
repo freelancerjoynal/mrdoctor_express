@@ -13,7 +13,7 @@ import {
 } from '../services/appointmentService.js';
 import { createLocalBooking } from '../services/localBookingService.js';
 import { getLocalBookingOptions } from '../services/localBookingService.js';
-import { getCollectionSummary, getMonthDays, getWeekDays } from '../services/collectionService.js';
+import { getCollectionSummary, getMonthDays, getWeekDays, getDoctorBreakdown, getLifetimeBalance } from '../services/collectionService.js';
 import {
   listConfirmed,
   type ConfirmedRange,
@@ -30,6 +30,7 @@ import {
 import {
   getStaffCollections,
   listStaffRows,
+  getLocalMonthlyCounts,
   type StaffCollectionRange,
 } from '../services/staffCollectionService.js';
 
@@ -151,13 +152,29 @@ export const showCollectionSummary = async (req: AuthenticatedRequest, res: Resp
   }
 };
 
-// GET /api/users/appointments/collection/days?year=&month=[&doctorUsername=] — per-day month breakdown.
+// GET /api/users/appointments/collection/lifetime-balance — hospital owner only.
+// All-time realized balance from served_appointments (ONLINE vs OFFLINE split).
+// On-demand (header button): aggregate-only query, never fetched on page load.
+export const showLifetimeBalance = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await getLifetimeBalance(callerOf(req));
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    return res.status(500).json({ error: 'Failed to load lifetime balance' });
+  }
+};
+
+// GET /api/users/appointments/collection/days?year=&month=[&doctorUsername=][&doctorId=] — per-day month breakdown.
 export const showCollectionDays = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const data = await getMonthDays(callerOf(req), {
       year: parseOptional(req, 'year'),
       month: parseOptional(req, 'month'),
       doctorUsername: parseOptional(req, 'doctorUsername'),
+      doctorId: parseOptional(req, 'doctorId'),
     });
     return res.json({ backend: 'usersBackend', data });
   } catch (error: any) {
@@ -170,12 +187,13 @@ export const showCollectionDays = async (req: AuthenticatedRequest, res: Respons
   }
 };
 
-// GET /api/users/appointments/collection/week?offset=0[&doctorUsername=] — per-day week breakdown.
+// GET /api/users/appointments/collection/week?offset=0[&doctorUsername=][&doctorId=] — per-day week breakdown.
 export const showCollectionWeek = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const data = await getWeekDays(callerOf(req), {
       offset: parseOptional(req, 'offset'),
       doctorUsername: parseOptional(req, 'doctorUsername'),
+      doctorId: parseOptional(req, 'doctorId'),
     });
     return res.json({ backend: 'usersBackend', data });
   } catch (error: any) {
@@ -185,6 +203,32 @@ export const showCollectionWeek = async (req: AuthenticatedRequest, res: Respons
     if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
       return res.status(404).json({ error: 'Doctor not found' });
     return res.status(500).json({ error: 'Failed to load week days' });
+  }
+};
+
+// GET /api/users/appointments/collection/doctors?date=yyyy-mm-dd[&from=&to=][&year=&month=][&doctorId=]
+// Hospital owner: per-doctor served totals (collection + patient counts, online/offline split).
+export const showCollectionDoctors = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await getDoctorBreakdown(callerOf(req), {
+      date: parseOptional(req, 'date'),
+      from: parseOptional(req, 'from'),
+      to: parseOptional(req, 'to'),
+      year: parseOptional(req, 'year'),
+      month: parseOptional(req, 'month'),
+      doctorUsername: parseOptional(req, 'doctorUsername'),
+      doctorId: parseOptional(req, 'doctorId'),
+    });
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
+      return res.status(404).json({ error: 'Doctor not found' });
+    if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
+      return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
+    return res.status(500).json({ error: 'Failed to load doctor breakdown' });
   }
 };
 
@@ -396,6 +440,27 @@ export const showStaffCollections = async (req: AuthenticatedRequest, res: Respo
     if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
       return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
     return res.status(500).json({ error: 'Failed to load staff collections' });
+  }
+};
+
+// GET /api/users/appointments/staff-collections/monthly[?doctorUsername=][&doctorId=]
+// Last 12 months of LOCAL booking patient counts (number only).
+export const showLocalMonthlyCounts = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await getLocalMonthlyCounts(callerOf(req), {
+      doctorUsername: parseOptional(req, 'doctorUsername'),
+      doctorId: parseOptional(req, 'doctorId'),
+    });
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN') return res.status(403).json({ error: 'Access denied' });
+    if (error.message === 'NO_DOCTOR_PROFILE' || error.message === 'NO_HOSPITAL_PROFILE')
+      return res.status(404).json({ error: 'No profile linked to this user' });
+    if (error.message === 'DOCTOR_NOT_FOUND' || error.message === 'DOCTOR_REQUIRED')
+      return res.status(404).json({ error: 'Doctor not found' });
+    if (error.message === 'DOCTOR_NOT_IN_HOSPITAL')
+      return res.status(400).json({ error: 'এই ডাক্তার এই হাসপাতালের নন।' });
+    return res.status(500).json({ error: 'Failed to load monthly counts' });
   }
 };
 

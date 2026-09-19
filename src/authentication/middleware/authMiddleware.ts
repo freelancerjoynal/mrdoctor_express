@@ -13,7 +13,13 @@ export interface AuthenticatedRequest extends Request {
 export type AuthRequest = AuthenticatedRequest & { userId?: string };
 
 // All roles from the Role enum in prisma/schema.prisma — HOSPITAL was missing, which made a hospital-guarded route untypable.
-export type UserRole = 'SUPER_ADMIN' | 'DOCTOR' | 'DOCTOR_STAFF' | 'BUSINESS_OWNER' | 'HOSPITAL' | 'HOSPITAL_STAFF';
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN_MANAGER' | 'DOCTOR' | 'DOCTOR_STAFF' | 'BUSINESS_OWNER' | 'HOSPITAL' | 'HOSPITAL_STAFF';
+
+// ADMIN_MANAGER shares every SUPER_ADMIN privilege (full platform admin).
+// Central helper so services don't scatter `=== 'SUPER_ADMIN' || === 'ADMIN_MANAGER'` checks.
+export const ADMIN_ROLES: readonly UserRole[] = ['SUPER_ADMIN', 'ADMIN_MANAGER'] as const;
+export const isAdminRole = (role: string | undefined | null): boolean =>
+  role === 'SUPER_ADMIN' || role === 'ADMIN_MANAGER';
 
 // এখানে [UserRole, ...UserRole[]] ব্যবহার করার ফলে অন্তত একটি রোল পাস করা বাধ্যতামূলক করা হয়েছে
 export const protectedRoute = (...allowedRoles: [UserRole, ...UserRole[]]) => {

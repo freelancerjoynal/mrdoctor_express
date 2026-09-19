@@ -18,6 +18,7 @@
 // - lifetime = [doctor joining (doctors.createdAt), now)
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 
 export interface CollectionCaller {
   userId: string;
@@ -65,7 +66,7 @@ async function resolveDoctor(
   doctorUsername?: string,
   doctorId?: string,
 ): Promise<{ id: string; joinedAt: Date }> {
-  if (caller.role === 'SUPER_ADMIN') {
+  if (isAdminRole(caller.role)) {
     if (!doctorUsername?.trim()) throw new Error('DOCTOR_REQUIRED');
     const doctor = await prisma.doctor.findFirst({
       where: { username: doctorUsername.trim() },
@@ -350,12 +351,48 @@ export interface WeekDays {
   offline: ChannelBucket;
 }
 
+/**
+ * Expand a resolved doctor scope into a prisma doctor filter.
+ * - `__none__` → null (hospital without doctors → zero boxes, never 404)
+ * - `hospital:<id>` → { doctorId: { in: [...] } } via chambers + schedules
+ * - single id → { doctorId }
+ */
+async function expandDoctorFilter(
+  resolvedId: string,
+): Promise<Record<string, unknown> | null> {
+  if (resolvedId === '__none__') return null;
+  if (!resolvedId.startsWith('hospital:')) return { doctorId: resolvedId };
+  const hospitalId = resolvedId.slice('hospital:'.length);
+  const [chambers, schedules] = await Promise.all([
+    prisma.chamber.findMany({ where: { hospitalId }, select: { doctorId: true } }),
+    prisma.doctorSchedule.findMany({ where: { hospitalId }, select: { doctorId: true } }),
+  ]);
+  const ids = new Set<string>();
+  for (const c of chambers) if (c.doctorId) ids.add(c.doctorId);
+  for (const s of schedules) {
+    const did = (s as { doctorId?: string | null }).doctorId;
+    if (did) ids.add(did);
+  }
+  if (ids.size === 0) return null;
+  return { doctorId: { in: [...ids] } };
+}
+
+function weekEmptyDays(monday: Date): WeekDayRow[] {
+  const out: WeekDayRow[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday.getTime() + i * DAY_MS);
+    const date = isoDay(d);
+    out.push({ date, total: 0, count: 0, online: { total: 0, count: 0 }, offline: { total: 0, count: 0 } });
+  }
+  return out;
+}
+
 /** Per-day আদায় for one Mon–Sun week (served ledger). offset=0 → current week, -1 → last week. */
 export async function getWeekDays(
   caller: CollectionCaller,
-  opts: { offset?: unknown; doctorUsername?: string } = {},
+  opts: { offset?: unknown; doctorUsername?: string; doctorId?: string } = {},
 ): Promise<WeekDays> {
-  const doctor = await resolveDoctor(caller, opts.doctorUsername);
+  const doctor = await resolveDoctor(caller, opts.doctorUsername, opts.doctorId);
 
   let offset = Number(opts.offset);
   if (!Number.isInteger(offset) || offset < -52 || offset > 1) offset = 0;
@@ -363,9 +400,24 @@ export async function getWeekDays(
   const monday = new Date(startOfWeekMonday(new Date()).getTime() + offset * 7 * DAY_MS);
   const nextMonday = new Date(monday.getTime() + 7 * DAY_MS);
 
+  const doctorFilter = await expandDoctorFilter(doctor.id);
+  if (doctorFilter === null) {
+    const emptyDays = weekEmptyDays(monday);
+    return {
+      from: isoDay(monday),
+      to: isoDay(new Date(nextMonday.getTime() - DAY_MS)),
+      offset,
+      days: emptyDays,
+      total: 0,
+      count: 0,
+      online: { total: 0, count: 0 },
+      offline: { total: 0, count: 0 },
+    };
+  }
+
   const rows = await prisma.servedAppointment.findMany({
     where: {
-      doctorId: doctor.id,
+      ...doctorFilter,
       appointmentDate: { gte: monday, lt: nextMonday },
     },
     select: { appointmentDate: true, bookingType: true, collectionAmount: true, paymentAmount: true },
@@ -417,13 +469,13 @@ export async function getWeekDays(
   };
 }
 
-/** Per-day আদায় for one calendar month (that month's day 1 → last day). Doctor only. */
+/** Per-day আদায় for one calendar month (that month's day 1 → last day). */
 export async function getMonthDays(
   caller: CollectionCaller,
-  opts: { year?: unknown; month?: unknown; doctorUsername?: string } = {},
+  opts: { year?: unknown; month?: unknown; doctorUsername?: string; doctorId?: string } = {},
 ): Promise<MonthDays> {
   if (caller.role === 'DOCTOR_STAFF' || caller.role === 'HOSPITAL_STAFF') throw new Error('FORBIDDEN');
-  const doctor = await resolveDoctor(caller, opts.doctorUsername);
+  const doctor = await resolveDoctor(caller, opts.doctorUsername, opts.doctorId);
 
   const now = new Date();
   let year = Number(opts.year);
@@ -435,13 +487,7 @@ export async function getMonthDays(
   const lt = new Date(year, month, 1);
   const lastDay = new Date(year, month, 0).getDate();
 
-  const rows = await prisma.servedAppointment.findMany({
-    where: {
-      doctorId: doctor.id,
-      appointmentDate: { gte, lt },
-    },
-    select: { appointmentDate: true, bookingType: true, collectionAmount: true, paymentAmount: true },
-  });
+  const doctorFilter = await expandDoctorFilter(doctor.id);
 
   const byDay = new Map<string, MonthDayRow>();
   for (let d = 1; d <= lastDay; d++) {
@@ -454,6 +500,18 @@ export async function getMonthDays(
       offline: { total: 0, count: 0 },
     });
   }
+  if (doctorFilter === null) {
+    return { year, month, name: `${BN_MONTH[month - 1]} ${year}`, days: [...byDay.values()], total: 0, count: 0, online: { total: 0, count: 0 }, offline: { total: 0, count: 0 } };
+  }
+
+  const rows = await prisma.servedAppointment.findMany({
+    where: {
+      ...doctorFilter,
+      appointmentDate: { gte, lt },
+    },
+    select: { appointmentDate: true, bookingType: true, collectionAmount: true, paymentAmount: true },
+  });
+
   for (const r of rows) {
     const row = byDay.get(isoDay(r.appointmentDate));
     if (!row) continue;
@@ -477,4 +535,245 @@ export async function getMonthDays(
     count: days.reduce((s, d) => s + d.offline.count, 0),
   };
   return { year, month, name: `${BN_MONTH[month - 1]} ${year}`, days, total, count, online, offline };
+}
+
+export interface DoctorBreakdownRow {
+  doctorId: string;
+  doctorName: string;
+  doctorSpeciality?: string | null;
+  total: number;
+  count: number;
+  online: ChannelBucket;
+  offline: ChannelBucket;
+  servedCount: number;
+  servedTotal: number;
+  confirmedCount: number;
+  confirmedTotal: number;
+  confirmedOnline: ChannelBucket;
+  confirmedOffline: ChannelBucket;
+}
+
+/**
+ * Hospital owner: served + confirmed per-doctor breakdown for a range.
+ * Served ledger is the income (collection), confirmed ledger is still-pending.
+ * - date=yyyy-mm-dd → single day
+ * - from/to=yyyy-mm-dd → explicit range (inclusive from, exclusive to+1)
+ * - year+month → calendar month
+ * Defaults to today when nothing is passed.
+ */
+export async function getDoctorBreakdown(
+  caller: CollectionCaller,
+  opts: { date?: string; from?: string; to?: string; year?: unknown; month?: unknown; doctorId?: string; doctorUsername?: string } = {},
+): Promise<{ from: string; to: string; doctors: DoctorBreakdownRow[]; total: number; count: number }> {
+  const doctor = await resolveDoctor(caller, opts.doctorUsername, opts.doctorId);
+  const doctorFilter = await expandDoctorFilter(doctor.id);
+
+  let gte: Date;
+  let lt: Date;
+  const picked = parseDay(opts.date);
+  if (picked) {
+    gte = picked;
+    lt = new Date(picked.getTime() + DAY_MS);
+  } else if (opts.from || opts.to) {
+    const f = parseDay(opts.from) ?? startOfToday();
+    const tRaw = parseDay(opts.to);
+    const t = tRaw ? new Date(tRaw.getTime() + DAY_MS) : new Date(f.getTime() + DAY_MS);
+    gte = f;
+    lt = t > f ? t : new Date(f.getTime() + DAY_MS);
+  } else if (opts.year !== undefined || opts.month !== undefined) {
+    const now = new Date();
+    let year = Number(opts.year);
+    let month = Number(opts.month);
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) year = now.getFullYear();
+    if (!Number.isInteger(month) || month < 1 || month > 12) month = now.getMonth() + 1;
+    gte = new Date(year, month - 1, 1);
+    lt = new Date(year, month, 1);
+  } else {
+    gte = startOfToday();
+    lt = new Date(gte.getTime() + DAY_MS);
+  }
+
+  if (doctorFilter === null) {
+    return { from: isoDay(gte), to: isoDay(new Date(lt.getTime() - DAY_MS)), doctors: [], total: 0, count: 0 };
+  }
+
+  const [served, confirmed] = await Promise.all([
+    prisma.servedAppointment.findMany({
+      where: { ...doctorFilter, appointmentDate: { gte, lt } },
+      select: { doctorId: true, doctorName: true, bookingType: true, collectionAmount: true, paymentAmount: true },
+    }),
+    prisma.confirmedAppointment.findMany({
+      where: { ...doctorFilter, appointmentDate: { gte, lt } },
+      select: { doctorId: true, doctorName: true, bookingType: true, collectionAmount: true, paymentAmount: true },
+    }),
+  ]);
+
+  const map = new Map<string, DoctorBreakdownRow>();
+  const touch = (doctorId: string, doctorName?: string | null): DoctorBreakdownRow => {
+    let b = map.get(doctorId);
+    if (!b) {
+      b = {
+        doctorId,
+        doctorName: doctorName?.trim() || 'ডাক্তার',
+        doctorSpeciality: null,
+        total: 0,
+        count: 0,
+        online: { total: 0, count: 0 },
+        offline: { total: 0, count: 0 },
+        servedCount: 0,
+        servedTotal: 0,
+        confirmedCount: 0,
+        confirmedTotal: 0,
+        confirmedOnline: { total: 0, count: 0 },
+        confirmedOffline: { total: 0, count: 0 },
+      };
+      map.set(doctorId, b);
+    } else if ((!b.doctorName || b.doctorName === 'ডাক্তার') && doctorName?.trim()) {
+      b.doctorName = doctorName.trim();
+    }
+    return b;
+  };
+
+  for (const r of served) {
+    const b = touch(r.doctorId, r.doctorName);
+    const amount = Number(r.collectionAmount ?? r.paymentAmount ?? 0) || 0;
+    const ch = r.bookingType === 'ONLINE' ? b.online : b.offline;
+    ch.total += amount;
+    ch.count += 1;
+    b.total += amount;
+    b.count += 1;
+    b.servedCount += 1;
+    b.servedTotal += amount;
+  }
+  for (const r of confirmed) {
+    const b = touch(r.doctorId, r.doctorName);
+    const amount = Number(r.collectionAmount ?? r.paymentAmount ?? 0) || 0;
+    const ch = r.bookingType === 'ONLINE' ? b.confirmedOnline : b.confirmedOffline;
+    ch.total += amount;
+    ch.count += 1;
+    b.confirmedCount += 1;
+    b.confirmedTotal += amount;
+  }
+
+  // Backfill speciality + fresh names from doctors table.
+  const ids = [...map.keys()];
+  if (ids.length > 0) {
+    const docs = await prisma.doctor.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, speciality: true },
+    });
+    for (const d of docs) {
+      const b = map.get(d.id);
+      if (b) {
+        if (d.name?.trim()) b.doctorName = d.name.trim();
+        b.doctorSpeciality = d.speciality ?? null;
+      }
+    }
+  }
+
+  const doctors = [...map.values()].sort((a, b) => b.servedTotal - a.servedTotal || b.servedCount - a.servedCount);
+  const total = doctors.reduce((s, d) => s + d.servedTotal, 0);
+  const count = doctors.reduce((s, d) => s + d.servedCount, 0);
+  return { from: isoDay(gte), to: isoDay(new Date(lt.getTime() - DAY_MS)), doctors, total, count };
+}
+
+export interface LifetimeBalance {
+  joinedAt: string;
+  doctorCount: number;
+  total: number;
+  count: number;
+  online: ChannelBucket;
+  offline: ChannelBucket;
+}
+
+function zeroLifetime(joinedAt: string): LifetimeBalance {
+  return {
+    joinedAt,
+    doctorCount: 0,
+    total: 0,
+    count: 0,
+    online: { total: 0, count: 0 },
+    offline: { total: 0, count: 0 },
+  };
+}
+
+/**
+ * Hospital owner only: all-time realized balance from served_appointments.
+ * Split by booking channel — ONLINE (gateway-paid) vs OFFLINE (desk cash).
+ * Amount per row = (collectionAmount ?? paymentAmount).
+ *
+ * On-demand only (header button): uses SQL-side SUM/COUNT aggregates so no
+ * appointment rows are transferred — safe for hospitals with years of data.
+ * Never called on page load; the header button fetches it on first click.
+ */
+export async function getLifetimeBalance(caller: CollectionCaller): Promise<LifetimeBalance> {
+  if (caller.role !== 'HOSPITAL') throw new Error('FORBIDDEN');
+  const own = await prisma.user.findUnique({
+    where: { id: caller.userId },
+    select: { hospitalProfile: { select: { id: true, createdAt: true } } },
+  });
+  const hospitalId = (own as { hospitalProfile?: { id: string; createdAt: Date } | null } | null)
+    ?.hospitalProfile?.id;
+  if (!hospitalId) throw new Error('NO_HOSPITAL_PROFILE');
+  const [hospital, chambers, schedules] = await Promise.all([
+    prisma.hospital.findUnique({ where: { id: hospitalId }, select: { createdAt: true } }),
+    prisma.chamber.findMany({ where: { hospitalId }, select: { doctorId: true } }),
+    prisma.doctorSchedule.findMany({ where: { hospitalId }, select: { doctorId: true } }),
+  ]);
+  if (!hospital) throw new Error('NO_HOSPITAL_PROFILE');
+  const ids = new Set<string>();
+  for (const c of chambers) if (c.doctorId) ids.add(c.doctorId);
+  for (const s of schedules) {
+    const did = (s as { doctorId?: string | null }).doctorId;
+    if (did) ids.add(did);
+  }
+  const joinedAt = isoDay(hospital.createdAt);
+  if (ids.size === 0) return zeroLifetime(joinedAt);
+  const inIds = [...ids];
+  const all = { doctorId: { in: inIds } };
+  const on = { ...all, bookingType: 'ONLINE' as const };
+  const off = { ...all, bookingType: 'OFFLINE' as const };
+
+  const [
+    countAll,
+    sumCollAll,
+    sumPayFallbackAll,
+    countOn,
+    sumCollOn,
+    sumPayFallbackOn,
+    countOff,
+    sumCollOff,
+    sumPayFallbackOff,
+  ] = await Promise.all([
+    prisma.servedAppointment.count({ where: all }),
+    prisma.servedAppointment.aggregate({ where: all, _sum: { collectionAmount: true } }),
+    prisma.servedAppointment.aggregate({
+      where: { ...all, collectionAmount: null },
+      _sum: { paymentAmount: true },
+    }),
+    prisma.servedAppointment.count({ where: on }),
+    prisma.servedAppointment.aggregate({ where: on, _sum: { collectionAmount: true } }),
+    prisma.servedAppointment.aggregate({
+      where: { ...on, collectionAmount: null },
+      _sum: { paymentAmount: true },
+    }),
+    prisma.servedAppointment.count({ where: off }),
+    prisma.servedAppointment.aggregate({ where: off, _sum: { collectionAmount: true } }),
+    prisma.servedAppointment.aggregate({
+      where: { ...off, collectionAmount: null },
+      _sum: { paymentAmount: true },
+    }),
+  ]);
+
+  const num = (v: unknown): number => Number(v ?? 0) || 0;
+  const onlineTotal = num(sumCollOn._sum.collectionAmount) + num(sumPayFallbackOn._sum.paymentAmount);
+  const offlineTotal = num(sumCollOff._sum.collectionAmount) + num(sumPayFallbackOff._sum.paymentAmount);
+  return {
+    joinedAt,
+    doctorCount: ids.size,
+    total: num(sumCollAll._sum.collectionAmount) + num(sumPayFallbackAll._sum.paymentAmount),
+    count: countAll,
+    online: { total: onlineTotal, count: countOn },
+    offline: { total: offlineTotal, count: countOff },
+  };
 }

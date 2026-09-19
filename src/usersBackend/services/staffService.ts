@@ -11,6 +11,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 import { sendStaffCredentialsEmail } from '../../authentication/lib/mailer.js';
 
 export interface StaffCaller {
@@ -30,7 +31,7 @@ const STAFF_SELECT = {
 } as const;
 
 async function resolveOwnDoctorId(caller: StaffCaller): Promise<string> {
-  if (caller.role === 'SUPER_ADMIN') return '';
+  if (isAdminRole(caller.role)) return '';
   if (caller.role !== 'DOCTOR') throw new Error('FORBIDDEN');
   const own = await prisma.user.findUnique({
     where: { id: caller.userId },
@@ -42,7 +43,7 @@ async function resolveOwnDoctorId(caller: StaffCaller): Promise<string> {
 }
 
 async function resolveOwnHospitalId(caller: StaffCaller): Promise<string> {
-  if (caller.role === 'SUPER_ADMIN') return '';
+  if (isAdminRole(caller.role)) return '';
   if (caller.role !== 'HOSPITAL') throw new Error('FORBIDDEN');
   const own = await prisma.user.findUnique({
     where: { id: caller.userId },
@@ -87,7 +88,7 @@ export async function listStaff(caller: StaffCaller) {
       orderBy: { createdAt: 'desc' },
     });
   }
-  if (caller.role === 'SUPER_ADMIN') {
+  if (isAdminRole(caller.role)) {
     return prisma.user.findMany({
       where: { role: { in: ['DOCTOR_STAFF', 'HOSPITAL_STAFF'] } } as never,
       select: {
@@ -194,7 +195,7 @@ export async function updateStaff(
     throw new Error('STAFF_NOT_FOUND');
   }
   if (target.role === 'DOCTOR_STAFF') {
-    if (caller.role !== 'DOCTOR' && caller.role !== 'SUPER_ADMIN') throw new Error('FORBIDDEN');
+    if (caller.role !== 'DOCTOR' && !isAdminRole(caller.role)) throw new Error('FORBIDDEN');
     if (caller.role === 'DOCTOR') {
       const doctorId = await resolveOwnDoctorId(caller);
       if (target.staffDoctorId !== doctorId) throw new Error('FORBIDDEN');
@@ -206,7 +207,7 @@ export async function updateStaff(
     return prisma.user.update({ where: { id }, data, select: STAFF_SELECT });
   }
   // HOSPITAL_STAFF: nothing to toggle — rights are fixed.
-  if (caller.role !== 'HOSPITAL' && caller.role !== 'SUPER_ADMIN') throw new Error('FORBIDDEN');
+  if (caller.role !== 'HOSPITAL' && !isAdminRole(caller.role)) throw new Error('FORBIDDEN');
   if (caller.role === 'HOSPITAL') {
     const hospitalId = await resolveOwnHospitalId(caller);
     if ((target as { staffHospitalId?: string | null }).staffHospitalId !== hospitalId) {
@@ -225,13 +226,13 @@ export async function removeStaff(caller: StaffCaller, id: string) {
     throw new Error('STAFF_NOT_FOUND');
   }
   if (target.role === 'DOCTOR_STAFF') {
-    if (caller.role !== 'DOCTOR' && caller.role !== 'SUPER_ADMIN') throw new Error('FORBIDDEN');
+    if (caller.role !== 'DOCTOR' && !isAdminRole(caller.role)) throw new Error('FORBIDDEN');
     if (caller.role === 'DOCTOR') {
       const doctorId = await resolveOwnDoctorId(caller);
       if (target.staffDoctorId !== doctorId) throw new Error('FORBIDDEN');
     }
   } else {
-    if (caller.role !== 'HOSPITAL' && caller.role !== 'SUPER_ADMIN') throw new Error('FORBIDDEN');
+    if (caller.role !== 'HOSPITAL' && !isAdminRole(caller.role)) throw new Error('FORBIDDEN');
     if (caller.role === 'HOSPITAL') {
       const hospitalId = await resolveOwnHospitalId(caller);
       if ((target as { staffHospitalId?: string | null }).staffHospitalId !== hospitalId) {

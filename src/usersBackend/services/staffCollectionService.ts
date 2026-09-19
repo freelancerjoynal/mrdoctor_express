@@ -4,6 +4,7 @@
 // - confirmed (still pending) + served (done) for the requested range.
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 
 export interface StaffCollectionCaller {
   userId: string;
@@ -15,6 +16,11 @@ export type StaffCollectionRange = 'today' | 'tomorrow' | 'yesterday' | 'last30'
 export const UNKNOWN_STAFF = 'unknown';
 
 const DAY_MS = 86400000;
+
+const BN_MONTH = [
+  'জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
+  'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর',
+];
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -59,7 +65,7 @@ async function resolveDoctorIds(
   doctorUsername?: string,
   doctorId?: string,
 ): Promise<string[]> {
-  if (caller.role === 'SUPER_ADMIN') {
+  if (isAdminRole(caller.role)) {
     if (!doctorUsername?.trim()) throw new Error('DOCTOR_REQUIRED');
     const doctor = await prisma.doctor.findFirst({
       where: { username: doctorUsername.trim() },
@@ -305,6 +311,55 @@ export async function getStaffCollections(
   }
 
   return rows.sort((x, y) => y.total - x.total || y.count - x.count);
+}
+
+export interface MonthlyLocalCount {
+  year: number;
+  month: number;
+  name: string;
+  /** Locally booked patients that month (confirmed pending + served done). */
+  count: number;
+}
+
+/**
+ * Last 12 calendar months (oldest → newest) of LOCAL booking patient counts.
+ * Number only — no amounts. Both ledgers are counted so a booking never
+ * drops when it is marked served. 24 tiny indexed COUNTs in parallel, no
+ * rows transferred.
+ */
+export async function getLocalMonthlyCounts(
+  caller: StaffCollectionCaller,
+  opts: { doctorUsername?: string; doctorId?: string } = {},
+): Promise<{ months: MonthlyLocalCount[]; thisMonth: MonthlyLocalCount }> {
+  const doctorIds = await resolveDoctorIds(caller, opts.doctorUsername, opts.doctorId);
+  const now = new Date();
+  const bounds: { gte: Date; lt: Date; year: number; month: number }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const gte = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    bounds.push({ gte, lt: new Date(gte.getFullYear(), gte.getMonth() + 1, 1), year: gte.getFullYear(), month: gte.getMonth() + 1 });
+  }
+  if (doctorIds.length === 0) {
+    const months = bounds.map((b) => ({ year: b.year, month: b.month, name: `${BN_MONTH[b.month - 1]} ${b.year}`, count: 0 }));
+    return { months, thisMonth: months[months.length - 1] as MonthlyLocalCount };
+  }
+  const base = { doctorId: { in: doctorIds }, bookingType: 'OFFLINE' as const };
+  const counts = await Promise.all(
+    bounds.map(async (b) => {
+      const where = { ...base, appointmentDate: { gte: b.gte, lt: b.lt } };
+      const [c, s] = await Promise.all([
+        prisma.confirmedAppointment.count({ where }),
+        prisma.servedAppointment.count({ where }),
+      ]);
+      return c + s;
+    }),
+  );
+  const months = bounds.map((b, i) => ({
+    year: b.year,
+    month: b.month,
+    name: `${BN_MONTH[b.month - 1]} ${b.year}`,
+    count: counts[i] ?? 0,
+  }));
+  return { months, thisMonth: months[months.length - 1] as MonthlyLocalCount };
 }
 
 export interface StaffRow {

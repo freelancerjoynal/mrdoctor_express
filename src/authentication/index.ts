@@ -3,7 +3,7 @@
 // Localized routing lives in src/authentication/routes/*.
 // Fully isolated from src/whatsappChatbot/* and src/publicWebsite/*.
 
-export { signup, verifyOTP, login, refresh, logout, forgotPassword, resetPassword } from './controllers/authController.js';
+export { verifyOTP, login, refresh, logout, forgotPassword, resetPassword } from './controllers/authController.js';
 export { getProfile } from './controllers/profileController.js';
 export { generateTokens, generateOTP, getOTPExpiry } from './services/authService.js';
 export { sendOTPEmail, sendNewPasswordEmail } from './lib/mailer.js';

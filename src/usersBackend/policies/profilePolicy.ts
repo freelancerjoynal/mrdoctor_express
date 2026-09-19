@@ -21,6 +21,12 @@ export const PROFILE_VISIBILITY: Record<UserRole, RoleVisibility> = {
     includeSuperAdminProfile: true,
     canViewOthers: true,
   },
+  ADMIN_MANAGER: {
+    includeDoctorProfile: true,
+    includeHospitalProfile: true,
+    includeSuperAdminProfile: true,
+    canViewOthers: true,
+  },
   DOCTOR: {
     includeDoctorProfile: true,
     includeHospitalProfile: false,

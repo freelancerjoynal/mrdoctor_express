@@ -5,6 +5,7 @@
 // - SUPER_ADMIN: may pass an explicit doctorId, otherwise their own (if any).
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 
 export interface ChamberCaller {
   userId: string;
@@ -59,7 +60,7 @@ function cleanDay(raw: unknown): string {
 }
 
 async function resolveDoctorId(caller: ChamberCaller, explicitDoctorId?: string): Promise<string> {
-  if (caller.role === 'SUPER_ADMIN') {
+  if (isAdminRole(caller.role)) {
     if (explicitDoctorId?.trim()) {
       const target = await prisma.doctor.findUnique({
         where: { id: explicitDoctorId.trim() },
