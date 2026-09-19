@@ -12,7 +12,7 @@ import crypto from 'crypto';
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
 import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
-import { sendStaffCredentialsEmail } from '../../authentication/lib/mailer.js';
+import { sendMail } from '../../lib/mailer.js';
 
 export interface StaffCaller {
   userId: string;
@@ -134,7 +134,18 @@ export async function inviteStaff(
     });
     let emailSent = true;
     try {
-      await sendStaffCredentialsEmail(email, tempPassword, hospital?.name ?? 'আপনার হাসপাতাল', name);
+      const greeting = `${name}, ${hospital?.name ?? 'আপনার হাসপাতাল'} আপনাকে স্টাফ হিসেবে যোগ করেছেন।`;
+      await sendMail({
+        to: email,
+        subject: 'আপনার স্টাফ লগইন তথ্য — MrDoctor',
+        text: `${greeting}\n\nইমেইল: ${email}\nপাসওয়ার্ড: ${tempPassword}\n\nএই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।`,
+        html: `
+      <h3>${greeting}</h3>
+      <p>ইমেইল: <b>${email}</b></p>
+      <p>পাসওয়ার্ড: <b>${tempPassword}</b></p>
+      <p>এই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।</p>
+    `,
+      });
     } catch (error) {
       console.error('Staff credentials email failed:', error);
       emailSent = false;
@@ -168,7 +179,18 @@ export async function inviteStaff(
 
   let emailSent = true;
   try {
-    await sendStaffCredentialsEmail(email, tempPassword, doctor?.name ?? 'আপনার ডাক্তার', name);
+    const greeting = `${name}, ${doctor?.name ?? 'আপনার ডাক্তার'} আপনাকে স্টাফ হিসেবে যোগ করেছেন।`;
+    await sendMail({
+      to: email,
+      subject: 'আপনার স্টাফ লগইন তথ্য — MrDoctor',
+      text: `${greeting}\n\nইমেইল: ${email}\nপাসওয়ার্ড: ${tempPassword}\n\nএই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।`,
+      html: `
+      <h3>${greeting}</h3>
+      <p>ইমেইল: <b>${email}</b></p>
+      <p>পাসওয়ার্ড: <b>${tempPassword}</b></p>
+      <p>এই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।</p>
+    `,
+    });
   } catch (error) {
     console.error('Staff credentials email failed:', error);
     emailSent = false;

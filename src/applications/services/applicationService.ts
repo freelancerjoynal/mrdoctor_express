@@ -6,7 +6,7 @@
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { prisma } from '../../lib/prisma.js';
-import { sendAccountCredentialsEmail } from '../../authentication/lib/mailer.js';
+import { sendMail } from '../../lib/mailer.js';
 
 function cleanEmail(raw: unknown): string {
   if (typeof raw !== 'string') throw new Error('INVALID_EMAIL');
@@ -266,7 +266,17 @@ function safeUser(user: Record<string, unknown>) {
 
 async function notifyCredentials(email: string, tempPassword: string, orgName: string): Promise<boolean> {
   try {
-    await sendAccountCredentialsEmail(email, tempPassword, orgName);
+    await sendMail({
+      to: email,
+      subject: 'আপনার MrDoctor লগইন তথ্য',
+      text: `${orgName} — আপনার অ্যাকাউন্ট তৈরি হয়েছে।\n\nইমেইল: ${email}\nপাসওয়ার্ড: ${tempPassword}\n\nএই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।`,
+      html: `
+      <h3>${orgName} — আপনার অ্যাকাউন্ট তৈরি হয়েছে</h3>
+      <p>ইমেইল: <b>${email}</b></p>
+      <p>পাসওয়ার্ড: <b>${tempPassword}</b></p>
+      <p>এই তথ্য দিয়ে লগইন করুন। লগইনের পর ইমেইলে পাঠানো ওটিপি দিয়ে ভেরিফাই করুন।</p>
+    `,
+    });
     return true;
   } catch (error) {
     console.error('Account credentials email failed:', error);

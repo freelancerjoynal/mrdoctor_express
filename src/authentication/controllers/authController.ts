@@ -6,7 +6,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
-import { sendOTPEmail, sendNewPasswordEmail } from '../lib/mailer.js';
+import { sendMail } from '../../lib/mailer.js';
 import { generateTokens, generateOTP, getOTPExpiry } from '../services/authService.js';
 import { prisma } from '../../lib/prisma.js';
 
@@ -67,7 +67,12 @@ export const login = async (req: Request, res: Response) => {
       data: { otp: newOtp, otpExpiry: otpExpiry }
     });
 
-    await sendOTPEmail(email, newOtp);
+    await sendMail({
+      to: email,
+      subject: 'Verification Code',
+      text: `Your OTP is ${newOtp}. It will expire in 10 minutes.`,
+      html: `<b>Your OTP is: ${newOtp}</b><p>It will expire in 10 minutes.</p>`,
+    });
 
     // ইউজারকে জানিয়ে দেওয়া হচ্ছে যে ইমেইলে ওটিপি পাঠানো হয়েছে, ভেরিফাই করলেই লগইন কমপ্লিট হবে
     return res.status(200).json({
@@ -97,7 +102,12 @@ export const forgotPassword = async (req: Request, res: Response) => {
       data: { otp, otpExpiry }
     });
 
-    await sendOTPEmail(email, otp);
+    await sendMail({
+      to: email,
+      subject: 'Verification Code',
+      text: `Your OTP is ${otp}. It will expire in 10 minutes.`,
+      html: `<b>Your OTP is: ${otp}</b><p>It will expire in 10 minutes.</p>`,
+    });
     res.json({ message: 'Reset OTP sent to your email' });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
@@ -126,7 +136,16 @@ export const resetPassword = async (req: Request, res: Response) => {
       }
     });
 
-    await sendNewPasswordEmail(email, newRawPassword);
+    await sendMail({
+      to: email,
+      subject: 'Your New Password',
+      text: `Your password has been reset. Your new temporary password is: ${newRawPassword}. Please login and change it immediately.`,
+      html: `
+      <h3>Password Reset Successful</h3>
+      <p>Your new temporary password is: <b>${newRawPassword}</b></p>
+      <p>Please login and change your password as soon as possible for security reasons.</p>
+    `,
+    });
 
     res.json({ message: 'A new password has been sent to your email.' });
   } catch (error) {
