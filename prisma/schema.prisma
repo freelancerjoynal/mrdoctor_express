@@ -681,6 +681,33 @@ model Blog {
   @@map("blogs")
 }
 
+// Per-thana portal customization (super-admin controlled).
+// `<slug>.domain.com` hero image, texts and notice come from here;
+// missing row = portal renders with defaults.
+model LocationPortalSetting {
+  id String @id @default(uuid())
+
+  // Location subdomain slug, e.g. "nilphamari" (every location = a thana).
+  slug String @unique
+
+  division String?
+  district String?
+  thana    String?
+
+  heroImage   String?
+  headline    String?
+  subheadline String?
+  description String?
+  notice      String?
+
+  updatedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("location_portal_settings")
+}
+
 // রোগীদের মতামত — ডাক্তার ও হাসপাতাল দুজনের জন্যই।
 // - doctorId বসলে ডাক্তারের রিভিউ, hospitalId বসলে হাসপাতালের রিভিউ (ঠিক একটি)।
 // - ভিজিটররা পাবলিক ফর্মে লিখে (PENDING), অনুমোদনের পর (APPROVED) সাইটে দেখায়।

@@ -9,6 +9,9 @@ import {
   showDirectory,
   showDoctorOverview,
   showHospitalOverview,
+  listLocationSettings,
+  showLocationSetting,
+  saveLocationSetting,
 } from '../controllers/adminController.js';
 
 const adminRouter = express.Router();
@@ -21,5 +24,9 @@ adminRouter.get('/locations', admins, showLocationOptions);
 adminRouter.get('/directory', admins, showDirectory);
 adminRouter.get('/doctors/:id/overview', admins, showDoctorOverview);
 adminRouter.get('/hospitals/:id/overview', admins, showHospitalOverview);
+// Thana portal customization (hero image + texts per location slug).
+adminRouter.get('/location-settings', admins, listLocationSettings);
+adminRouter.get('/location-settings/:slug', admins, showLocationSetting);
+adminRouter.put('/location-settings/:slug', admins, saveLocationSetting);
 
 export default adminRouter;

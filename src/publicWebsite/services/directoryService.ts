@@ -68,6 +68,7 @@ const PUBLIC_DOCTOR_SELECT = {
   tagline: true,
   bio: true,
   startedYear: true,
+  bmdcNumber: true,
   profilePicture: true,
   gender: true,
   information: {
@@ -151,10 +152,13 @@ const NESTED_DOCTOR_SELECT = {
 } as const;
 
 // Public hospital card: identity + contact + associated chambers/doctors.
+// NOTE: the Hospital table stores `addressLine` (no `address` column) —
+// queries select it and alias to `address` so the public API shape stays
+// stable for every frontend (portals, directory, location pages).
 const PUBLIC_HOSPITAL_SELECT = {
   slug: true,
   name: true,
-  address: true,
+  addressLine: true,
   phone: true,
   establishedYear: true,
   chambers: {
@@ -287,14 +291,14 @@ export async function getPublicHospitals(filters: HospitalFilters) {
   if (search) {
     where.OR = [
       { name: { contains: search, mode: 'insensitive' } },
-      { address: { contains: search, mode: 'insensitive' } },
+      { addressLine: { contains: search, mode: 'insensitive' } },
     ];
   }
   // Hospital itself has no location columns — locate via its chambers.
   const location = chamberLocationFilter({ division, district, thana });
   if (location) where.chambers = location;
 
-  const [total, data] = await prisma.$transaction([
+  const [total, rows] = await prisma.$transaction([
     prisma.hospital.count({ where }),
     prisma.hospital.findMany({
       where,
@@ -305,15 +309,20 @@ export async function getPublicHospitals(filters: HospitalFilters) {
     }),
   ]);
 
+  // Alias addressLine → address (public API shape).
+  const data = rows.map(({ addressLine, ...rest }) => ({ ...rest, address: addressLine ?? null }));
+
   return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
 }
 
 export async function getPublicHospitalBySlug(slug: string) {
-  const hospital = await prisma.hospital.findFirst({
+  const row = await prisma.hospital.findFirst({
     where: { slug, status: 'APPROVED' },
     select: PUBLIC_HOSPITAL_SELECT,
   });
-  if (!hospital) return null;
+  if (!row) return null;
+  const { addressLine, ...rest } = row;
+  const hospital = { ...rest, address: addressLine ?? null };
   const agg = await prisma.review.aggregate({
     where: { hospital: { slug }, status: 'APPROVED' },
     _avg: { rating: true },
