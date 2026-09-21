@@ -13,6 +13,7 @@ import {
   showLocationSetting,
   saveLocationSetting,
 } from '../controllers/adminController.js';
+import { listSeo, showSeo, saveSeo, removeSeo } from '../controllers/seoController.js';
 
 const adminRouter = express.Router();
 
@@ -28,5 +29,10 @@ adminRouter.get('/hospitals/:id/overview', admins, showHospitalOverview);
 adminRouter.get('/location-settings', admins, listLocationSettings);
 adminRouter.get('/location-settings/:slug', admins, showLocationSetting);
 adminRouter.put('/location-settings/:slug', admins, saveLocationSetting);
+// Per-page SEO (titles, descriptions, OG, canonical per location/doctor/hospital).
+adminRouter.get('/seo', admins, listSeo);
+adminRouter.get('/seo/:pageType/:pageKey', admins, showSeo);
+adminRouter.put('/seo/:pageType/:pageKey', admins, saveSeo);
+adminRouter.delete('/seo/:pageType/:pageKey', admins, removeSeo);
 
 export default adminRouter;

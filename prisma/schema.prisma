@@ -708,6 +708,55 @@ model LocationPortalSetting {
   @@map("location_portal_settings")
 }
 
+// Per-page SEO (top-notch SEO + AI-search/SGE ranking).
+// One row per public page: GLOBAL ("home"), LOCATION (thana slug),
+// DOCTOR (username) or HOSPITAL (slug). Only managers/admins can write;
+// the public website reads a single row per page render — appointment
+// and other hot paths NEVER touch this table.
+enum SeoPageType {
+  GLOBAL
+  LOCATION
+  DOCTOR
+  HOSPITAL
+}
+
+model SeoSetting {
+  id String @id @default(uuid())
+
+  pageType SeoPageType
+  // GLOBAL → "home"; LOCATION → thana slug; DOCTOR → username; HOSPITAL → slug.
+  pageKey String
+
+  // <title> — keep 50–60 chars. Empty = auto-generated default.
+  title String?
+  // Visible H1 override (LOCATION + GLOBAL portals). Empty = auto default.
+  h1 String?
+  // Portal/brand name for OG site_name + search display. Empty = auto default.
+  siteName String?
+  // meta description — keep 150–160 chars. Empty = auto default.
+  description String?
+  // comma-separated keywords (legacy + some AI parsers). Optional.
+  keywords String?
+  // Open Graph / Twitter overrides. Empty = derived from title/description.
+  ogTitle       String?
+  ogDescription String?
+  ogImage       String?
+  // Canonical URL override. Empty = auto canonical for the page.
+  canonicalUrl String?
+  // Robots directive override, e.g. "index, follow". Empty = "index, follow".
+  robots String?
+  // Extra JSON-LD blocks (array of objects) merged with auto schema.
+  extraJsonLd Json?
+
+  updatedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pageType, pageKey])
+  @@map("seo_settings")
+}
+
 // রোগীদের মতামত — ডাক্তার ও হাসপাতাল দুজনের জন্যই।
 // - doctorId বসলে ডাক্তারের রিভিউ, hospitalId বসলে হাসপাতালের রিভিউ (ঠিক একটি)।
 // - ভিজিটররা পাবলিক ফর্মে লিখে (PENDING), অনুমোদনের পর (APPROVED) সাইটে দেখায়।
