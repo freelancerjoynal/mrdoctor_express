@@ -148,6 +148,8 @@ model User {
   otp          String?
   otpExpiry    DateTime?
   refreshToken String?
+  // Staff mobile (REQUIRED at invite) — login OTP + credentials go here by SMS.
+  phone        String?
 
   // Timestamps
   createdAt DateTime @default(now())

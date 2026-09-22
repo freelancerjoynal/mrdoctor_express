@@ -9,6 +9,8 @@ import crypto from 'crypto';
 import { sendMail } from '../../lib/mailer.js';
 import { generateTokens, generateOTP, getOTPExpiry } from '../services/authService.js';
 import { prisma } from '../../lib/prisma.js';
+import { otpSmsText } from '../../lib/sms.js';
+import { ownerForUser, sendOtpSms } from '../../lib/creditService.js';
 
 // 1. [REMOVED] Public self-registration is disabled — doctors/hospitals
 // apply via POST /api/applications/doctor|hospital and SUPER_ADMIN creates
@@ -49,10 +51,28 @@ export const verifyOTP = async (req: Request, res: Response) => {
 };
 
 // 3. Standard Login (প্রতিবার লগইনের সময় ওটিপি জেনারেট করে পাঠানো হবে)
+// Identifier = email OR phone. OTP goes to BOTH email and SMS — each
+// channel is independent, so one failing never blocks the other.
 export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, password, identifier } = req.body;
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const raw =
+      typeof identifier === 'string' && identifier.trim() !== ''
+        ? identifier.trim()
+        : typeof email === 'string'
+          ? email.trim()
+          : '';
+    let user = null;
+    if (raw.includes('@')) {
+      user = await prisma.user.findUnique({ where: { email: raw.toLowerCase() } });
+    } else {
+      let digits = raw.replace(/[^\d]/g, '');
+      if (digits.startsWith('880')) digits = '0' + digits.slice(3);
+      if (digits.startsWith('00880')) digits = '0' + digits.slice(5);
+      if (/^01\d{9}$/.test(digits)) {
+        user = await prisma.user.findFirst({ where: { phone: digits } });
+      }
+    }
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -63,22 +83,50 @@ export const login = async (req: Request, res: Response) => {
     const otpExpiry = getOTPExpiry();
 
     await prisma.user.update({
-      where: { email },
+      where: { id: user.id },
       data: { otp: newOtp, otpExpiry: otpExpiry }
     });
 
-    await sendMail({
-      to: email,
-      subject: 'Verification Code',
-      text: `Your OTP is ${newOtp}. It will expire in 10 minutes.`,
-      html: `<b>Your OTP is: ${newOtp}</b><p>It will expire in 10 minutes.</p>`,
-    });
+    let emailSent = false;
+    try {
+      await sendMail({
+        to: user.email,
+        subject: 'Verification Code',
+        text: `Your OTP is ${newOtp}. It will expire in 10 minutes.`,
+        html: `<b>Your OTP is: ${newOtp}</b><p>It will expire in 10 minutes.</p>`,
+      });
+      emailSent = true;
+    } catch (mailError) {
+      console.error('Login OTP email failed:', mailError);
+    }
 
-    // ইউজারকে জানিয়ে দেওয়া হচ্ছে যে ইমেইলে ওটিপি পাঠানো হয়েছে, ভেরিফাই করলেই লগইন কমপ্লিট হবে
+    // Login OTP by SMS too (1 credit from the doctor/hospital wallet).
+    // Independent of email — runs even when the email failed.
+    // MUST follow the gateway OTP template or operators drop it.
+    let smsSent = false;
+    if (user.phone) {
+      const owner = await ownerForUser(user).catch(() => null);
+      smsSent = await sendOtpSms({
+        phone: user.phone,
+        text: otpSmsText(newOtp),
+        owner,
+        refId: user.id,
+        note: 'Login OTP SMS',
+        createdBy: user.id,
+      });
+    }
+
+    if (!emailSent && !smsSent) {
+      return res.status(500).json({ error: 'OTP পাঠানো যায়নি (ইমেইল/SMS দুটোই ব্যর্থ) — আবার চেষ্টা করুন।' });
+    }
+
+    // ইউজারকে জানিয়ে দেওয়া হচ্ছে যে ওটিপি পাঠানো হয়েছে, ভেরিফাই করলেই লগইন কমপ্লিট হবে
     return res.status(200).json({
-      message: 'Credentials verified. OTP has been sent to your email for login verification.',
+      message: 'Credentials verified. OTP has been sent for login verification.',
       requiresOTP: true,
-      email: user.email
+      email: user.email,
+      emailSent,
+      smsSent,
     });
 
   } catch (error) {
@@ -108,7 +156,23 @@ export const forgotPassword = async (req: Request, res: Response) => {
       text: `Your OTP is ${otp}. It will expire in 10 minutes.`,
       html: `<b>Your OTP is: ${otp}</b><p>It will expire in 10 minutes.</p>`,
     });
-    res.json({ message: 'Reset OTP sent to your email' });
+
+    // Reset OTP by SMS too (1 credit from the doctor/hospital wallet).
+    // Best-effort — the email above already delivered it.
+    // MUST follow the gateway OTP template or operators drop it.
+    let smsSent = false;
+    if (user.phone) {
+      const owner = await ownerForUser(user).catch(() => null);
+      smsSent = await sendOtpSms({
+        phone: user.phone,
+        text: otpSmsText(otp),
+        owner,
+        refId: user.id,
+        note: 'Forgot-password OTP SMS',
+        createdBy: user.id,
+      });
+    }
+    res.json({ message: 'Reset OTP sent to your email', smsSent });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }

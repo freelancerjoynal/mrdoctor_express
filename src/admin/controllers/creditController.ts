@@ -9,7 +9,6 @@ import {
   topupCredit,
   type CreditOwnerType,
 } from '../../lib/creditService.js';
-
 function parseOwner(req: AuthenticatedRequest): { ownerType: CreditOwnerType; ownerId: string } {
   const q = (req.query ?? {}) as { ownerType?: unknown; ownerId?: unknown };
   const ownerType = typeof q.ownerType === 'string' ? q.ownerType.trim().toUpperCase() : '';
@@ -45,15 +44,19 @@ export const runTopup = async (req: AuthenticatedRequest, res: Response) => {
     if ((ownerType !== 'DOCTOR' && ownerType !== 'HOSPITAL') || !ownerId) {
       return res.status(400).json({ error: 'সঠিক ownerType (DOCTOR/HOSPITAL) ও ownerId দিন।' });
     }
-    const data = await topupCredit({
+    await topupCredit({
       ownerType,
       ownerId,
       amount: body.amount as number,
       note: body.note as string | null | undefined,
       createdBy: req.user!.userId,
     });
-    const balance = await getCreditBalance(ownerType, ownerId);
-    return res.json({ backend: 'admin', data: { ...balance, toppedUp: data.balanceAfter } });
+    // Full view (balance + fresh ledger) so the card can render it directly.
+    const [balance, ledger] = await Promise.all([
+      getCreditBalance(ownerType, ownerId),
+      listCreditLedger(ownerType, ownerId, 50),
+    ]);
+    return res.json({ backend: 'admin', data: { ...balance, ledger } });
   } catch (error: any) {
     const code = error?.message as string | undefined;
     if (code === 'INVALID_OWNER') return res.status(400).json({ error: 'সঠিক ownerType (DOCTOR/HOSPITAL) ও ownerId দিন।' });

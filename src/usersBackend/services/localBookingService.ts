@@ -286,8 +286,6 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
 
   let chamberId: string | null = null;
   let chamberName: string | null = null;
-  let chamberText = '';
-  let mapLink = '';
   let hospitalId: string | null = null;
   let resolvedHospitalName: string | null = null;
   const effectiveChamberId = requestedChamberId ?? autoChamberId;
@@ -331,15 +329,6 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
     chamberName = chamber.chamberName;
     hospitalId = chamber.hospitalId ?? (isHospitalDesk ? hospital!.id : null);
     resolvedHospitalName = chamber.hospital?.name ?? (isHospitalDesk ? hospital!.name : null);
-    chamberText = [chamber.chamberName, chamber.addressLine, chamber.thana, chamber.district]
-      .filter(Boolean)
-      .join(', ');
-    // Google Map link built from the chamber's latitude/longitude stored in DB.
-    if (chamber.latitude != null && chamber.longitude != null) {
-      mapLink = `https://www.google.com/maps?q=${chamber.latitude},${chamber.longitude}`;
-    } else if (chamberText) {
-      mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chamberText)}`;
-    }
   }
 
   // Hospital desk without a chamber row (schedule-only link): still tag the hospital.
@@ -349,9 +338,9 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
   }
 
   const taker = await resolveTaker(caller);
-  // 1 appointment = 1 credit, charged only after every validation above
-  // passed: hospital desk spends the HOSPITAL wallet, doctor + own staff
-  // spend the DOCTOR wallet. Refunded if the booking write fails below.
+  // 1 offline appointment = 1 credit, charged only after every validation
+  // above passed: hospital desk spends the HOSPITAL wallet, doctor + own
+  // staff spend the DOCTOR wallet. Refunded if the booking write fails below.
   const charge = await spendAppointmentCredit({
     ownerType: isHospitalDesk ? 'HOSPITAL' : 'DOCTOR',
     ownerId: isHospitalDesk ? hospital!.id : doctor.id,
@@ -394,15 +383,18 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
   let smsSent = false;
   try {
     const serial = (booking as { serial?: number }).serial ?? '';
-    const lines = [
-      `প্রিয় ${patientName}, ${doctor.name}-এর চেম্বারে আপনার বুকিং নিশ্চিত।`,
-      `সিরিয়াল: ${serial}, তারিখ: ${bnDate(appointmentDate)}।`,
-    ];
-    if (chamberText) lines.push(`চেম্বার: ${chamberText}।`);
-    if (mapLink) lines.push(`ম্যাপ: ${mapLink}`);
-    if (type === 'RENEW') lines.push(`অনুগ্রহ করে আপনার পুরনো প্রেসক্রিপশনটি সঙ্গে নিয়ে আসুন।`);
-    lines.push(`ফি ৳${collectionAmount} গ্রহণ করা হয়েছে।`);
-    await singleMessage(phone, lines.join('\n'));
+    // SHORT on purpose: the gateway rejects long multi-part SMS (error 1004).
+    // Hospital-linked → hospital name (first 3 words max); otherwise chamber
+    // name only, never the address.
+    const hospitalWords = (resolvedHospitalName || '').trim().split(/\s+/).filter(Boolean);
+    const place = hospitalWords.length
+      ? hospitalWords.slice(0, 3).join(' ') + (hospitalWords.length > 3 ? '...' : '')
+      : (chamberName || '').trim();
+    const text =
+      `প্রিয় ${patientName}, ${doctor.name}-এর সিরিয়াল-${serial} নিশ্চিত` +
+      (place ? `, ${place}` : '') +
+      `, ${bnDate(appointmentDate)}। mrdoctor.com.bd`;
+    await singleMessage(phone, text);
     smsSent = true;
   } catch (error: any) {
     console.error(`[LocalBooking] SMS failed to=${phone}:`, error?.message ?? error);

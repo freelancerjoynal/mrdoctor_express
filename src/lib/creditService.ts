@@ -1,22 +1,16 @@
-// Credit wallet shared by every booking path (website, WhatsApp, dashboard).
-// 1 appointment = 1 credit, spent at creation — cancelled ones cost too
-// (no refund path exists on purpose). Balances may go negative up to the
-// due limit (doctor 200, hospital 500); past that, booking is blocked and
-// the panel tells the owner to contact support. Admins top up.
+// Credit wallet shared by OFFLINE booking paths (dashboard walk-ins).
+// 1 offline appointment = 1 credit, spent at creation — cancelled ones cost
+// too (no refund path exists on purpose). Online bookings (website +
+// WhatsApp) are FREE and never touch credits. No due: at zero balance the
+// next offline booking is blocked and the panel says to contact support.
+// Admins top up.
 import { prisma } from './prisma.js';
 import type { UserRole } from '../authentication/middleware/authMiddleware.js';
 
-/** One appointment always costs exactly this. */
+/** One offline appointment always costs exactly this. */
 export const APPOINTMENT_COST = 1;
-/** How far below zero each owner type may go (due). */
-export const DOCTOR_DUE_LIMIT = 200;
-export const HOSPITAL_DUE_LIMIT = 500;
 
 export type CreditOwnerType = 'DOCTOR' | 'HOSPITAL';
-
-export function dueLimitFor(ownerType: CreditOwnerType): number {
-  return ownerType === 'HOSPITAL' ? HOSPITAL_DUE_LIMIT : DOCTOR_DUE_LIMIT;
-}
 
 export interface CreditCaller {
   userId: string;
@@ -59,11 +53,86 @@ export async function resolveCreditOwner(caller: CreditCaller): Promise<{ ownerT
   throw new Error('FORBIDDEN');
 }
 
+/**
+ * Wallet behind any user row (for OTP SMS charging):
+ * doctor + own staff → the doctor, hospital + desk staff → the hospital.
+ * Returns null for platform roles (admins etc.) — their OTP SMS is free.
+ */
+export async function ownerForUser(user: {
+  id: string;
+  role: string;
+  staffDoctorId?: string | null;
+  staffHospitalId?: string | null;
+}): Promise<{ ownerType: CreditOwnerType; ownerId: string } | null> {
+  if (user.role === 'DOCTOR_STAFF' && user.staffDoctorId) {
+    return { ownerType: 'DOCTOR', ownerId: user.staffDoctorId };
+  }
+  if (user.role === 'HOSPITAL_STAFF' && user.staffHospitalId) {
+    return { ownerType: 'HOSPITAL', ownerId: user.staffHospitalId };
+  }
+  if (user.role === 'DOCTOR') {
+    const own = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { doctorProfile: { select: { id: true } } },
+    });
+    const id = (own as { doctorProfile?: { id: string } | null } | null)?.doctorProfile?.id;
+    return id ? { ownerType: 'DOCTOR', ownerId: id } : null;
+  }
+  if (user.role === 'HOSPITAL') {
+    const own = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { hospitalProfile: { select: { id: true } } },
+    });
+    const id = (own as { hospitalProfile?: { id: string } | null } | null)?.hospitalProfile?.id;
+    return id ? { ownerType: 'HOSPITAL', ownerId: id } : null;
+  }
+  return null;
+}
+
+/** Send one OTP SMS, charging 1 credit. Returns true if sent AND charged. */
+export async function sendOtpSms(opts: {
+  phone: string;
+  text: string;
+  owner: { ownerType: CreditOwnerType; ownerId: string } | null;
+  refId: string;
+  note: string;
+  createdBy?: string | null;
+}): Promise<boolean> {
+  const { singleMessage } = await import('./sms.js');
+  try {
+    await singleMessage(opts.phone, opts.text);
+  } catch (error) {
+    console.error('OTP SMS failed:', error);
+    return false;
+  }
+  // Charged only after a successful send — a failed SMS never costs credit.
+  if (!opts.owner) return true;
+  try {
+    await spendAppointmentCredit({
+      ownerType: opts.owner.ownerType,
+      ownerId: opts.owner.ownerId,
+      kind: 'OTP_SMS',
+      refType: 'User',
+      refId: opts.refId,
+      note: opts.note,
+      createdBy: opts.createdBy ?? null,
+    });
+  } catch (error) {
+    console.error('OTP SMS credit failed:', error);
+    return false;
+  }
+  return true;
+}
+
 export interface SpendInput {
   ownerType: CreditOwnerType;
   ownerId: string;
+  /** Ledger kind — appointment spends (default) or OTP_SMS. */
+  kind?: 'APPOINTMENT_SPEND' | 'OTP_SMS';
   /** Which table row this spend belongs to (linked right after creation). */
-  refType: 'PendingAppointment' | 'ConfirmedAppointment';
+  refType: 'PendingAppointment' | 'ConfirmedAppointment' | 'User';
+  /** Known upfront for OTP sends (the user already exists). */
+  refId?: string | null;
   /** User who booked (null for patient-side website/WhatsApp bookings). */
   createdBy?: string | null;
   note?: string | null;
@@ -71,14 +140,14 @@ export interface SpendInput {
 
 /**
  * Atomically spend 1 credit (check-and-decrement in one statement, so
- * concurrent bookings can never overspend past the due limit).
- * Throws INSUFFICIENT_CREDIT when the due is exhausted — the caller maps
- * it to "contact support". Throws OWNER_NOT_FOUND for a bad owner id.
+ * concurrent bookings can never overspend past zero).
+ * Throws INSUFFICIENT_CREDIT at zero balance — the caller maps it to
+ * "contact support". Throws OWNER_NOT_FOUND for a bad owner id.
  */
 export async function spendAppointmentCredit(input: SpendInput): Promise<{ ledgerId: string; balanceAfter: number }> {
-  const due = dueLimitFor(input.ownerType);
-  // Balance must still cover one more credit: balance - 1 >= -due.
-  const minBefore = 1 - due;
+  // No due: at least 1 credit must remain before the decrement.
+  const minBefore = 1;
+  const kind = input.kind ?? 'APPOINTMENT_SPEND';
   return prisma.$transaction(async (tx) => {
     let balanceAfter: number;
     if (input.ownerType === 'DOCTOR') {
@@ -99,8 +168,9 @@ export async function spendAppointmentCredit(input: SpendInput): Promise<{ ledge
           doctorId: input.ownerId,
           amount: -APPOINTMENT_COST,
           balanceAfter,
-          kind: 'APPOINTMENT_SPEND',
+          kind,
           refType: input.refType,
+          refId: input.refId ?? null,
           note: input.note ?? null,
           createdBy: input.createdBy ?? null,
         },
@@ -125,8 +195,9 @@ export async function spendAppointmentCredit(input: SpendInput): Promise<{ ledge
         hospitalId: input.ownerId,
         amount: -APPOINTMENT_COST,
         balanceAfter,
-        kind: 'APPOINTMENT_SPEND',
+        kind,
         refType: input.refType,
+        refId: input.refId ?? null,
         note: input.note ?? null,
         createdBy: input.createdBy ?? null,
       },
@@ -213,25 +284,23 @@ export interface CreditBalance {
   ownerId: string;
   ownerName: string;
   balance: number;
-  dueLimit: number;
-  /** How many more appointments can be taken right now (0 = contact support). */
+  /** How many more offline bookings can be taken right now (0 = contact support). */
   bookableLeft: number;
   exhausted: boolean;
 }
 
 /** Wallet snapshot for panels (doctor, hospital, staff all see their owner's). */
 export async function getCreditBalance(ownerType: CreditOwnerType, ownerId: string): Promise<CreditBalance> {
-  const dueLimit = dueLimitFor(ownerType);
   if (ownerType === 'DOCTOR') {
     const doctor = await prisma.doctor.findUnique({ where: { id: ownerId }, select: { id: true, name: true, creditBalance: true } });
     if (!doctor) throw new Error('OWNER_NOT_FOUND');
-    const bookableLeft = Math.max(0, doctor.creditBalance + dueLimit);
-    return { ownerType, ownerId, ownerName: doctor.name, balance: doctor.creditBalance, dueLimit, bookableLeft, exhausted: bookableLeft <= 0 };
+    const bookableLeft = Math.max(0, doctor.creditBalance);
+    return { ownerType, ownerId, ownerName: doctor.name, balance: doctor.creditBalance, bookableLeft, exhausted: bookableLeft <= 0 };
   }
   const hospital = await prisma.hospital.findUnique({ where: { id: ownerId }, select: { id: true, name: true, creditBalance: true } });
   if (!hospital) throw new Error('OWNER_NOT_FOUND');
-  const bookableLeft = Math.max(0, hospital.creditBalance + dueLimit);
-  return { ownerType, ownerId, ownerName: hospital.name, balance: hospital.creditBalance, dueLimit, bookableLeft, exhausted: bookableLeft <= 0 };
+  const bookableLeft = Math.max(0, hospital.creditBalance);
+  return { ownerType, ownerId, ownerName: hospital.name, balance: hospital.creditBalance, bookableLeft, exhausted: bookableLeft <= 0 };
 }
 
 export interface LedgerRow {
@@ -258,5 +327,5 @@ export async function listCreditLedger(ownerType: CreditOwnerType, ownerId: stri
 
 /** Bengali "contact support" message shared by every blocked-booking response. */
 export function insufficientCreditMessage(): string {
-  return '❌ ক্রেডিট শেষ! বাকি বা বকেয়া সীমাও শেষ — নতুন অ্যাপয়েন্টমেন্ট নিতে সাপোর্টে যোগাযোগ করুন।';
+  return '❌ ক্রেডিট শেষ! নতুন অফলাইন বুকিং নিতে সাপোর্টে যোগাযোগ করুন।';
 }

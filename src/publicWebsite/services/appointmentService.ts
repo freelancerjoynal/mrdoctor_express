@@ -4,7 +4,6 @@
 // stays filterable by doctor AND by hospital.
 import { prisma } from '../../lib/prisma.js';
 import { notifyAppointments } from '../../realtime/notify.js';
-import { spendAppointmentCredit, voidSpend, linkCreditRef } from '../../lib/creditService.js';
 
 export const DAY_BN: Record<string, string> = {
   SATURDAY: 'শনিবার',
@@ -408,16 +407,8 @@ export async function createAppointment(input: CreateAppointmentInput) {
   const hospitalName = chamber?.hospital?.name ?? null;
   const dayLabel = buildDayLabel(appointmentDate);
 
-  // 1 appointment = 1 credit from the DOCTOR wallet (patient-side booking,
-  // so no staff involved) — charged only after every validation above
-  // passed; refunded if the row write fails below.
-  const charge = await spendAppointmentCredit({
-    ownerType: 'DOCTOR',
-    ownerId: doctor.id,
-    refType: 'PendingAppointment',
-    createdBy: null,
-    note: `Website: ${patientName}`,
-  });
+  // Online bookings are FREE — credits apply to offline bookings only,
+  // so no wallet touch here.
   const row = await prisma.pendingAppointment.create({
     data: {
       phoneNumber: contactPhone,
@@ -440,11 +431,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
       status: 'PENDING',
     },
     select: { id: true, dayLabel: true, appointmentDate: true },
-  }).catch(async (err) => {
-    await voidSpend(charge.ledgerId);
-    throw err;
   });
-  await linkCreditRef(charge.ledgerId, row.id);
 
   notifyAppointments({ doctorId: doctor.id, hospitalId });
 

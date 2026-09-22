@@ -41,8 +41,6 @@ export const postAppointment = async (req: Request, res: Response) => {
     if (msg === 'NO_CHAMBER') return res.status(400).json({ error: 'এই ডাক্তারের কোনো চেম্বার পাওয়া যায়নি।' });
     if (msg === 'INVALID_DATE') return res.status(400).json({ error: 'সঠিক তারিখ বেছে নিন।' });
     if (msg === 'CLOSED_DAY') return res.status(400).json({ error: 'ওই দিন চেম্বার বন্ধ থাকে — চালু দিন বেছে নিন।' });
-    if (msg === 'INSUFFICIENT_CREDIT')
-      return res.status(402).json({ error: '❌ দুঃখিত, এই মুহূর্তে বুকিং নেওয়া যাচ্ছে না — দয়া করে চেম্বারে ফোন করে সিরিয়াল নিন।' });
     return res.status(500).json({ error: 'অনুরোধ জমা দেওয়া যায়নি। আবার চেষ্টা করুন।' });
   }
 };

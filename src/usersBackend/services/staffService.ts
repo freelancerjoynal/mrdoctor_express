@@ -13,6 +13,7 @@ import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
 import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
 import { sendMail } from '../../lib/mailer.js';
+import { sendOtpSms } from '../../lib/creditService.js';
 
 export interface StaffCaller {
   userId: string;
@@ -23,6 +24,7 @@ const STAFF_SELECT = {
   id: true,
   email: true,
   name: true,
+  phone: true,
   role: true,
   isVerified: true,
   canApprove: true,
@@ -68,6 +70,16 @@ function cleanEmail(raw: unknown): string {
   return email;
 }
 
+/** Staff mobile — REQUIRED at invite (login details + OTP go here by SMS). */
+function cleanPhone(raw: unknown): string {
+  if (typeof raw !== 'string') throw new Error('INVALID_PHONE');
+  let digits = raw.replace(/[^\d]/g, '');
+  if (digits.startsWith('880')) digits = '0' + digits.slice(3);
+  if (digits.startsWith('00880')) digits = '0' + digits.slice(5);
+  if (!/^01\d{9}$/.test(digits)) throw new Error('INVALID_PHONE');
+  return digits;
+}
+
 /** 10-char alphanumeric temporary password. */
 function makeTempPassword(): string {
   return crypto.randomBytes(8).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).padEnd(10, '7');
@@ -104,10 +116,11 @@ export async function listStaff(caller: StaffCaller) {
 
 export async function inviteStaff(
   caller: StaffCaller,
-  input: { email?: string; name?: string; canApprove?: unknown; canManageChambers?: unknown },
+  input: { email?: string; name?: string; phone?: string; canApprove?: unknown; canManageChambers?: unknown },
 ) {
   const email = cleanEmail(input.email);
   const name = cleanName(input.name);
+  const phone = cleanPhone(input.phone);
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) throw new Error('EMAIL_TAKEN');
 
@@ -123,6 +136,7 @@ export async function inviteStaff(
       data: {
         email,
         name,
+        phone,
         password: hashedPassword,
         role: 'HOSPITAL_STAFF',
         isVerified: true,
@@ -150,7 +164,17 @@ export async function inviteStaff(
       console.error('Staff credentials email failed:', error);
       emailSent = false;
     }
-    return { staff, tempPassword, emailSent };
+    // Login details by SMS too — 1 credit from the HOSPITAL wallet.
+    // Best-effort: the email above already delivered them.
+    const smsSent = await sendOtpSms({
+      phone,
+      text: `${hospital?.name ?? 'MrDoctor'}: আপনাকে স্টাফ হিসেবে যোগ করা হয়েছে। ইমেইল: ${email}, পাসওয়ার্ড: ${tempPassword} — লগইন করুন।`,
+      owner: { ownerType: 'HOSPITAL', ownerId: hospitalId },
+      refId: staff.id,
+      note: `Staff invite SMS: ${name}`,
+      createdBy: caller.userId,
+    });
+    return { staff, tempPassword, emailSent, smsSent };
   }
 
   const doctorId = await resolveOwnDoctorId(caller);
@@ -167,6 +191,7 @@ export async function inviteStaff(
     data: {
       email,
       name,
+      phone,
       password: hashedPassword,
       role: 'DOCTOR_STAFF',
       isVerified: true,
@@ -195,8 +220,18 @@ export async function inviteStaff(
     console.error('Staff credentials email failed:', error);
     emailSent = false;
   }
+  // Login details by SMS too — 1 credit from the DOCTOR wallet.
+  // Best-effort: the email above already delivered them.
+  const smsSent = await sendOtpSms({
+    phone,
+    text: `${doctor?.name ?? 'MrDoctor'}: আপনাকে স্টাফ হিসেবে যোগ করা হয়েছে। ইমেইল: ${email}, পাসওয়ার্ড: ${tempPassword} — লগইন করুন।`,
+    owner: { ownerType: 'DOCTOR', ownerId: doctorId },
+    refId: staff.id,
+    note: `Staff invite SMS: ${name}`,
+    createdBy: caller.userId,
+  });
   // tempPassword is shown exactly once — it is never stored in plain text.
-  return { staff, tempPassword, emailSent };
+  return { staff, tempPassword, emailSent, smsSent };
 }
 
 /** Flip a staff member's rights.
