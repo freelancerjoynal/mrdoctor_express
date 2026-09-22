@@ -8,6 +8,7 @@ import { BACK_HINT, MENU_BUTTON, withNav } from "../../lib/navButtons.js";
 import { saveConnectSession } from "../../lib/chatSession.js";
 import { prisma } from "../../../lib/prisma.js";
 import { notifyAppointments } from "../../../realtime/notify.js";
+import { spendAppointmentCredit, voidSpend, linkCreditRef } from "../../../lib/creditService.js";
 import { getButtonId } from "../../lib/session.js";
 import {
     DOCTOR_TEXTS,
@@ -88,24 +89,39 @@ async function savePendingAppointment(phoneNumber: string, data: any) {
     const appointmentDate: Date = data.appointmentDate instanceof Date
         ? data.appointmentDate
         : new Date(data.appointmentDate);
-    const created = await prisma.pendingAppointment.create({
-        data: {
-            phoneNumber,
-            doctorId: data.doctorId,
-            doctorName: data.name || null,
-            problem: data.problem,
-            appointmentDate,
-            dayLabel: data.dayLabel || null,
-            chamberId: data.chamberId || null,
-            chamberName: data.chamberName || null,
-            patientName: data.patientName,
-            patientAge: data.patientAge ?? null,
-            patientWeight: data.patientWeight ?? null,
-            patientArea: data.patientArea || null,
-            contactPhone: data.contactPhone,
-            status: "PENDING",
-        },
+    // 1 appointment = 1 credit from the DOCTOR wallet (patient-side booking).
+    const charge = await spendAppointmentCredit({
+        ownerType: 'DOCTOR',
+        ownerId: data.doctorId,
+        refType: 'PendingAppointment',
+        createdBy: null,
+        note: `WhatsApp: ${data.patientName || ''}`.slice(0, 120),
     });
+    let created;
+    try {
+        created = await prisma.pendingAppointment.create({
+            data: {
+                phoneNumber,
+                doctorId: data.doctorId,
+                doctorName: data.name || null,
+                problem: data.problem,
+                appointmentDate,
+                dayLabel: data.dayLabel || null,
+                chamberId: data.chamberId || null,
+                chamberName: data.chamberName || null,
+                patientName: data.patientName,
+                patientAge: data.patientAge ?? null,
+                patientWeight: data.patientWeight ?? null,
+                patientArea: data.patientArea || null,
+                contactPhone: data.contactPhone,
+                status: "PENDING",
+            },
+        });
+    } catch (err) {
+        await voidSpend(charge.ledgerId);
+        throw err;
+    }
+    await linkCreditRef(charge.ledgerId, created.id);
     notifyAppointments({ doctorId: data.doctorId ?? null, chamberId: data.chamberId ?? null });
     return created;
 }
@@ -391,8 +407,13 @@ export async function handleGetDoctorFlow(
         const finalData = go("APT_DONE", { contactPhone });
         try {
             await savePendingAppointment(phoneNumber, finalData);
-        } catch (error) {
+        } catch (error: any) {
             console.error("❌ PendingAppointment save error:", error);
+            if (error?.message === 'INSUFFICIENT_CREDIT') {
+                await sendWhatsAppMessage(phoneNumber, "❌ দুঃখিত, এই মুহূর্তে বুকিং নেওয়া যাচ্ছে না — দয়া করে চেম্বারে ফোন করে সিরিয়াল নিন।");
+                go("APT_ASK_PHONE", {});
+                return;
+            }
             await sendWhatsAppMessage(phoneNumber, DOCTOR_TEXTS.DB_ERROR);
             go("APT_ASK_PHONE", {});
             return;

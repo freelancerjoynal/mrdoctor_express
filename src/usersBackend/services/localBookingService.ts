@@ -4,6 +4,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { singleMessage } from '../../lib/sms.js';
 import { createConfirmedWithSerial } from './confirmedService.js';
+import { spendAppointmentCredit, voidSpend, linkCreditRef } from '../../lib/creditService.js';
 import { notifyAppointments } from '../../realtime/notify.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
 
@@ -348,29 +349,47 @@ export async function createLocalBooking(caller: LocalBookingCaller, input: Loca
   }
 
   const taker = await resolveTaker(caller);
-  const booking = await createConfirmedWithSerial({
-    doctorId: doctor.id,
-    appointmentDate,
-    doctorName: doctor.name,
-    hospitalId,
-    hospitalName: resolvedHospitalName,
-    phoneNumber: phone,
-    problem,
-    dayLabel: bnDate(appointmentDate),
-    chamberId,
-    chamberName,
-    patientName,
-    patientType: type,
-    patientAge: age,
-    patientArea: area,
-    contactPhone: phone,
-    source: 'local',
-    status: 'CONFIRMED',
-    bookingType: 'OFFLINE',
-    collectionAmount,
+  // 1 appointment = 1 credit, charged only after every validation above
+  // passed: hospital desk spends the HOSPITAL wallet, doctor + own staff
+  // spend the DOCTOR wallet. Refunded if the booking write fails below.
+  const charge = await spendAppointmentCredit({
+    ownerType: isHospitalDesk ? 'HOSPITAL' : 'DOCTOR',
+    ownerId: isHospitalDesk ? hospital!.id : doctor.id,
+    refType: 'ConfirmedAppointment',
     createdBy: taker.id,
-    createdByName: taker.name,
+    note: `Walk-in: ${patientName}`,
   });
+  let booking;
+  try {
+    booking = await createConfirmedWithSerial({
+      doctorId: doctor.id,
+      appointmentDate,
+      doctorName: doctor.name,
+      hospitalId,
+      hospitalName: resolvedHospitalName,
+      phoneNumber: phone,
+      problem,
+      dayLabel: bnDate(appointmentDate),
+      chamberId,
+      chamberName,
+      patientName,
+      patientType: type,
+      patientAge: age,
+      patientArea: area,
+      contactPhone: phone,
+      source: 'local',
+      status: 'CONFIRMED',
+      bookingType: 'OFFLINE',
+      collectionAmount,
+      createdBy: taker.id,
+      createdByName: taker.name,
+    });
+  } catch (err) {
+    await voidSpend(charge.ledgerId);
+    throw err;
+  }
+  const bookingId = (booking as { id?: unknown }).id;
+  if (typeof bookingId === 'string' && bookingId) await linkCreditRef(charge.ledgerId, bookingId);
 
   let smsSent = false;
   try {

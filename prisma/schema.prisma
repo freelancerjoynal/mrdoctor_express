@@ -254,6 +254,12 @@ model Doctor {
   liveBreakReason   String?
   liveBreakUntil    DateTime?
 
+  // Credit wallet: 1 appointment = 1 credit (cancelled ones cost too).
+  // Balance may go negative up to the due limit (doctor 200, hospital 500);
+  // every movement is recorded in CreditLedger below.
+  creditBalance       Int             @default(0)
+  creditLedger        CreditLedger[]  @relation("DoctorCredits")
+
   chambers              Chamber[]
   schedules             DoctorSchedule[]
   pendingAppointments   PendingAppointment[]
@@ -292,6 +298,11 @@ model Hospital {
   establishedYear Int?
   status          HospitalStatus @default(PENDING)
 
+  // Credit wallet: same rules as doctors (1 appointment = 1 credit),
+  // but hospitals may go due up to 500 credits.
+  creditBalance       Int             @default(0)
+  creditLedger        CreditLedger[]  @relation("HospitalCredits")
+
   chambers              Chamber[]
   schedules             DoctorSchedule[]
   blogs                 Blog[]
@@ -307,6 +318,40 @@ model Hospital {
   updatedAt DateTime @updatedAt
 
   @@map("hospitals")
+}
+
+// Credit ledger: every wallet movement for doctors + hospitals.
+// 1 appointment = 1 credit (APPOINTMENT_SPEND), even cancelled ones — the
+// spend happens at booking creation and is never refunded. Admins add
+// credit with TOPUP. ownerType is TEXT (not a PG enum) on purpose so the
+// table migrates with plain SQL anywhere.
+model CreditLedger {
+  id String @id @default(uuid())
+
+  // Owner: exactly one of the two is set.
+  ownerType  String // "DOCTOR" | "HOSPITAL"
+  doctorId   String?
+  doctor     Doctor?   @relation("DoctorCredits", fields: [doctorId], references: [id], onDelete: Cascade)
+  hospitalId String?
+  hospital   Hospital? @relation("HospitalCredits", fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  // Movement: negative = spend, positive = top-up/adjustment.
+  amount       Int
+  balanceAfter Int
+  // Kind: "APPOINTMENT_SPEND" | "TOPUP" | "ADJUSTMENT".
+  kind      String
+  // What consumed it: "PendingAppointment" | "ConfirmedAppointment" (+ row id).
+  refType   String?
+  refId     String?
+  note      String?
+  // Who triggered it (user id) — null for patient-side website/WhatsApp bookings.
+  createdBy String?
+
+  createdAt DateTime @default(now())
+
+  @@index([ownerType, doctorId, createdAt])
+  @@index([ownerType, hospitalId, createdAt])
+  @@map("credit_ledger")
 }
 
 model Chamber {

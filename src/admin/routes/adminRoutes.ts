@@ -14,6 +14,7 @@ import {
   saveLocationSetting,
 } from '../controllers/adminController.js';
 import { listSeo, showSeo, saveSeo, removeSeo } from '../controllers/seoController.js';
+import { showCredit, runTopup } from '../controllers/creditController.js';
 
 const adminRouter = express.Router();
 
@@ -29,6 +30,9 @@ adminRouter.get('/hospitals/:id/overview', admins, showHospitalOverview);
 adminRouter.get('/location-settings', admins, listLocationSettings);
 adminRouter.get('/location-settings/:slug', admins, showLocationSetting);
 adminRouter.put('/location-settings/:slug', admins, saveLocationSetting);
+// Credit wallets — balance + ledger view, admin top-ups.
+adminRouter.get('/credits', admins, showCredit);
+adminRouter.post('/credits/topup', admins, runTopup);
 // Per-page SEO (titles, descriptions, OG, canonical per location/doctor/hospital).
 adminRouter.get('/seo', admins, listSeo);
 adminRouter.get('/seo/:pageType/:pageKey', admins, showSeo);

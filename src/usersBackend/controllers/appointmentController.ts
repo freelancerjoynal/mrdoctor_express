@@ -271,6 +271,8 @@ export const createLocalBookingAppointment = async (req: AuthenticatedRequest, r
       return res.status(400).json({ error: 'আজ চেম্বার বন্ধ আছে।' });
     if (error.message === 'INVALID_AGE') return res.status(400).json({ error: 'সঠিক বয়স দিন।' });
     if (error.message === 'INVALID_CHAMBER') return res.status(400).json({ error: 'চেম্বার সঠিক নয়।' });
+    if (error.message === 'INSUFFICIENT_CREDIT')
+      return res.status(402).json({ error: '❌ ক্রেডিট শেষ! বাকি বা বকেয়া সীমাও শেষ — নতুন বুকিং নিতে সাপোর্টে যোগাযোগ করুন।' });
     return res.status(500).json({ error: 'Failed to create booking' });
   }
 };

@@ -9,6 +9,7 @@ import appointmentRouter from './appointmentRoutes.js';
 import staffRouter from './staffRoutes.js';
 import chamberRouter from './chamberRoutes.js';
 import serialLiveRouter from './serialLiveRoutes.js';
+import creditRouter from './creditRoutes.js';
 import hospitalBalanceRouter from './hospitalBalanceRoutes.js';
 import incomeRouter from './incomeRoutes.js';
 import streamRouter from '../../realtime/streamRoutes.js';
@@ -38,6 +39,9 @@ usersRouter.use('/chambers', chamberRouter);
 
 // GET|POST /api/users/serial-live — live serial scoreboard controls
 usersRouter.use('/serial-live', serialLiveRouter);
+
+// GET /api/users/credits/balance — own credit wallet (doctor/hospital/staff)
+usersRouter.use('/credits', creditRouter);
 
 // GET /api/users/hospital-balance/summary|payouts — online balance ledger (hospital owner + super-admin)
 usersRouter.use('/hospital-balance', hospitalBalanceRouter);
