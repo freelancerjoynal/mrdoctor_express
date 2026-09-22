@@ -1,9 +1,9 @@
 // Thin controller for the live serial scoreboard controls.
 // GET /api/users/serial-live/status — own live state + today's queue snapshot.
-// POST /api/users/serial-live/start|stop|skip|recall — doctor + staff run the board.
+// POST /api/users/serial-live/start|stop|skip|recall|break|break/end — doctor + staff run the board.
 import type { Response } from 'express';
 import type { AuthenticatedRequest, UserRole } from '../../authentication/middleware/authMiddleware.js';
-import { getSerialLiveStatus, startSerialLive, stopSerialLive, skipCurrentSerial, recallSerial } from '../services/serialLiveService.js';
+import { getSerialLiveStatus, startSerialLive, stopSerialLive, skipCurrentSerial, recallSerial, startLiveBreak, endLiveBreak } from '../services/serialLiveService.js';
 
 function callerOf(req: AuthenticatedRequest) {
   return { userId: req.user!.userId, role: req.user!.role as UserRole };
@@ -17,6 +17,7 @@ function handleError(res: Response, error: any, fallback: string) {
   if (code === 'NO_LIVE') return res.status(400).json({ error: 'লাইভ চালু নেই।' });
   if (code === 'NO_CURRENT') return res.status(400).json({ error: 'স্কিপ করার মতো সিরিয়াল নেই।' });
   if (code === 'NO_NEXT_SERIAL') return res.status(400).json({ error: 'এটাই শেষ সিরিয়াল — স্কিপ করা যাবে না।' });
+  if (code === 'INVALID_BREAK') return res.status(400).json({ error: 'বিরতির সময় ১–১৮০ মিনিটের মধ্যে দিন।' });
   return res.status(500).json({ error: fallback });
 }
 
@@ -77,5 +78,24 @@ export const runSerialLiveRecall = async (req: AuthenticatedRequest, res: Respon
     if (error?.message === 'INVALID_SERIAL')
       return res.status(400).json({ error: 'সঠিক সিরিয়াল নম্বর দিন।' });
     return handleError(res, error, 'Failed to recall serial');
+  }
+};
+
+export const runLiveBreakStart = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const body = (req.body ?? {}) as { reason?: unknown; minutes?: unknown };
+    const data = await startLiveBreak(callerOf(req), body.reason, body.minutes);
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    return handleError(res, error, 'বিরতি চালু করা যায়নি।');
+  }
+};
+
+export const runLiveBreakEnd = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await endLiveBreak(callerOf(req));
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    return handleError(res, error, 'বিরতি শেষ করা যায়নি।');
   }
 };

@@ -194,9 +194,27 @@ export async function getSerialLiveBoard(username: string) {
       liveCurrentSerial: true,
       liveUpdatedAt: true,
       liveSkippedAt: true,
+      liveBreakReason: true,
+      liveBreakUntil: true,
     },
   });
   if (!doctor) throw new Error('DOCTOR_NOT_FOUND');
+  const breakUntilRaw = doctor.liveBreakUntil as unknown;
+  const breakUntil =
+    breakUntilRaw instanceof Date
+      ? breakUntilRaw
+      : typeof breakUntilRaw === 'string'
+        ? new Date(breakUntilRaw)
+        : null;
+  const breakActive =
+    doctor.serialLive &&
+    typeof doctor.liveBreakReason === 'string' &&
+    doctor.liveBreakReason.trim() !== '' &&
+    breakUntil &&
+    !Number.isNaN(breakUntil.getTime()) &&
+    breakUntil.getTime() > Date.now()
+      ? { reason: doctor.liveBreakReason, endsAt: breakUntil }
+      : null;
   const base = {
     live: doctor.serialLive,
     doctor: {
@@ -206,8 +224,9 @@ export async function getSerialLiveBoard(username: string) {
       profilePicture: doctor.profilePicture,
     },
     liveUpdatedAt: doctor.liveUpdatedAt,
+    break: breakActive,
   };
-  if (!doctor.serialLive) return { ...base, current: null, next: null, upcoming: [], missed: [], waitingCount: 0, totalToday: 0 };
+  if (!doctor.serialLive) return { ...base, break: null, current: null, next: null, upcoming: [], missed: [], waitingCount: 0, totalToday: 0 };
 
   const now = new Date();
   const gte = new Date(now.getFullYear(), now.getMonth(), now.getDate());

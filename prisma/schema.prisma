@@ -250,6 +250,9 @@ model Doctor {
   // Skip timestamps ("not present" punishment clock): { "<serial>": "<ISO time>" }.
   // A skipped serial can be recalled to the board only 20 minutes after its skip.
   liveSkippedAt     Json?
+  // Break ("বিরতি"): reason + return time, shown on the public board while live.
+  liveBreakReason   String?
+  liveBreakUntil    DateTime?
 
   chambers              Chamber[]
   schedules             DoctorSchedule[]

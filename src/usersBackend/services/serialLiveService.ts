@@ -87,6 +87,11 @@ async function todayQueue(doctorId: string): Promise<LiveEntry[]> {
   }));
 }
 
+export interface LiveBreak {
+  reason: string;
+  endsAt: Date | null;
+}
+
 export interface LiveSnapshot {
   live: boolean;
   current: LiveEntry | null;
@@ -97,6 +102,20 @@ export interface LiveSnapshot {
   waitingCount: number;
   totalToday: number;
   liveUpdatedAt: Date | null;
+  /** Doctor break ("বিরতি") — reason + return time, shown on the board. */
+  break: LiveBreak | null;
+}
+
+/**
+ * Active break or null (missing fields, live off, or return time passed).
+ * Expired breaks read as "no break" — the doctor ends it or starts a new one.
+ */
+function toLiveBreak(live: boolean, reason: string | null, until: Date | null): LiveBreak | null {
+  if (!live || !reason) return null;
+  if (until && !(until instanceof Date)) until = new Date(until);
+  if (until && Number.isNaN(until.getTime())) return null;
+  if (until && until.getTime() <= Date.now()) return null;
+  return { reason, endsAt: until };
 }
 
 function snapshot(
@@ -105,6 +124,7 @@ function snapshot(
   liveUpdatedAt: Date | null,
   queue: LiveEntry[],
   skipMap: Record<string, string> = {},
+  liveBreak: LiveBreak | null = null,
 ): LiveSnapshot {
   const pinned = liveCurrentSerial != null ? (queue.find((q) => q.serial === liveCurrentSerial) ?? null) : null;
   const current = pinned ?? queue[0] ?? null;
@@ -136,6 +156,7 @@ function snapshot(
     waitingCount: current ? queue.length - 1 : queue.length,
     totalToday: queue.length,
     liveUpdatedAt,
+    break: liveBreak,
   };
 }
 
@@ -143,16 +164,17 @@ export async function getSerialLiveStatus(caller: SerialLiveCaller) {
   const doctorId = await resolveOwnDoctorId(caller);
   const doctor = await prisma.doctor.findUnique({
     where: { id: doctorId },
-    select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true, liveSkippedAt: true },
+    select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true, liveSkippedAt: true, liveBreakReason: true, liveBreakUntil: true },
   });
   if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
   const queue = await todayQueue(doctorId);
   let skipMap = parseSkipMap(doctor.liveSkippedAt);
-  let snap = snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue, skipMap);
+  const liveBreak = toLiveBreak(doctor.serialLive, doctor.liveBreakReason, doctor.liveBreakUntil);
+  let snap = snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue, skipMap, liveBreak);
   const released = await autoReleaseIfFewLeft(doctor.id, doctor.serialLive, queue, skipMap, snap.missed.length);
   if (released !== skipMap) {
     skipMap = released;
-    snap = snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue, skipMap);
+    snap = snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue, skipMap, liveBreak);
   }
   return { doctorId: doctor.id, ...snap };
 }
@@ -166,8 +188,10 @@ export async function startSerialLive(caller: SerialLiveCaller) {
       serialLive: true,
       liveCurrentSerial: queue[0]?.serial ?? null,
       liveUpdatedAt: new Date(),
-      // Fresh board — yesterday's skip clocks never carry over.
+      // Fresh board — yesterday's skip clocks and breaks never carry over.
       liveSkippedAt: Prisma.DbNull,
+      liveBreakReason: null,
+      liveBreakUntil: null,
     },
     select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true },
   });
@@ -179,12 +203,61 @@ export async function stopSerialLive(caller: SerialLiveCaller) {
   const doctorId = await resolveOwnDoctorId(caller);
   const doctor = await prisma.doctor.update({
     where: { id: doctorId },
-    data: { serialLive: false, liveCurrentSerial: null, liveUpdatedAt: new Date(), liveSkippedAt: Prisma.DbNull },
+    data: { serialLive: false, liveCurrentSerial: null, liveUpdatedAt: new Date(), liveSkippedAt: Prisma.DbNull, liveBreakReason: null, liveBreakUntil: null },
     select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true },
   });
   const queue = await todayQueue(doctorId);
   notifyLive(doctor.id);
   return { doctorId: doctor.id, ...snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue) };
+}
+
+/**
+ * Start a break ("বিরতি"): the public board shows the reason + return time,
+ * and the TV stops repeating the next-person call until the break ends.
+ * Minutes are clamped to 1–180.
+ */
+export async function startLiveBreak(caller: SerialLiveCaller, reasonRaw: unknown, minutesRaw: unknown) {
+  const doctorId = await resolveOwnDoctorId(caller);
+  const doctor = await prisma.doctor.findUnique({
+    where: { id: doctorId },
+    select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true, liveSkippedAt: true },
+  });
+  if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
+  if (!doctor.serialLive) throw new Error('NO_LIVE');
+  const minutes = typeof minutesRaw === 'string' && minutesRaw.trim() !== '' ? Number(minutesRaw) : minutesRaw;
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes)) throw new Error('INVALID_BREAK');
+  const mins = Math.min(180, Math.max(1, Math.round(minutes)));
+  const reason = typeof reasonRaw === 'string' ? reasonRaw.trim().slice(0, 140) : '';
+  const liveBreak: LiveBreak = { reason: reason || 'বিরতি', endsAt: new Date(Date.now() + mins * 60000) };
+  const updated = await prisma.doctor.update({
+    where: { id: doctorId },
+    data: { liveBreakReason: liveBreak.reason, liveBreakUntil: liveBreak.endsAt, liveUpdatedAt: new Date() },
+    select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true },
+  });
+  const queue = await todayQueue(doctorId);
+  const skipMap = parseSkipMap(doctor.liveSkippedAt);
+  notifyLive(updated.id);
+  return { doctorId: updated.id, ...snapshot(updated.serialLive, updated.liveCurrentSerial, updated.liveUpdatedAt, queue, skipMap, liveBreak) };
+}
+
+/** End the break early — the board and the repeating next-call resume. */
+export async function endLiveBreak(caller: SerialLiveCaller) {
+  const doctorId = await resolveOwnDoctorId(caller);
+  const doctor = await prisma.doctor.findUnique({
+    where: { id: doctorId },
+    select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true, liveSkippedAt: true },
+  });
+  if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
+  if (!doctor.serialLive) throw new Error('NO_LIVE');
+  const updated = await prisma.doctor.update({
+    where: { id: doctorId },
+    data: { liveBreakReason: null, liveBreakUntil: null, liveUpdatedAt: new Date() },
+    select: { id: true, serialLive: true, liveCurrentSerial: true, liveUpdatedAt: true },
+  });
+  const queue = await todayQueue(doctorId);
+  const skipMap = parseSkipMap(doctor.liveSkippedAt);
+  notifyLive(updated.id);
+  return { doctorId: updated.id, ...snapshot(updated.serialLive, updated.liveCurrentSerial, updated.liveUpdatedAt, queue, skipMap, null) };
 }
 
 /**
@@ -198,7 +271,7 @@ export async function skipCurrentSerial(caller: SerialLiveCaller) {
   const doctorId = await resolveOwnDoctorId(caller);
   const doctor = await prisma.doctor.findUnique({
     where: { id: doctorId },
-    select: { id: true, serialLive: true, liveCurrentSerial: true, liveSkippedAt: true },
+    select: { id: true, serialLive: true, liveCurrentSerial: true, liveSkippedAt: true, liveBreakReason: true, liveBreakUntil: true },
   });
   if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
   if (!doctor.serialLive) throw new Error('NO_LIVE');
@@ -227,7 +300,7 @@ export async function skipCurrentSerial(caller: SerialLiveCaller) {
   return {
     doctorId: updated.id,
     skipped: { ...current, skippedAt: pruned[String(current.serial)] ?? null },
-    ...snapshot(updated.serialLive, updated.liveCurrentSerial, updated.liveUpdatedAt, queue, pruned),
+    ...snapshot(updated.serialLive, updated.liveCurrentSerial, updated.liveUpdatedAt, queue, pruned, toLiveBreak(updated.serialLive, doctor.liveBreakReason, doctor.liveBreakUntil)),
   };
 }
 
@@ -269,7 +342,7 @@ export async function recallSerial(caller: SerialLiveCaller, serialRaw: unknown)
   const doctorId = await resolveOwnDoctorId(caller);
   const doctor = await prisma.doctor.findUnique({
     where: { id: doctorId },
-    select: { id: true, serialLive: true, liveCurrentSerial: true, liveSkippedAt: true },
+    select: { id: true, serialLive: true, liveCurrentSerial: true, liveSkippedAt: true, liveBreakReason: true, liveBreakUntil: true },
   });
   if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
   if (!doctor.serialLive) throw new Error('NO_LIVE');
@@ -309,14 +382,16 @@ export async function recallSerial(caller: SerialLiveCaller, serialRaw: unknown)
   return {
     doctorId: updated.id,
     recalled: target,
-    ...snapshot(updated.serialLive, updated.liveCurrentSerial, updated.liveUpdatedAt, queue, pruned),
+    ...snapshot(updated.serialLive, updated.liveCurrentSerial, updated.liveUpdatedAt, queue, pruned, toLiveBreak(updated.serialLive, doctor.liveBreakReason, doctor.liveBreakUntil)),
   };
 }
 
 /**
  * Called (best-effort) after a serve: when the served serial was the live
  * current one, the next pending serial takes the board ("get in") and the
- * one after is flagged ready. Never throws — serving must not fail.
+ * one after is flagged ready. When NOBODY is left, the live stops itself
+ * (serialLive=false) so the board flips to "সম্প্রচার বন্ধ" instead of
+ * glowing LIVE on an empty list. Never throws — serving must not fail.
  */
 export async function advanceSerialLiveAfterServe(doctorId: string, servedSerial: number): Promise<void> {
   try {
@@ -342,10 +417,32 @@ export async function advanceSerialLiveAfterServe(doctorId: string, servedSerial
     const skipMap = parseSkipMap(doctor.liveSkippedAt);
     const pruned = { ...skipMap };
     delete pruned[String(servedSerial)];
-    await prisma.doctor.update({
-      where: { id: doctorId },
-      data: { liveCurrentSerial: next?.serial ?? null, liveUpdatedAt: new Date(), liveSkippedAt: pruned },
-    });
+    if (!next) {
+      if (queue.length === 0) {
+        // Patient list truly finished — stop the live automatically so the
+        // board flips to "সম্প্রচার বন্ধ" instead of glowing LIVE on nothing.
+        await prisma.doctor.update({
+          where: { id: doctorId },
+          data: { serialLive: false, liveCurrentSerial: null, liveUpdatedAt: new Date(), liveSkippedAt: Prisma.DbNull, liveBreakReason: null, liveBreakUntil: null },
+        });
+      } else {
+        // Only missed ("not present") serials remain below — put the first
+        // back on the board and keep the live running for them.
+        const firstLeft = queue[0];
+        if (firstLeft) {
+          await prisma.doctor.update({
+            where: { id: doctorId },
+            data: { liveCurrentSerial: firstLeft.serial, liveUpdatedAt: new Date(), liveSkippedAt: pruned },
+          });
+        }
+      }
+    } else {
+      await prisma.doctor.update({
+        where: { id: doctorId },
+        data: { liveCurrentSerial: next.serial, liveUpdatedAt: new Date(), liveSkippedAt: pruned },
+      });
+    }
+    notifyLive(doctorId);
   } catch (error) {
     console.error('[SerialLive] advance failed:', error);
   }

@@ -1,0 +1,2 @@
+ALTER TABLE "doctors" ADD COLUMN IF NOT EXISTS "liveBreakReason" TEXT;
+ALTER TABLE "doctors" ADD COLUMN IF NOT EXISTS "liveBreakUntil" TIMESTAMP(3);

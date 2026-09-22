@@ -8,6 +8,8 @@ import {
   runSerialLiveStop,
   runSerialLiveSkip,
   runSerialLiveRecall,
+  runLiveBreakStart,
+  runLiveBreakEnd,
 } from '../controllers/serialLiveController.js';
 
 const serialLiveRouter = express.Router();
@@ -19,5 +21,7 @@ serialLiveRouter.post('/start', protectedRoute(...OPERATORS), runSerialLiveStart
 serialLiveRouter.post('/stop', protectedRoute(...OPERATORS), runSerialLiveStop);
 serialLiveRouter.post('/skip', protectedRoute(...OPERATORS), runSerialLiveSkip);
 serialLiveRouter.post('/recall', protectedRoute(...OPERATORS), runSerialLiveRecall);
+serialLiveRouter.post('/break', protectedRoute(...OPERATORS), runLiveBreakStart);
+serialLiveRouter.post('/break/end', protectedRoute(...OPERATORS), runLiveBreakEnd);
 
 export default serialLiveRouter;
