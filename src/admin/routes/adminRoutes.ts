@@ -15,6 +15,10 @@ import {
 } from '../controllers/adminController.js';
 import { listSeo, showSeo, saveSeo, removeSeo } from '../controllers/seoController.js';
 import { showCredit, runTopup } from '../controllers/creditController.js';
+import {
+  showContactMessages,
+  runContactStatus,
+} from '../controllers/contactAdminController.js';
 
 const adminRouter = express.Router();
 
@@ -38,5 +42,8 @@ adminRouter.get('/seo', admins, listSeo);
 adminRouter.get('/seo/:pageType/:pageKey', admins, showSeo);
 adminRouter.put('/seo/:pageType/:pageKey', admins, saveSeo);
 adminRouter.delete('/seo/:pageType/:pageKey', admins, removeSeo);
+// Contact-form inbox (/contact submissions — NEW → READ → REPLIED → ARCHIVED).
+adminRouter.get('/contact-messages', admins, showContactMessages);
+adminRouter.patch('/contact-messages/:id', admins, runContactStatus);
 
 export default adminRouter;

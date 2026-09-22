@@ -834,3 +834,27 @@ model Review {
   @@index([hospitalId, status])
   @@map("reviews")
 }
+
+// Contact-form messages — /contact page submissions (no account needed).
+// User concerns + opinions land here as NEW; SUPER_ADMIN / ADMIN_MANAGER
+// triage them from /admin/messages (READ → REPLIED → ARCHIVED).
+// Status is TEXT (not a PG enum) on purpose so the table migrates
+// with plain SQL anywhere — same convention as CreditLedger.ownerType.
+model ContactMessage {
+  id      String  @id @default(uuid())
+  name    String
+  phone   String
+  email   String?
+  topic   String  @default("GENERAL")
+  subject String?
+  message String
+
+  status String @default("NEW")
+  source String @default("website")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@map("contact_messages")
+}

@@ -8,6 +8,7 @@ import locationRouter from './locationRoutes.js';
 import blogRouter from './blogRoutes.js';
 import reviewRouter from './reviewRoutes.js';
 import appointmentRouter from './appointmentRoutes.js';
+import contactRouter from './contactRoutes.js';
 import seoRouter from './seoRoutes.js';
 
 const websiteRouter = express.Router();
@@ -29,6 +30,9 @@ websiteRouter.use('/', reviewRouter);
 
 // Public appointments (unauthenticated by design — creates PENDING rows)
 websiteRouter.use('/', appointmentRouter);
+
+// Public contact form (unauthenticated by design — creates NEW rows)
+websiteRouter.use('/', contactRouter);
 
 // Public per-page SEO (unauthenticated by design — single-row read)
 websiteRouter.use('/', seoRouter);

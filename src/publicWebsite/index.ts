@@ -36,5 +36,7 @@ export {
   getHospitalReviews,
 } from './services/reviewService.js';
 export type { RatingSummary, SubmitReviewInput } from './services/reviewService.js';
+export { submitContactMessage, CONTACT_TOPICS } from './services/contactService.js';
+export type { SubmitContactInput } from './services/contactService.js';
 export { homeFlow } from './flows/homeFlow.js';
 export { websiteRouter } from './routes/index.js';
