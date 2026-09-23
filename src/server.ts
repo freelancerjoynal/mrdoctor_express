@@ -50,3 +50,18 @@ const PORT = 8000;
 app.listen(PORT, () => {
   console.log(`TS Server is running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
+
+// Background sweep: turn off abandoned/empty/rolled-over live serial boards
+// even when no request arrives to trigger the lazy checks (closed tabs,
+// logouts, dead sessions, midnight). Keeps overnight TVs from holding load.
+void (async () => {
+  try {
+    const { sweepStaleLives, LIVE_SWEEP_MS } = await import('./usersBackend/services/serialLiveService.js');
+    const run = () =>
+      sweepStaleLives().catch((err) => console.error('[SerialLive] sweep failed:', err));
+    void run();
+    setInterval(run, LIVE_SWEEP_MS);
+  } catch (err) {
+    console.error('[SerialLive] sweep scheduler failed to start:', err);
+  }
+})();

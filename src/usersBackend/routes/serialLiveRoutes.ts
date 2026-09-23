@@ -6,6 +6,7 @@ import {
   showSerialLiveStatus,
   runSerialLiveStart,
   runSerialLiveStop,
+  runSerialLiveHeartbeat,
   runSerialLiveSkip,
   runSerialLiveRecall,
   runLiveBreakStart,
@@ -19,6 +20,7 @@ const OPERATORS = ['DOCTOR', 'DOCTOR_STAFF'] as const;
 serialLiveRouter.get('/status', protectedRoute(...OPERATORS), showSerialLiveStatus);
 serialLiveRouter.post('/start', protectedRoute(...OPERATORS), runSerialLiveStart);
 serialLiveRouter.post('/stop', protectedRoute(...OPERATORS), runSerialLiveStop);
+serialLiveRouter.post('/heartbeat', protectedRoute(...OPERATORS), runSerialLiveHeartbeat);
 serialLiveRouter.post('/skip', protectedRoute(...OPERATORS), runSerialLiveSkip);
 serialLiveRouter.post('/recall', protectedRoute(...OPERATORS), runSerialLiveRecall);
 serialLiveRouter.post('/break', protectedRoute(...OPERATORS), runLiveBreakStart);

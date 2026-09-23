@@ -239,6 +239,19 @@ export const refresh = async (req: Request, res: Response) => {
 // 7. Logout
 export const logout = async (req: Request, res: Response) => {
   const refreshToken = req.cookies.refreshToken;
+  // Stop any live serial board owned by this session first — a logged-out
+  // doctor must never keep the public /live TV streaming (server pressure).
+  // Best-effort: logout always succeeds even if the live stop fails.
+  try {
+    const raw = refreshToken || req.cookies.accessToken;
+    const payload = raw ? (jwt.decode(raw) as { userId?: string } | null) : null;
+    if (payload?.userId) {
+      const { stopLivesForUser } = await import('../../usersBackend/services/serialLiveService.js');
+      await stopLivesForUser(payload.userId);
+    }
+  } catch {
+    /* live stop is best-effort — continue with logout */
+  }
   if (refreshToken) {
     await prisma.user.updateMany({
       where: { refreshToken },

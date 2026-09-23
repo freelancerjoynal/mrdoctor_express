@@ -13,6 +13,17 @@ import { notifyLive } from '../../realtime/notify.js';
 /** Punishment clock: a skipped serial returns to the board after 20 minutes. */
 export const RECALL_COOLDOWN_MS = 20 * 60 * 1000;
 
+/**
+ * Presence window: while the dashboard is open with live ON it heartbeats
+ * every 2 minutes (touching liveUpdatedAt). A live with no heartbeat, no
+ * serve and no board action for this long is treated as abandoned (tab
+ * closed, logged out, session dead) and stops itself — this is what keeps
+ * overnight TVs and dead sessions from holding server resources.
+ */
+export const LIVE_STALE_MS = 15 * 60 * 1000;
+/** Background sweep cadence (server.ts interval) for stale/empty lives. */
+export const LIVE_SWEEP_MS = 5 * 60 * 1000;
+
 export interface SerialLiveCaller {
   userId: string;
   role: UserRole;
@@ -49,6 +60,51 @@ function todayBounds(): { gte: Date; lt: Date } {
   const now = new Date();
   const gte = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return { gte, lt: new Date(gte.getTime() + 86400000) };
+}
+
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function asDate(v: Date | string | null | undefined): Date | null {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** True when the live has seen no presence (heartbeat/serve/action) within the window. */
+function isLiveStale(liveUpdatedAt: Date | string | null | undefined): boolean {
+  const d = asDate(liveUpdatedAt);
+  if (!d) return true;
+  return Date.now() - d.getTime() > LIVE_STALE_MS;
+}
+
+/**
+ * Hard stop reasons — apply even when the dashboard is actively
+ * heartbeating (a finished day must end even with the tab open).
+ * Returns the reason or null when the live may continue.
+ */
+function hardStopReason(queueLength: number, liveUpdatedAt: Date | null): string | null {
+  if (queueLength === 0) return 'queue-empty';
+  if (liveUpdatedAt && !isSameLocalDay(liveUpdatedAt, new Date())) return 'date-rollover';
+  return null;
+}
+
+/** Force a doctor's live OFF (best-effort notify so TVs/dashboards flip). */
+async function autoStopLive(doctorId: string, reason: string): Promise<void> {
+  await prisma.doctor.update({
+    where: { id: doctorId },
+    data: {
+      serialLive: false,
+      liveCurrentSerial: null,
+      liveUpdatedAt: new Date(),
+      liveSkippedAt: Prisma.DbNull,
+      liveBreakReason: null,
+      liveBreakUntil: null,
+    },
+  });
+  notifyLive(doctorId);
+  console.log(`[SerialLive] auto-stop doctor=${doctorId} reason=${reason}`);
 }
 
 async function resolveOwnDoctorId(caller: SerialLiveCaller): Promise<string> {
@@ -168,6 +224,17 @@ export async function getSerialLiveStatus(caller: SerialLiveCaller) {
   });
   if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
   const queue = await todayQueue(doctorId);
+  // Lazy auto-stop: finished day, midnight rollover, or abandoned session
+  // (no heartbeat/serve/action within the presence window and no active
+  // break) — so dead lives never glow LIVE overnight.
+  if (doctor.serialLive) {
+    const hard = hardStopReason(queue.length, doctor.liveUpdatedAt);
+    const liveBreakNow = toLiveBreak(doctor.serialLive, doctor.liveBreakReason, doctor.liveBreakUntil);
+    if (hard || (!liveBreakNow && isLiveStale(doctor.liveUpdatedAt))) {
+      await autoStopLive(doctor.id, hard ?? 'stale');
+      return { doctorId: doctor.id, ...snapshot(false, null, new Date(), queue, {}, null) };
+    }
+  }
   let skipMap = parseSkipMap(doctor.liveSkippedAt);
   const liveBreak = toLiveBreak(doctor.serialLive, doctor.liveBreakReason, doctor.liveBreakUntil);
   let snap = snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue, skipMap, liveBreak);
@@ -182,6 +249,8 @@ export async function getSerialLiveStatus(caller: SerialLiveCaller) {
 export async function startSerialLive(caller: SerialLiveCaller) {
   const doctorId = await resolveOwnDoctorId(caller);
   const queue = await todayQueue(doctorId);
+  // No point glowing LIVE on an empty list (and no server load for nothing).
+  if (queue.length === 0) throw new Error('NO_APPOINTMENTS');
   const doctor = await prisma.doctor.update({
     where: { id: doctorId },
     data: {
@@ -209,6 +278,110 @@ export async function stopSerialLive(caller: SerialLiveCaller) {
   const queue = await todayQueue(doctorId);
   notifyLive(doctor.id);
   return { doctorId: doctor.id, ...snapshot(doctor.serialLive, doctor.liveCurrentSerial, doctor.liveUpdatedAt, queue) };
+}
+
+/**
+ * Presence heartbeat — the dashboard calls this every ~2 minutes while the
+ * live is ON. Refreshes liveUpdatedAt so an attended board never expires;
+ * a closed tab / logout / dead session simply stops heartbeating and the
+ * lazy + sweep checks turn the live off shortly after.
+ * Never resurrects a finished/rolled-over day (hard stops still apply).
+ */
+export async function heartbeatLive(caller: SerialLiveCaller) {
+  const doctorId = await resolveOwnDoctorId(caller);
+  const doctor = await prisma.doctor.findUnique({
+    where: { id: doctorId },
+    select: { id: true, serialLive: true, liveUpdatedAt: true },
+  });
+  if (!doctor) throw new Error('NO_DOCTOR_PROFILE');
+  if (!doctor.serialLive) return getSerialLiveStatus(caller);
+  const queue = await todayQueue(doctorId);
+  const hard = hardStopReason(queue.length, doctor.liveUpdatedAt);
+  if (hard) {
+    await autoStopLive(doctor.id, hard);
+    return { doctorId: doctor.id, ...snapshot(false, null, new Date(), queue, {}, null) };
+  }
+  await prisma.doctor.update({ where: { id: doctorId }, data: { liveUpdatedAt: new Date() } });
+  return getSerialLiveStatus(caller);
+}
+
+/**
+ * Stop every live owned by a user — called on logout so a doctor's (or
+ * their staffer's) board never keeps streaming after the session ends.
+ * Best-effort and never throws; logout must always succeed.
+ */
+export async function stopLivesForUser(userId: string): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { doctorProfile: { select: { id: true } }, staffDoctor: { select: { id: true } } },
+    });
+    const ids = new Set<string>();
+    const own = (user as { doctorProfile?: { id: string } | null } | null)?.doctorProfile?.id;
+    const staff = (user as { staffDoctor?: { id: string } | null } | null)?.staffDoctor?.id;
+    if (own) ids.add(own);
+    if (staff) ids.add(staff);
+    for (const id of ids) {
+      const d = await prisma.doctor.findUnique({ where: { id }, select: { serialLive: true } });
+      if (d?.serialLive) await autoStopLive(id, 'logout');
+    }
+  } catch (error) {
+    console.error('[SerialLive] stop-on-logout failed:', error);
+  }
+}
+
+/**
+ * Stop the live when today's queue just became empty through a non-serve
+ * path (e.g. deleting the last walk-in). Called best-effort after deletes.
+ */
+export async function autoStopIfQueueEmpty(doctorId: string): Promise<void> {
+  try {
+    const doctor = await prisma.doctor.findUnique({ where: { id: doctorId }, select: { serialLive: true } });
+    if (!doctor?.serialLive) return;
+    const { gte, lt } = todayBounds();
+    const n = await prisma.confirmedAppointment.count({
+      where: { doctorId, appointmentDate: { gte, lt }, status: { not: 'CANCELLED' } },
+    });
+    if (n === 0) await autoStopLive(doctorId, 'queue-empty');
+  } catch (error) {
+    console.error('[SerialLive] auto-stop-if-empty failed:', error);
+  }
+}
+
+/**
+ * Background sweep (server interval): turns off lives nobody is attending
+ * even when no request arrives to trigger the lazy checks — stale presence
+ * (closed tab / logout without hitting the endpoint / dead session),
+ * midnight rollover, and queues that drained to zero. Returns stop count.
+ */
+export async function sweepStaleLives(): Promise<number> {
+  const lives = await prisma.doctor.findMany({
+    where: { serialLive: true },
+    select: { id: true, liveUpdatedAt: true, liveBreakReason: true, liveBreakUntil: true },
+  });
+  let stopped = 0;
+  for (const d of lives) {
+    try {
+      const liveBreak = toLiveBreak(true, d.liveBreakReason, d.liveBreakUntil);
+      if ((d.liveUpdatedAt && !isSameLocalDay(d.liveUpdatedAt, new Date())) || (!liveBreak && isLiveStale(d.liveUpdatedAt))) {
+        await autoStopLive(d.id, d.liveUpdatedAt && !isSameLocalDay(d.liveUpdatedAt, new Date()) ? 'date-rollover' : 'stale');
+        stopped++;
+        continue;
+      }
+      const { gte, lt } = todayBounds();
+      const n = await prisma.confirmedAppointment.count({
+        where: { doctorId: d.id, appointmentDate: { gte, lt }, status: { not: 'CANCELLED' } },
+      });
+      if (n === 0) {
+        await autoStopLive(d.id, 'queue-empty');
+        stopped++;
+      }
+    } catch (error) {
+      console.error('[SerialLive] sweep failed for doctor=', d.id, error);
+    }
+  }
+  if (stopped > 0) console.log(`[SerialLive] sweep stopped ${stopped} stale live(s)`);
+  return stopped;
 }
 
 /**

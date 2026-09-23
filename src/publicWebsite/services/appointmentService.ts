@@ -3,7 +3,38 @@
 // hospitalId is derived from the selected chamber (chamber.hospitalId) so every row
 // stays filterable by doctor AND by hospital.
 import { prisma } from '../../lib/prisma.js';
-import { notifyAppointments } from '../../realtime/notify.js';
+import { Prisma } from '../../../generated/prisma/client.js';
+import { notifyAppointments, notifyLive } from '../../realtime/notify.js';
+
+/**
+ * Presence window mirror (see usersBackend serialLiveService.LIVE_STALE_MS —
+ * duplicated so this public module never imports the operator backend).
+ * A live with no dashboard heartbeat/serve/action for this long is treated
+ * as abandoned (logged out / tab closed / session dead) and the next board
+ * read turns it off instead of serving a stale LIVE frame.
+ */
+const LIVE_STALE_MS = 15 * 60 * 1000;
+
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+/** Force a doctor's live OFF (one write per transition, then reads stay cheap). */
+async function autoStopLiveBoard(doctorId: string, reason: string): Promise<void> {
+  await prisma.doctor.update({
+    where: { id: doctorId },
+    data: {
+      serialLive: false,
+      liveCurrentSerial: null,
+      liveUpdatedAt: new Date(),
+      liveSkippedAt: Prisma.DbNull,
+      liveBreakReason: null,
+      liveBreakUntil: null,
+    },
+  });
+  notifyLive(doctorId);
+  console.log(`[SerialLive] public board auto-stop doctor=${doctorId} reason=${reason}`);
+}
 
 export const DAY_BN: Record<string, string> = {
   SATURDAY: 'শনিবার',
@@ -228,6 +259,23 @@ export async function getSerialLiveBoard(username: string) {
   };
   if (!doctor.serialLive) return { ...base, break: null, current: null, next: null, upcoming: [], missed: [], waitingCount: 0, totalToday: 0 };
 
+  // Lazy auto-stop on the public read path (saves server load from TVs left
+  // on overnight): midnight rollover and abandoned sessions flip the board
+  // to offline here. An active break exempts the staleness check — the
+  // doctor paused on purpose and may have closed the tab meanwhile.
+  const liveAt = doctor.liveUpdatedAt instanceof Date ? doctor.liveUpdatedAt : null;
+  if (liveAt && !isSameLocalDay(liveAt, new Date())) {
+    await autoStopLiveBoard(doctor.id, 'date-rollover');
+    return { ...base, live: false, break: null, current: null, next: null, upcoming: [], missed: [], waitingCount: 0, totalToday: 0 };
+  }
+  if (!breakActive) {
+    const t = liveAt?.getTime() ?? NaN;
+    if (!liveAt || Number.isNaN(t) || Date.now() - t > LIVE_STALE_MS) {
+      await autoStopLiveBoard(doctor.id, 'stale');
+      return { ...base, live: false, break: null, current: null, next: null, upcoming: [], missed: [], waitingCount: 0, totalToday: 0 };
+    }
+  }
+
   const now = new Date();
   const gte = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const [rows, chambers] = await Promise.all([
@@ -249,6 +297,12 @@ export async function getSerialLiveBoard(username: string) {
     hospitalName: (r.chamberId && hospitalOf.get(r.chamberId)) || null,
     bookingType: r.bookingType as 'ONLINE' | 'OFFLINE',
   }));
+  // Today's list drained to zero (all served / deleted) — end the live so
+  // the TV flips to "সম্প্রচার বন্ধ" instead of glowing LIVE on nothing.
+  if (queue.length === 0) {
+    await autoStopLiveBoard(doctor.id, 'queue-empty');
+    return { ...base, live: false, break: null, current: null, next: null, upcoming: [], missed: [], waitingCount: 0, totalToday: 0 };
+  }
   const pinned =
     doctor.liveCurrentSerial != null
       ? (queue.find((q) => q.serial === doctor.liveCurrentSerial) ?? null)

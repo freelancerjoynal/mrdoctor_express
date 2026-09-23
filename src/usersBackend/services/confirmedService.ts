@@ -5,7 +5,7 @@
 import { prisma } from '../../lib/prisma.js';
 import type { UserRole } from '../../authentication/middleware/authMiddleware.js';
 import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
-import { advanceSerialLiveAfterServe } from './serialLiveService.js';
+import { advanceSerialLiveAfterServe, autoStopIfQueueEmpty } from './serialLiveService.js';
 import { recordOnlineServe } from './hospitalBalanceService.js';
 import { notifyAppointments, notifyLive } from '../../realtime/notify.js';
 
@@ -520,7 +520,11 @@ export async function deleteOfflineBooking(caller: ConfirmedCaller, id: string, 
   });
   await prisma.confirmedAppointment.delete({ where: { id } });
   await rearrangeDaySerials(row.doctorId, row.appointmentDate);
+  // Deleting the last booking of the day must end the live too (not only
+  // serving does) — otherwise the board glows LIVE on an empty list.
+  await autoStopIfQueueEmpty(row.doctorId);
   notifyAppointments({ doctorId: row.doctorId, hospitalId: row.hospitalId });
+  notifyLive(row.doctorId);
   return { deleted: true };
 }
 

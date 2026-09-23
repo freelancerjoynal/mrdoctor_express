@@ -3,7 +3,7 @@
 // POST /api/users/serial-live/start|stop|skip|recall|break|break/end — doctor + staff run the board.
 import type { Response } from 'express';
 import type { AuthenticatedRequest, UserRole } from '../../authentication/middleware/authMiddleware.js';
-import { getSerialLiveStatus, startSerialLive, stopSerialLive, skipCurrentSerial, recallSerial, startLiveBreak, endLiveBreak } from '../services/serialLiveService.js';
+import { getSerialLiveStatus, startSerialLive, stopSerialLive, heartbeatLive, skipCurrentSerial, recallSerial, startLiveBreak, endLiveBreak } from '../services/serialLiveService.js';
 
 function callerOf(req: AuthenticatedRequest) {
   return { userId: req.user!.userId, role: req.user!.role as UserRole };
@@ -18,6 +18,8 @@ function handleError(res: Response, error: any, fallback: string) {
   if (code === 'NO_CURRENT') return res.status(400).json({ error: 'স্কিপ করার মতো সিরিয়াল নেই।' });
   if (code === 'NO_NEXT_SERIAL') return res.status(400).json({ error: 'এটাই শেষ সিরিয়াল — স্কিপ করা যাবে না।' });
   if (code === 'INVALID_BREAK') return res.status(400).json({ error: 'বিরতির সময় ১–১৮০ মিনিটের মধ্যে দিন।' });
+  if (code === 'NO_APPOINTMENTS')
+    return res.status(400).json({ error: 'আজকের কোনো অ্যাপয়েন্টমেন্ট নেই — লাইভ চালু করার মতো সিরিয়াল নেই।' });
   return res.status(500).json({ error: fallback });
 }
 
@@ -45,6 +47,16 @@ export const runSerialLiveStop = async (req: AuthenticatedRequest, res: Response
     return res.json({ backend: 'usersBackend', data });
   } catch (error: any) {
     return handleError(res, error, 'Failed to stop live serial');
+  }
+};
+
+// POST /api/users/serial-live/heartbeat — dashboard presence ping while live is ON.
+export const runSerialLiveHeartbeat = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await heartbeatLive(callerOf(req));
+    return res.json({ backend: 'usersBackend', data });
+  } catch (error: any) {
+    return handleError(res, error, 'Failed to heartbeat live serial');
   }
 };
 
