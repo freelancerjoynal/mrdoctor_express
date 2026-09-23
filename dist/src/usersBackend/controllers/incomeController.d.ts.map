@@ -1,0 +1,1 @@
+{"version":3,"file":"incomeController.d.ts","sourceRoot":"","sources":["../../../../src/usersBackend/controllers/incomeController.ts"],"names":[],"mappings":"AAEA,OAAO,KAAK,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AACxC,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,mDAAmD,CAAC;AAI9F,eAAO,MAAM,kBAAkB,GAAU,KAAK,oBAAoB,EAAE,KAAK,QAAQ,gDAehF,CAAC"}

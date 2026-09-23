@@ -54,7 +54,23 @@ async function loadApprovedChamberRows(): Promise<ChamberRow[]> {
   ) as ChamberRow[];
 }
 
-function blankCounts(): LocationCounts & { _doctors: Set<string>; _hospitals: Set<string> } {
+type InternalCounts = LocationCounts & { _doctors: Set<string>; _hospitals: Set<string> };
+
+type InternalThanaNode = ThanaNode & { _doctors: Set<string>; _hospitals: Set<string> };
+
+type InternalDistrictNode = Omit<DistrictNode, 'thanas'> & {
+  thanas: InternalThanaNode[];
+  _doctors: Set<string>;
+  _hospitals: Set<string>;
+};
+
+type InternalDivisionNode = Omit<DivisionNode, 'districts'> & {
+  districts: InternalDistrictNode[];
+  _doctors: Set<string>;
+  _hospitals: Set<string>;
+};
+
+function blankCounts(): InternalCounts {
   return { chambers: 0, doctors: 0, hospitals: 0, _doctors: new Set(), _hospitals: new Set() };
 }
 
@@ -76,7 +92,7 @@ function strip<T extends { _doctors: Set<string>; _hospitals: Set<string> }>(nod
 
 export async function getLocationTree(): Promise<DivisionNode[]> {
   const rows = await loadApprovedChamberRows();
-  const divisions = new Map<string, DivisionNode & { _doctors: Set<string>; _hospitals: Set<string> }>();
+  const divisions = new Map<string, InternalDivisionNode>();
 
   for (const row of rows) {
     let div = divisions.get(row.division);
@@ -86,21 +102,23 @@ export async function getLocationTree(): Promise<DivisionNode[]> {
     }
     bump(div, row);
 
-    let dist = div.districts.find((d) => d.district === row.district);
+    let dist: InternalDistrictNode | undefined = div.districts.find((d) => d.district === row.district);
     if (!dist) {
       const fresh = blankCounts();
-      dist = { district: row.district, chambers: 0, doctors: 0, hospitals: 0, thanas: [], _doctors: fresh._doctors, _hospitals: fresh._hospitals };
-      div.districts.push(dist);
+      const newDist: InternalDistrictNode = { district: row.district, chambers: 0, doctors: 0, hospitals: 0, thanas: [], _doctors: fresh._doctors, _hospitals: fresh._hospitals };
+      div.districts.push(newDist);
+      dist = newDist;
     }
     bump(dist, row);
 
-    let thana = dist.thanas.find((t) => t.thana === row.thana);
+    let thana: InternalThanaNode | undefined = dist.thanas.find((t) => t.thana === row.thana);
     if (!thana) {
       const fresh = blankCounts();
-      thana = { thana: row.thana, chambers: 0, doctors: 0, hospitals: 0, _doctors: fresh._doctors, _hospitals: fresh._hospitals } as ThanaNode & { _doctors: Set<string>; _hospitals: Set<string> };
-      dist.thanas.push(thana);
+      const newThana: InternalThanaNode = { thana: row.thana, chambers: 0, doctors: 0, hospitals: 0, _doctors: fresh._doctors, _hospitals: fresh._hospitals };
+      dist.thanas.push(newThana);
+      thana = newThana;
     }
-    bump(thana as unknown as Parameters<typeof bump>[0], row);
+    bump(thana, row);
   }
 
   return [...divisions.values()]

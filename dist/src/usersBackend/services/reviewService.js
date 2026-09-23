@@ -1,0 +1,70 @@
+// Service layer for moderating the reviews table.
+// DOCTOR / HOSPITAL see and delete reviews on their own profile;
+// status changes (APPROVED / REJECTED) are SUPER_ADMIN-only.
+import { prisma } from '../../lib/prisma.js';
+import { isAdminRole } from '../../authentication/middleware/authMiddleware.js';
+async function ownershipFilter(caller) {
+    if (isAdminRole(caller.role))
+        return null;
+    if (caller.role === 'DOCTOR') {
+        const own = await prisma.user.findUnique({
+            where: { id: caller.userId },
+            select: { doctorProfile: { select: { id: true } } },
+        });
+        const doctorId = own?.doctorProfile?.id;
+        if (!doctorId)
+            throw new Error('NO_DOCTOR_PROFILE');
+        return { doctorId };
+    }
+    if (caller.role === 'HOSPITAL') {
+        const own = await prisma.user.findUnique({
+            where: { id: caller.userId },
+            select: { hospitalProfile: { select: { id: true } } },
+        });
+        const hospitalId = own?.hospitalProfile?.id;
+        if (!hospitalId)
+            throw new Error('NO_HOSPITAL_PROFILE');
+        return { hospitalId };
+    }
+    throw new Error('FORBIDDEN');
+}
+function assertOwned(filter, review) {
+    if (!filter)
+        return;
+    const denied = Object.entries(filter).some(([key, value]) => review[key] !== value);
+    if (denied)
+        throw new Error('FORBIDDEN');
+}
+export async function listReviews(caller, opts = {}) {
+    const filter = await ownershipFilter(caller);
+    const where = { ...(filter ?? {}) };
+    if (opts.status === 'PENDING' || opts.status === 'APPROVED' || opts.status === 'REJECTED') {
+        where.status = opts.status;
+    }
+    return prisma.review.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: Math.min(Math.max(opts.take ?? 20, 1), 50),
+    });
+}
+export async function moderateReview(caller, id, status) {
+    if (!isAdminRole(caller.role))
+        throw new Error('FORBIDDEN');
+    if (status !== 'APPROVED' && status !== 'REJECTED' && status !== 'PENDING') {
+        throw new Error('INVALID_STATUS');
+    }
+    const existing = await prisma.review.findUnique({ where: { id } });
+    if (!existing)
+        throw new Error('REVIEW_NOT_FOUND');
+    return prisma.review.update({ where: { id }, data: { status: status } });
+}
+export async function deleteReview(caller, id) {
+    const filter = await ownershipFilter(caller);
+    const review = await prisma.review.findUnique({ where: { id } });
+    if (!review)
+        throw new Error('REVIEW_NOT_FOUND');
+    assertOwned(filter, review);
+    await prisma.review.delete({ where: { id } });
+    return { id };
+}
+//# sourceMappingURL=reviewService.js.map

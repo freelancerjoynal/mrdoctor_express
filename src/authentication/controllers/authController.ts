@@ -44,9 +44,9 @@ export const verifyOTP = async (req: Request, res: Response) => {
     res.cookie('accessToken', accessToken, { httpOnly: true, maxAge: 15 * 60 * 1000 });
     res.cookie('refreshToken', refreshToken, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
 
-    res.json({ message: 'Verified and logged in successfully!', accessToken });
+    return res.json({ message: 'Verified and logged in successfully!', accessToken });
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -131,7 +131,7 @@ export const login = async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error("Login Error:", error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -172,9 +172,9 @@ export const forgotPassword = async (req: Request, res: Response) => {
         createdBy: user.id,
       });
     }
-    res.json({ message: 'Reset OTP sent to your email', smsSent });
+    return res.json({ message: 'Reset OTP sent to your email', smsSent });
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -211,9 +211,9 @@ export const resetPassword = async (req: Request, res: Response) => {
     `,
     });
 
-    res.json({ message: 'A new password has been sent to your email.' });
+    return res.json({ message: 'A new password has been sent to your email.' });
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -230,9 +230,9 @@ export const refresh = async (req: Request, res: Response) => {
     const newAccessToken = jwt.sign({ userId: decoded.userId, role: decoded.role }, process.env.JWT_ACCESS_SECRET!, { expiresIn: '15m' });
 
     res.cookie('accessToken', newAccessToken, { httpOnly: true, maxAge: 15 * 60 * 1000 });
-    res.json({ message: 'Token refreshed', accessToken: newAccessToken });
+    return res.json({ message: 'Token refreshed', accessToken: newAccessToken });
   } catch (err) {
-    res.status(403).json({ error: 'Session expired' });
+    return res.status(403).json({ error: 'Session expired' });
   }
 };
 
