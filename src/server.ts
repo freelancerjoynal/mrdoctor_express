@@ -45,7 +45,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/admin', adminRouter);
 
 // Server configuration
-const PORT = 8000;
+const PORT = 5000;
 
 app.listen(PORT, () => {
   console.log(`TS Server is running in ${process.env.NODE_ENV} mode on port ${PORT}`);
