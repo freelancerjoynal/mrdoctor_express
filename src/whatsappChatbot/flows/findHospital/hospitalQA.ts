@@ -19,6 +19,7 @@
 // ----------------------------------------------------------------------------
 // SECTION 1: flow prompts (used by findHospitalFlow.ts — do not rename keys)
 // ----------------------------------------------------------------------------
+import { formatLocationPath } from "../../lib/locationSelect.js";
 export const HOSPITAL_TEXTS = {
     // Q: flow asks — which area? User can share device GPS or type the name.
     ASK_AREA:
@@ -38,6 +39,14 @@ export const HOSPITAL_TEXTS = {
     // A: shown when no hospital is found for the area.
     NO_HOSPITAL: (location: string) =>
         `❌ দুঃখিত, "${location}" এলাকায় কোনো হসপিটাল পাওয়া যায়নি।\n\nঅন্য কোনো এলাকার নাম লিখে পাঠান অথবা মূল মেনুতে যান।`,
+
+    // A: shown when no hospital is found in this thana (division -> district -> thana order).
+    NO_HOSPITAL_THANA: (thana: string, district?: string, division?: string) =>
+        `😔 দুঃখিত, "${formatLocationPath(division, district, thana)}" লোকেশনে কোনো হসপিটাল পাওয়া যায়নি।\nঅন্য লোকেশন চেষ্টা করুন 👇`,
+
+    // Q: thana picked — which hospital? (selectable list of hospitals here)
+    HOSPITAL_LIST_PROMPT: (thana: string, district?: string, division?: string) =>
+        `✅ "${formatLocationPath(division, district, thana)}" এলাকার হসপিটাল — তালিকা থেকে বেছে নিন 👇`,
 
     // A: header above the 5 hospital cards.
     HOSPITAL_LIST_HEADER: (location: string) =>

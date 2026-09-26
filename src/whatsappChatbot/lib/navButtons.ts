@@ -29,9 +29,10 @@ import {
     sendWhatsAppMessage,
     sendInteractiveButtons,
     sendButtonsChunked,
+    sendListChunked,
     type ButtonItem,
 } from "./sendWhatsAppMessage.js";
-import { BACK_HINT, shortTitle } from "./session.js";
+import { BACK_HINT } from "./session.js";
 import { FIND_DOCTOR_TEXTS } from "../flows/findDoctor/findDoctorQA.js";
 import { HOSPITAL_TEXTS } from "../flows/findHospital/hospitalQA.js";
 import {
@@ -45,7 +46,7 @@ import {
     buildChamberButtons,
     schedulesForChamber,
 } from "../flows/getDoctor/doctorQA.js";
-import { getHospitalById, buildHospitalCard } from "../services/hospitalSearch.js";
+import { findHospitalsByLocation, sendHospitalListPrompt } from "../services/hospitalSearch.js";
 import {
     findDivision,
     sendDivisionPrompt,
@@ -114,53 +115,44 @@ export async function resendStepPrompt(
                     await sendThanaPrompt(phoneNumber, district);
                     return;
                 }
-                case "ASK_SPECIALITY":
-                    await resendSpecialityPrompt(phoneNumber, "HOSPITAL", data);
-                    return;
-                case "ASK_SUGGEST_PROBLEM":
-                    await sendWhatsAppMessage(phoneNumber, LOCATION_TEXTS.SUGGEST_ASK_PROBLEM + BACK_HINT);
-                    return;
-                case "LOCATION_DONE":
-                    await sendWhatsAppMessage(phoneNumber, buildLocationDoneMessage(data));
-                    await sendInteractiveButtons(
-                        phoneNumber,
-                        "আর কিছু করতে চাইলে নিচে থেকে বেছে নিন:",
-                        withNav([])
-                    );
-                    return;
-                case "ASK_AREA":
-                    await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.ASK_AREA + BACK_HINT);
-                    return;
                 case "SELECT_HOSPITAL": {
-                    // Previous message = header + hospital cards. Re-fetch and re-send.
-                    const ids: string[] = Array.isArray(data.hospitalCandidates)
-                        ? data.hospitalCandidates.slice(0, 5)
-                        : [];
-                    await sendWhatsAppMessage(
-                        phoneNumber,
-                        HOSPITAL_TEXTS.HOSPITAL_LIST_HEADER(data.location || "আপনার এলাকা")
-                    );
-                    for (let i = 0; i < ids.length; i++) {
-                        const h = await getHospitalById(ids[i]!);
-                        if (!h) continue;
-                        await sendInteractiveButtons(phoneNumber, buildHospitalCard(i, h), [
-                            { id: `hsel_${h.id}`, title: "Select করুন" },
-                        ]);
+                    // Previous message = hospital list. Re-fetch this thana and re-send.
+                    const hospitals = await findHospitalsByLocation({
+                        division: String(data.division || ""),
+                        district: String(data.district || ""),
+                        thana: String(data.thana || ""),
+                    });
+                    if (!hospitals.length) {
+                        await sendDivisionPrompt(phoneNumber, "HOSPITAL");
+                        return;
                     }
-                    await sendWhatsAppMessage(phoneNumber, "উপরে থেকে হসপিটাল বেছে নিন অথবা:" + BACK_HINT);
+                    await sendHospitalListPrompt(
+                        phoneNumber,
+                        HOSPITAL_TEXTS.HOSPITAL_LIST_PROMPT(
+                            String(data.thana || ""),
+                            String(data.district || ""),
+                            String(data.division || "")
+                        ),
+                        hospitals
+                    );
                     return;
                 }
                 case "SELECT_DEPT": {
                     const departments: string[] = Array.isArray(data.departments) ? data.departments : [];
-                    const buttons = departments
-                        .slice(0, 10)
-                        .map((d, i) => ({ id: `hdept_${i}`, title: shortTitle(d) }));
-                    await sendButtonsChunked(
+                    if (!departments.length) {
+                        await sendDivisionPrompt(phoneNumber, "HOSPITAL");
+                        return;
+                    }
+                    const rows = departments.map((d, i) => ({
+                        id: `hdept_${i}`,
+                        title: d,
+                    }));
+                    await sendListChunked(
                         phoneNumber,
-                        HOSPITAL_TEXTS.ASK_DEPT(data.hospitalName || "হসপিটাল") +
-                            "\n" +
-                            departments.map((d, i) => `${i + 1}. ${d}`).join("\n"),
-                        buttons
+                        HOSPITAL_TEXTS.ASK_DEPT(data.hospitalName || "হসপিটাল"),
+                        "📋 বিভাগ দেখুন",
+                        rows,
+                        "বিভাগ"
                     );
                     return;
                 }

@@ -3,56 +3,37 @@ import {
     sendWhatsAppMessage,
     sendWhatsAppImage,
     sendInteractiveButtons,
-    sendButtonsChunked,
+    sendListChunked,
     sendTypingIndicator,
 } from "../../lib/sendWhatsAppMessage.js";
 import {
     getButtonId,
-    getLocationText,
-    extractGps,
-    isAreaClick,
-    extractAreaIdx,
     isEntryWord,
-    isValidLocation,
-    shortTitle,
     type UpdateFn,
     type ResetFn,
 } from "../../lib/session.js";
-import { findNearestAreas, findNearestByName } from "../../services/nearbyAreas.js";
-import { suggestAvailableSpeciality } from "../../services/aiService.js";
 import { BACK_HINT, withNav } from "../../lib/navButtons.js";
 import {
     findDivision,
     matchDivision,
     matchDistrict,
     matchThana,
-    matchSpeciality,
-    fetchAvailableSpecs,
-    fetchLocationDoctors,
-    countLocationDoctors,
     sendDivisionPrompt,
     sendDistrictPrompt,
     sendThanaPrompt,
-    sendSpecialityPrompt,
     sendDoctorCards,
-    sendSeeMoreButton,
-    buildLocationDoneMessage,
-    advancePickedSpeciality,
-    handleAltDistrict,
-    handleAltThana,
     LOCATION_TEXTS,
-    DOCTOR_CARD_PAGE,
-    MORE_DOCTORS_ID,
-    SUGGEST_SPEC_ID,
-    type AvailableSpec,
+    type LocationDoctorCard,
 } from "../../lib/locationSelect.js";
 import {
-    findHospitalsByArea,
-    getHospitalById,
-    buildHospitalCard,
+    findHospitalsByLocation,
+    getHospitalInLocation,
+    sendHospitalListPrompt,
+    sendHospSeeMoreButton,
+    HOSP_DEPT_PAGE,
+    HOSP_MORE_DOCTORS_ID,
     type HospitalWithDoctors,
 } from "../../services/hospitalSearch.js";
-import { buildDoctorCard, type DoctorWithChambers } from "../../services/doctorSearch.js";
 import { handleGetDoctorFlow } from "../getDoctor/getDoctorFlow.js";
 import { HOSPITAL_TEXTS, buildTrackingSummary } from "./hospitalQA.js";
 
@@ -67,14 +48,8 @@ async function track(_phoneNumber: string, _step: string, _data: any) {
 
 // NOTE: hospital-select prefix is `hsel_` — never `hosp_`, because the main-menu
 // hospital button id is `hosp_btn` and a `hosp_` prefix would hijack that click.
-function hospButtonId(h: HospitalWithDoctors) {
-    return `hsel_${h.id}`;
-}
 function deptButtonId(idx: number) {
     return `hdept_${idx}`;
-}
-function connectButtonId(username: string) {
-    return `connect_${username}`;
 }
 
 const MENU_BUTTON_IDS = new Set(["hosp_btn", "doc_btn", "home_btn", "menu_btn", "yes_restore"]);
@@ -106,6 +81,7 @@ function extractUsername(raw: string, buttonId: string) {
     return src.slice("connect_".length).trim();
 }
 
+/** Contact -> username -> direct doctor bot takes over (same as doctor flow). */
 async function connectDoctor(
     phoneNumber: string,
     msg: any,
@@ -131,13 +107,20 @@ async function connectDoctor(
     return true;
 }
 
+/** Hospital picked -> business card image FIRST, then its available categories. */
 async function showDepartments(
     phoneNumber: string,
     hospital: HospitalWithDoctors,
     data: any,
     updateSession: UpdateFn
 ) {
-    const departments = hospital.departments.slice(0, 10);
+    // Categories with a real chamber in THIS hospital (local chambers only).
+    const counts = new Map<string, number>();
+    for (const doc of hospital.doctors) {
+        const key = (doc.speciality || "জেনারেল").trim();
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const departments = [...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)!);
     const next = {
         ...data,
         hospitalId: hospital.id,
@@ -158,16 +141,44 @@ async function showDepartments(
         return;
     }
 
-    const buttons = departments.map((d, i) => ({ id: deptButtonId(i), title: shortTitle(d) }));
-    await sendButtonsChunked(
+    const rows = departments.map((d, i) => ({
+        id: deptButtonId(i),
+        title: d,
+        description: `${counts.get(d)} জন ডাক্তার`,
+    }));
+    await sendListChunked(
         phoneNumber,
-        HOSPITAL_TEXTS.ASK_DEPT(hospital.name) +
-            "\n" +
-            departments.map((d, i) => `${i + 1}. ${d}`).join("\n"),
-        buttons
+        HOSPITAL_TEXTS.ASK_DEPT(hospital.name),
+        "📋 বিভাগ দেখুন",
+        rows,
+        "বিভাগ"
     );
 }
 
+/** Department doctors as banner cards — same style as the doctor flow. */
+function toDeptCards(
+    hospital: HospitalWithDoctors,
+    dept: string
+): { cards: LocationDoctorCard[]; usernames: string[] } {
+    const list = hospital.doctors.filter((d) => (d.speciality || "জেনারেল").trim() === dept);
+    const cards: LocationDoctorCard[] = list.map((d) => {
+        // Full chamber line like the doctor flow: "চেম্বার, থানা, জেলা (বিভাগ)".
+        const area = [d.thana, d.district].filter(Boolean).join(", ");
+        const div = d.division ? ` (${d.division})` : "";
+        const chamber = `${[d.chamberName || "চেম্বার", area].filter(Boolean).join(", ")}${div}`;
+        return {
+            username: d.username,
+            name: d.name,
+            degree: d.degree,
+            speciality: d.speciality,
+            chamberName: chamber,
+            bannerCardImage: d.bannerCardImage,
+        };
+    });
+    return { cards, usernames: list.map((d) => d.username) };
+}
+
+/** Category picked -> max 5 doctor cards, each with a Contact (username) button. */
 async function showDeptDoctors(
     phoneNumber: string,
     hospital: HospitalWithDoctors,
@@ -175,47 +186,28 @@ async function showDeptDoctors(
     data: any,
     updateSession: UpdateFn
 ) {
-    const list = hospital.doctors.filter((d) => (d.speciality || "জেনারেল").trim() === dept);
-    const cards: DoctorWithChambers[] = list.map((d) => ({
-        id: d.id,
-        name: d.name,
-        username: d.username,
-        degree: d.degree,
-        speciality: d.speciality,
-        phone: d.phone,
-        chambers: [
-            {
-                id: "",
-                chamberName: d.chamberName,
-                addressLine: d.addressLine,
-                thana: d.thana,
-                district: d.district,
-                division: "",
-                newPatientFee: d.newPatientFee ?? null,
-                oldPatientFee: d.oldPatientFee ?? null,
-                hospital: { id: hospital.id, name: hospital.name },
-            },
-        ],
-    }));
-
+    const { cards, usernames } = toDeptCards(hospital, dept);
+    const first = cards.slice(0, HOSP_DEPT_PAGE);
     const next = {
         ...data,
         hospitalId: hospital.id,
         hospitalName: hospital.name,
         department: dept,
-        doctorsInDept: list.map((d) => d.username),
-        candidates: list.map((d) => d.username),
+        deptUsernames: usernames,
+        deptSkip: first.length,
+        deptTotal: usernames.length,
+        doctorsInDept: usernames,
+        candidates: usernames,
         category: "HOSPITAL",
     };
     updateSession("FIND_HOSPITAL_FLOW", "SELECT_DOCTOR", next);
     await track(phoneNumber, "SELECT_DOCTOR", next);
 
     await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.DEPT_DOCTORS_HEADER(hospital.name, dept));
-    for (let i = 0; i < cards.slice(0, 5).length; i++) {
-        const c = cards[i]!;
-        await sendInteractiveButtons(phoneNumber, buildDoctorCard(i, c), [
-            { id: connectButtonId(c.username), title: "Connect করুন" },
-        ]);
+    // Banner-image cards with Contact buttons — exactly like the doctor flow.
+    await sendDoctorCards(phoneNumber, first);
+    if (usernames.length > first.length) {
+        await sendHospSeeMoreButton(phoneNumber, usernames.length - first.length);
     }
     await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.SELECT_DOCTOR_PROMPT + BACK_HINT);
 }
@@ -232,9 +224,9 @@ export async function findHospitalFlow(
     const rawText = (text || "").trim();
     const buttonId = getButtonId(msg);
     const data = session?.data || {};
-    const step = session?.step || "ASK_AREA";
+    const step = session?.step || "ASK_DIVISION";
 
-    // ---------- LOCATION: division -> district -> thana -> speciality (stop) ----------
+    // ---------- LOCATION FIRST: division -> district -> thana ----------
     if (step === "ASK_DIVISION") {
         const hit = matchDivision(rawText, buttonId);
         if (!hit) {
@@ -273,6 +265,7 @@ export async function findHospitalFlow(
         return;
     }
 
+    // ---------- THANA -> selectable hospital list ----------
     if (step === "ASK_THANA") {
         const division = findDivision(String(data.division || ""));
         const district = division?.districts.find((d) => d.name === data.district) || null;
@@ -289,12 +282,17 @@ export async function findHospitalFlow(
             await sendWhatsAppMessage(phoneNumber, LOCATION_TEXTS.INVALID_PICK + BACK_HINT);
             return;
         }
-        // Only specialities with a real chamber here move forward.
-        const available: AvailableSpec[] = await fetchAvailableSpecs(hit, district.name);
-        if (!available.length) {
+        await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.PROCESSING);
+        void sendTypingIndicator(phoneNumber, msg?.messageId);
+        const hospitals = await findHospitalsByLocation({
+            division: division.name,
+            district: district.name,
+            thana: hit,
+        });
+        if (!hospitals.length) {
             await sendWhatsAppMessage(
                 phoneNumber,
-                LOCATION_TEXTS.NO_DOCTORS_THANA(hit) + BACK_HINT
+                HOSPITAL_TEXTS.NO_HOSPITAL_THANA(hit, district.name, division.name) + BACK_HINT
             );
             return;
         }
@@ -304,321 +302,57 @@ export async function findHospitalFlow(
             district: district.name,
             thana: hit,
             location: `${hit}, ${district.name}`,
-            availableSpecs: available,
-            category: "HOSPITAL",
-        };
-        updateSession("FIND_HOSPITAL_FLOW", "ASK_SPECIALITY", next);
-        await track(phoneNumber, "ASK_SPECIALITY", next);
-        await sendSpecialityPrompt(phoneNumber, available);
-        return;
-    }
-
-    if (step === "ASK_SPECIALITY") {
-        // Resumed without location context -> pick thana again from the top.
-        if (!data.thana || !data.district) {
-            const restart = { ...data, category: "HOSPITAL" };
-            updateSession("FIND_HOSPITAL_FLOW", "ASK_DIVISION", restart);
-            await track(phoneNumber, "ASK_DIVISION", restart);
-            await sendDivisionPrompt(phoneNumber, "HOSPITAL");
-            return;
-        }
-        // Keep a resumed session: recompute what's actually available here
-        // instead of falling back to the full unfiltered list.
-        const stored: AvailableSpec[] | undefined = Array.isArray(data.availableSpecs)
-            ? data.availableSpecs
-            : undefined;
-        const allowed: AvailableSpec[] = stored?.length
-            ? stored
-            : await fetchAvailableSpecs(String(data.thana), String(data.district));
-        if (!allowed.length) {
-            await sendWhatsAppMessage(
-                phoneNumber,
-                LOCATION_TEXTS.NO_DOCTORS_THANA(String(data.thana)) + BACK_HINT
-            );
-            return;
-        }
-        if (allowed !== stored) {
-            const refreshed = { ...data, availableSpecs: allowed };
-            updateSession("FIND_HOSPITAL_FLOW", "ASK_SPECIALITY", refreshed);
-            await track(phoneNumber, "ASK_SPECIALITY", refreshed);
-        }
-        // "Can't figure out?" row -> ask the problem, AI suggests the category.
-        if (buttonId.toLowerCase().trim() === SUGGEST_SPEC_ID) {
-            const next = { ...data, category: "HOSPITAL" };
-            updateSession("FIND_HOSPITAL_FLOW", "ASK_SUGGEST_PROBLEM", next);
-            await track(phoneNumber, "ASK_SUGGEST_PROBLEM", next);
-            await sendWhatsAppMessage(phoneNumber, LOCATION_TEXTS.SUGGEST_ASK_PROBLEM + BACK_HINT);
-            return;
-        }
-        const hit = matchSpeciality(rawText, buttonId, allowed);
-        if (!hit) {
-            await sendSpecialityPrompt(phoneNumber, allowed);
-            await sendWhatsAppMessage(phoneNumber, LOCATION_TEXTS.INVALID_PICK + BACK_HINT);
-            return;
-        }
-        await advancePickedSpeciality({
-            flow: "FIND_HOSPITAL_FLOW",
-            kind: "HOSPITAL",
-            phoneNumber,
-            data,
-            bn: hit.specialty_bn,
-            en: hit.specialty_en,
-            updateSession,
-            track: (s, d) => track(phoneNumber, s, d),
-        });
-        return;
-    }
-
-    // ---------- ALT-LOCATION: districts/thanas where this category exists ----------
-    if (step === "ASK_ALT_DISTRICT") {
-        await handleAltDistrict({
-            flow: "FIND_HOSPITAL_FLOW",
-            kind: "HOSPITAL",
-            phoneNumber,
-            rawText,
-            buttonId,
-            data,
-            updateSession,
-            track: (s, d) => track(phoneNumber, s, d),
-        });
-        return;
-    }
-
-    if (step === "ASK_ALT_THANA") {
-        await handleAltThana({
-            flow: "FIND_HOSPITAL_FLOW",
-            kind: "HOSPITAL",
-            phoneNumber,
-            rawText,
-            buttonId,
-            data,
-            updateSession,
-            track: (s, d) => track(phoneNumber, s, d),
-        });
-        return;
-    }
-
-    if (step === "LOCATION_DONE") {
-        await sendWhatsAppMessage(phoneNumber, buildLocationDoneMessage(data));
-        await sendInteractiveButtons(phoneNumber, "আর কিছু করতে চাইলে নিচে থেকে বেছে নিন:", withNav([]));
-        return;
-    }
-
-    // ---------- AI SUGGEST: problem -> DeepSeek picks from available list ----------
-    if (step === "ASK_SUGGEST_PROBLEM") {
-        if (!data.thana || !data.district) {
-            const restart = { ...data, category: "HOSPITAL" };
-            updateSession("FIND_HOSPITAL_FLOW", "ASK_DIVISION", restart);
-            await track(phoneNumber, "ASK_DIVISION", restart);
-            await sendDivisionPrompt(phoneNumber, "HOSPITAL");
-            return;
-        }
-        if (rawText.trim().length < 3) {
-            await sendWhatsAppMessage(phoneNumber, LOCATION_TEXTS.SUGGEST_ASK_PROBLEM + BACK_HINT);
-            return;
-        }
-        const stored: AvailableSpec[] | undefined = Array.isArray(data.availableSpecs)
-            ? data.availableSpecs
-            : undefined;
-        const allowed: AvailableSpec[] = stored?.length
-            ? stored
-            : await fetchAvailableSpecs(String(data.thana), String(data.district));
-        if (!allowed.length) {
-            await sendWhatsAppMessage(
-                phoneNumber,
-                LOCATION_TEXTS.NO_DOCTORS_THANA(String(data.thana)) + BACK_HINT
-            );
-            return;
-        }
-        if (allowed !== stored) {
-            const refreshed = { ...data, availableSpecs: allowed };
-            updateSession("FIND_HOSPITAL_FLOW", "ASK_SUGGEST_PROBLEM", refreshed);
-            await track(phoneNumber, "ASK_SUGGEST_PROBLEM", refreshed);
-        }
-        await sendWhatsAppMessage(phoneNumber, LOCATION_TEXTS.SUGGEST_THINKING);
-        void sendTypingIndicator(phoneNumber, msg?.messageId);
-        const pick = await suggestAvailableSpeciality(
-            rawText,
-            `${data.thana || ""}, ${data.district || ""}`,
-            allowed.map((a) => a.bn)
-        );
-        const entry = (pick && allowed.find((a) => a.bn === pick)) || null;
-        if (!entry) {
-            const next = { ...data, category: "HOSPITAL" };
-            updateSession("FIND_HOSPITAL_FLOW", "ASK_SPECIALITY", next);
-            await track(phoneNumber, "ASK_SPECIALITY", next);
-            await sendWhatsAppMessage(phoneNumber, LOCATION_TEXTS.SUGGEST_FAILED);
-            await sendSpecialityPrompt(phoneNumber, allowed);
-            return;
-        }
-        const picked = {
-            ...data,
-            department: entry.bn,
-            department_en: entry.en,
-            suggestedProblem: rawText.trim(),
-            category: "HOSPITAL",
-        };
-        await sendWhatsAppMessage(
-            phoneNumber,
-            `✅ আপনার সমস্যা অনুযায়ী *${entry.bn}* বিভাগের ডাক্তার দেখানো হচ্ছে:`
-        );
-        const thana = String(data.thana || "");
-        const district = String(data.district || "");
-        const [total, doctors] = await Promise.all([
-            countLocationDoctors(thana, district, entry.bn),
-            fetchLocationDoctors(thana, district, entry.bn),
-        ]);
-        if (!doctors.length) {
-            updateSession("FIND_HOSPITAL_FLOW", "ASK_SPECIALITY", picked);
-            await track(phoneNumber, "ASK_SPECIALITY", picked);
-            await sendWhatsAppMessage(
-                phoneNumber,
-                LOCATION_TEXTS.NO_DOCTORS_THANA(thana) + BACK_HINT
-            );
-            return;
-        }
-        await sendDoctorCards(phoneNumber, doctors);
-        const shown = doctors.length;
-        if (total > shown) await sendSeeMoreButton(phoneNumber, total - shown);
-        const withCandidates = {
-            ...picked,
-            candidates: doctors.map((d) => d.username),
-            doctorsInDept: doctors.map((d) => d.username),
-            doctorSkip: shown,
-            doctorTotal: total,
-        };
-        updateSession("FIND_HOSPITAL_FLOW", "SELECT_DOCTOR", withCandidates);
-        await track(phoneNumber, "SELECT_DOCTOR", withCandidates);
-        return;
-    }
-
-    // ---------- STEP 1: area ----------
-    if (step === "WELCOME" || step === "ASK_AREA") {
-        const entryHit =
-            !msg?.location &&
-            isEntryWord(rawText) &&
-            !data.location;
-
-        if (step === "WELCOME" || entryHit) {
-            const next = { ...data, category: "HOSPITAL" };
-            updateSession("FIND_HOSPITAL_FLOW", "ASK_AREA", next);
-            await track(phoneNumber, "ASK_AREA", next);
-            await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.ASK_AREA + BACK_HINT);
-            return;
-        }
-
-        // Suggested nearby-area button tapped (area_0, area_1, ...) -> resolve name.
-        const areaIdx = isAreaClick(rawText, buttonId) ? extractAreaIdx(rawText, buttonId) : -1;
-        const areaSug: string[] = Array.isArray(data.areaSuggestions) ? data.areaSuggestions : [];
-
-        // GPS shared from device -> suggest the 3 nearest Bengali areas as buttons.
-        // (No auto-search: the user confirms with one tap, fixing any wrong guess.)
-        const gps = extractGps(msg);
-        if (gps && areaIdx < 0) {
-            const nearest = findNearestAreas(gps.lat, gps.lng, 3);
-            if (nearest.length) {
-                const next = {
-                    ...data,
-                    areaSuggestions: nearest,
-                    detectedArea: nearest[0],
-                    category: "HOSPITAL",
-                };
-                updateSession("FIND_HOSPITAL_FLOW", "ASK_AREA", next);
-                await track(phoneNumber, "ASK_AREA", next);
-                const buttons = nearest.map((n, i) => ({ id: `area_${i}`, title: shortTitle(n) }));
-                await sendButtonsChunked(phoneNumber, HOSPITAL_TEXTS.NEARBY_HEADER(nearest[0]!), buttons);
-                return;
-            }
-        }
-
-        let locationText = getLocationText(rawText, msg);
-        if (areaIdx >= 0 && areaSug[areaIdx]) locationText = areaSug[areaIdx]!;
-        if (!msg?.location && !isValidLocation(locationText)) {
-            await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.INVALID_LOCATION + BACK_HINT);
-            return;
-        }
-
-        await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.PROCESSING);
-        void sendTypingIndicator(phoneNumber, msg?.messageId);
-
-        const areaForSearch = locationText;
-
-        const hospitals = await findHospitalsByArea(areaForSearch, 5);
-        if (!hospitals.length) {
-            // Nothing found -> offer nearby areas (from earlier GPS or by typed name).
-            const suggestions = areaSug.length ? areaSug : findNearestByName(locationText, 3);
-            const next = {
-                ...data,
-                location: locationText,
-                areaSuggestions: suggestions.length ? suggestions : areaSug,
-                category: "HOSPITAL",
-            };
-            updateSession("FIND_HOSPITAL_FLOW", "ASK_AREA", next);
-            await track(phoneNumber, "ASK_AREA", next);
-            if (suggestions.length) {
-                const buttons = suggestions.map((n, i) => ({ id: `area_${i}`, title: shortTitle(n) }));
-                await sendButtonsChunked(
-                    phoneNumber,
-                    HOSPITAL_TEXTS.NO_HOSPITAL(locationText) + "\n\n📍 কাছের এলাকা থেকে বেছে নিন 👇",
-                    buttons
-                );
-            } else {
-                await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.NO_HOSPITAL(locationText) + BACK_HINT);
-            }
-            return;
-        }
-
-        const next = {
-            ...data,
-            location: locationText,
             hospitalCandidates: hospitals.map((h) => h.id),
-            // cache for number/name fallback (ids only in session; full rows re-fetched on click)
+            hospitalOptions: hospitals.map((h) => ({ id: h.id, name: h.name })),
             category: "HOSPITAL",
         };
         updateSession("FIND_HOSPITAL_FLOW", "SELECT_HOSPITAL", next);
         await track(phoneNumber, "SELECT_HOSPITAL", next);
-
-        await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.HOSPITAL_LIST_HEADER(locationText));
-        for (let i = 0; i < hospitals.length; i++) {
-            const h = hospitals[i]!;
-            await sendInteractiveButtons(phoneNumber, buildHospitalCard(i, h), [
-                { id: hospButtonId(h), title: "Select করুন" },
-            ]);
-        }
+        await sendHospitalListPrompt(
+            phoneNumber,
+            HOSPITAL_TEXTS.HOSPITAL_LIST_PROMPT(hit, district.name, division.name),
+            hospitals
+        );
         return;
     }
 
-    // ---------- STEP 2: hospital click -> departments ----------
+    // ---------- HOSPITAL picked -> business card + category list ----------
     if (step === "SELECT_HOSPITAL") {
-        // Button click with hospital id
+        const loc = {
+            division: String(data.division || ""),
+            district: String(data.district || ""),
+            thana: String(data.thana || ""),
+        };
+        // List tap with hospital id.
         if (isHospClick(rawText, buttonId)) {
-            const id = extractHospId(rawText, buttonId);
-            const hospital = await getHospitalById(id);
+            const hospital = await getHospitalInLocation(extractHospId(rawText, buttonId), loc);
             if (hospital) {
                 await showDepartments(phoneNumber, hospital, data, updateSession);
                 return;
             }
         }
-        // Number 1-5 (resolve via candidates)
+        // Number 1-N (resolve via options).
+        const options: { id: string; name: string }[] = Array.isArray(data.hospitalOptions)
+            ? data.hospitalOptions
+            : [];
         const num = parseInt(rawText.trim(), 10);
-        const candidates: string[] = Array.isArray(data.hospitalCandidates) ? data.hospitalCandidates : [];
-        if (!Number.isNaN(num) && num >= 1 && num <= candidates.length) {
-            const hospital = await getHospitalById(candidates[num - 1]!);
+        if (!Number.isNaN(num) && num >= 1 && num <= options.length) {
+            const hospital = await getHospitalInLocation(options[num - 1]!.id, loc);
             if (hospital) {
                 await showDepartments(phoneNumber, hospital, data, updateSession);
                 return;
             }
         }
-        // Name typed -> search hospitals in same area
+        // Name typed -> match against the offered options.
         if (rawText.trim().length >= 2 && !isEntryWord(rawText)) {
-            const hospitals = await findHospitalsByArea(data.location || rawText, 5);
-            const hit =
-                hospitals.find((h) => h.name === rawText.trim()) ||
-                hospitals.find((h) => rawText.includes(h.name) || h.name.includes(rawText.trim()));
-            if (hit) {
-                const full = await getHospitalById(hit.id);
-                if (full) {
-                    await showDepartments(phoneNumber, full, data, updateSession);
+            const t = rawText.trim();
+            const opt =
+                options.find((o) => o.name === t) ||
+                options.find((o) => t.includes(o.name) || o.name.includes(t));
+            if (opt) {
+                const hospital = await getHospitalInLocation(opt.id, loc);
+                if (hospital) {
+                    await showDepartments(phoneNumber, hospital, data, updateSession);
                     return;
                 }
             }
@@ -627,73 +361,82 @@ export async function findHospitalFlow(
         return;
     }
 
-    // ---------- STEP 3: department click -> doctors ----------
+    // ---------- CATEGORY picked -> max 5 doctors ----------
     if (step === "SELECT_DEPT") {
         const departments: string[] = Array.isArray(data.departments) ? data.departments : [];
-        const hospital = data.hospitalId ? await getHospitalById(data.hospitalId) : null;
+        const loc = {
+            division: String(data.division || ""),
+            district: String(data.district || ""),
+            thana: String(data.thana || ""),
+        };
+        const hospitalId = String(data.hospitalId || "");
+        if (!hospitalId || !departments.length) {
+            await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.FALLBACK + BACK_HINT);
+            return;
+        }
+        let dept: string | null = null;
+        if (isDeptClick(rawText, buttonId)) {
+            const idx = extractDeptIdx(rawText, buttonId);
+            if (idx >= 0 && idx < departments.length) dept = departments[idx]!;
+        }
+        if (!dept) {
+            const num = parseInt(rawText.trim(), 10);
+            if (!Number.isNaN(num) && num >= 1 && num <= departments.length) {
+                dept = departments[num - 1]!;
+            }
+        }
+        if (!dept) {
+            const t = rawText.trim();
+            if (t.length >= 2) {
+                dept =
+                    departments.find((d) => d === t) ||
+                    departments.find((d) => t.includes(d) || d.includes(t)) ||
+                    null;
+            }
+        }
+        if (!dept) {
+            await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.FALLBACK + BACK_HINT);
+            return;
+        }
+        const hospital = await getHospitalInLocation(hospitalId, loc);
         if (!hospital) {
             await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.FALLBACK + BACK_HINT);
             return;
         }
-
-        if (isDeptClick(rawText, buttonId)) {
-            const idx = extractDeptIdx(rawText, buttonId);
-            if (idx >= 0 && idx < departments.length) {
-                await showDeptDoctors(phoneNumber, hospital, departments[idx]!, data, updateSession);
-                return;
-            }
-        }
-        const num = parseInt(rawText.trim(), 10);
-        if (!Number.isNaN(num) && num >= 1 && num <= departments.length) {
-            await showDeptDoctors(phoneNumber, hospital, departments[num - 1]!, data, updateSession);
-            return;
-        }
-        const hit = departments.find(
-            (d) => d === rawText.trim() || rawText.includes(d) || d.includes(rawText.trim())
-        );
-        if (hit) {
-            await showDeptDoctors(phoneNumber, hospital, hit, data, updateSession);
-            return;
-        }
-        await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.FALLBACK + BACK_HINT);
+        await showDeptDoctors(phoneNumber, hospital, dept, data, updateSession);
         return;
     }
 
-    // ---------- STEP 4: doctor click -> username -> direct doctor bot ----------
+    // ---------- DOCTOR: see-more pages + Contact (username) -> direct doctor bot ----------
     if (step === "SELECT_DOCTOR") {
-        // See-more tap -> next page of banner cards (no prompt text).
-        if (buttonId.toLowerCase().trim() === MORE_DOCTORS_ID) {
-            if (!data.thana || !data.district || !data.department) {
-                const restart = { ...data, category: "HOSPITAL" };
-                updateSession("FIND_HOSPITAL_FLOW", "ASK_DIVISION", restart);
-                await track(phoneNumber, "ASK_DIVISION", restart);
-                await sendDivisionPrompt(phoneNumber, "HOSPITAL");
+        // See-more tap -> next page of this department's cards.
+        if (buttonId.toLowerCase().trim() === HOSP_MORE_DOCTORS_ID) {
+            const hospitalId = String(data.hospitalId || "");
+            const dept = String(data.department || "");
+            if (!hospitalId || !dept) {
+                await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.SELECT_DOCTOR_PROMPT + BACK_HINT);
                 return;
             }
-            const skip = Number(data.doctorSkip ?? DOCTOR_CARD_PAGE);
-            const total = Number(data.doctorTotal ?? skip);
-            const doctors = await fetchLocationDoctors(
-                String(data.thana || ""),
-                String(data.district || ""),
-                String(data.department || ""),
-                DOCTOR_CARD_PAGE,
-                skip
-            );
-            if (!doctors.length) return;
-            await sendDoctorCards(phoneNumber, doctors);
-            const usernames = doctors.map((d) => d.username);
-            const nextSkip = skip + doctors.length;
-            const inDept: string[] = Array.isArray(data.doctorsInDept) ? data.doctorsInDept : [];
-            const next = {
-                ...data,
-                candidates: [...(Array.isArray(data.candidates) ? data.candidates : []), ...usernames],
-                doctorsInDept: [...inDept, ...usernames],
-                doctorSkip: nextSkip,
-                doctorTotal: total,
-            };
+            const hospital = await getHospitalInLocation(hospitalId, {
+                division: String(data.division || ""),
+                district: String(data.district || ""),
+                thana: String(data.thana || ""),
+            });
+            if (!hospital) {
+                await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.FALLBACK + BACK_HINT);
+                return;
+            }
+            const { cards } = toDeptCards(hospital, dept);
+            const skip = Number(data.deptSkip ?? HOSP_DEPT_PAGE);
+            const page = cards.slice(skip, skip + HOSP_DEPT_PAGE);
+            if (!page.length) return;
+            await sendDoctorCards(phoneNumber, page);
+            const nextSkip = skip + page.length;
+            const total = Number(data.deptTotal ?? cards.length);
+            const next = { ...data, deptSkip: nextSkip };
             updateSession("FIND_HOSPITAL_FLOW", "SELECT_DOCTOR", next);
             await track(phoneNumber, "SELECT_DOCTOR", next);
-            if (nextSkip < total) await sendSeeMoreButton(phoneNumber, total - nextSkip);
+            if (nextSkip < total) await sendHospSeeMoreButton(phoneNumber, total - nextSkip);
             return;
         }
         if (isConnectClick(rawText, buttonId)) {
@@ -713,7 +456,7 @@ export async function findHospitalFlow(
             if (ok) return;
         }
         const typed = rawText.toLowerCase().trim();
-        const inDept: string[] = Array.isArray(data.doctorsInDept) ? data.doctorsInDept : [];
+        const inDept: string[] = Array.isArray(data.deptUsernames) ? data.deptUsernames : [];
         const hit = inDept.find((c) => c.toLowerCase() === typed);
         if (hit) {
             const done = { ...data, confirmed: true, confirmedChoice: hit };
@@ -731,7 +474,7 @@ export async function findHospitalFlow(
     }
 
     const next = { ...data, category: "HOSPITAL" };
-    updateSession("FIND_HOSPITAL_FLOW", "ASK_AREA", next);
-    await track(phoneNumber, "ASK_AREA", next);
-    await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.ASK_AREA + BACK_HINT);
+    updateSession("FIND_HOSPITAL_FLOW", "ASK_DIVISION", next);
+    await track(phoneNumber, "ASK_DIVISION", next);
+    await sendDivisionPrompt(phoneNumber, "HOSPITAL");
 }

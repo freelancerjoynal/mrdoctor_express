@@ -506,7 +506,8 @@ export async function handleGetDoctorFlow(
                 (dayLabel ? `📅 ${dayLabel}\n` : "") +
                 `💰 ভিজিট ফি: ${feeText}\n` +
                 `📞 ফোন: ${contactPhone}\n\n` +
-                `পেমেন্ট সম্পন্ন করুন — পেমেন্ট কনফার্ম হলে আপনার সিরিয়াল নম্বর এখানেই জানিয়ে দেওয়া হবে।`;
+                `পেমেন্ট সম্পন্ন করুন — পেমেন্ট কনফার্ম হলে আপনার সিরিয়াল নম্বর ও প্রয়োজনীয় নির্দেশনা  আপনার মোবাইল নম্বরে SMS এর মাধ্যমে জানিয়ে দেওয়া হবে।  ।\n` +
+                `📲 সিরিয়াল নম্বর, রোগীর নাম ও ডাক্তারের তথ্যসহ একটি মেসেজ আপনার ফোনে পাঠিয়ে দেওয়া হবে।`;
             await sendCtaUrlButton(phoneNumber, confirmMsg, "💳 পেমেন্ট করুন", DUMMY_PAYMENT_LINK);
             await sendWhatsAppMessage(phoneNumber, DOC_ONTIME_NOTE);
             await sendInteractiveButtons(phoneNumber, "ধন্যবাদ! ☺️", withNav([]));

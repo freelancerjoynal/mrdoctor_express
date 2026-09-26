@@ -313,9 +313,9 @@ export async function handleIncomingMessage(msg: any) {
         }
 
         if (text.startsWith("hospital_") || buttonIdNorm.startsWith("hospital_")) {
-            const newSession: ChatbotSession = { flow: "FIND_HOSPITAL_FLOW", step: "ASK_AREA", data: { category: "HOSPITAL" } };
+            const newSession: ChatbotSession = { flow: "FIND_HOSPITAL_FLOW", step: "ASK_DIVISION", data: { category: "HOSPITAL" } };
             setSession(phoneNumber, newSession.flow, newSession.step, newSession.data);
-            await findHospitalFlow(phoneNumber, "hospital", msg, newSession,
+            await findHospitalFlow(phoneNumber, rawText, msg, newSession,
                 (f, s, d) => { setSession(phoneNumber, f, s, d); },
                 () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
             return;
@@ -354,7 +354,7 @@ export async function handleIncomingMessage(msg: any) {
         // active find flow's ASK_AREA step; the flow resolves the name.
         if (isAreaClick(rawText, buttonId)) {
             if (session.flow === "FIND_HOSPITAL_FLOW") {
-                const s = { ...session, step: "ASK_AREA" };
+                const s = { ...session, step: "ASK_DIVISION" };
                 await findHospitalFlow(phoneNumber, rawText, msg, s,
                     (f, st, d) => { setSession(phoneNumber, f, st, d); },
                     () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
