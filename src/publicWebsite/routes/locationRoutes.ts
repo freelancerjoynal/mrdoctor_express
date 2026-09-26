@@ -6,6 +6,7 @@ import express from 'express';
 import { getTree, getDivisions, getDistricts, getThanas } from '../controllers/locationController.js';
 import { getPortal } from '../controllers/portalController.js';
 import { getPortalSetting } from '../controllers/portalSettingController.js';
+import { postAiSuggest } from '../controllers/aiSuggestController.js';
 
 const locationRouter = express.Router();
 
@@ -22,5 +23,7 @@ locationRouter.get('/locations/thanas', getThanas);
 locationRouter.get('/portal', getPortal);
 // GET /api/website/portal-settings/:slug — super-admin hero/text customization (null = defaults).
 locationRouter.get('/portal-settings/:slug', getPortalSetting);
+// POST /api/website/ai-suggest — problem + age + weight -> AI category -> local thana doctors.
+locationRouter.post('/ai-suggest', postAiSuggest);
 
 export default locationRouter;
