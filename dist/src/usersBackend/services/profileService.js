@@ -158,6 +158,10 @@ function parseDoctorPayload(input) {
         out.templateName = cleanRequiredText(d.templateName, 1, 50);
     if (d.profilePicture !== undefined)
         out.profilePicture = cleanOptionalText(d.profilePicture, 500) ?? null;
+    if (d.businessCardImage !== undefined)
+        out.businessCardImage = cleanOptionalText(d.businessCardImage, 500) ?? null;
+    if (d.bannerCardImage !== undefined)
+        out.bannerCardImage = cleanOptionalText(d.bannerCardImage, 500) ?? null;
     if (d.religion !== undefined)
         out.religion = cleanOptionalText(d.religion, 50) ?? null;
     if (d.bmdcNumber !== undefined)
@@ -192,6 +196,34 @@ function parseDoctorPayload(input) {
     }
     return out;
 }
+function parseHospitalPayload(input) {
+    if (input === undefined || input === null)
+        return {};
+    if (typeof input !== 'object' || Array.isArray(input))
+        throw new Error('INVALID_HOSPITAL_FIELD');
+    const h = input;
+    // Immutable hospital identifiers — never editable from edit-profile.
+    if (typeof h.name === 'string' && h.name.trim().length > 0)
+        throw new Error('NAME_IMMUTABLE');
+    if (typeof h.slug === 'string' && h.slug.trim().length > 0)
+        throw new Error('SLUG_IMMUTABLE');
+    if (typeof h.email === 'string' && h.email.trim().length > 0)
+        throw new Error('EMAIL_IMMUTABLE');
+    if (h.status !== undefined && h.status !== null && String(h.status).trim().length > 0) {
+        throw new Error('STATUS_IMMUTABLE');
+    }
+    if (h.id !== undefined && h.id !== null && String(h.id).trim().length > 0)
+        throw new Error('IMMUTABLE_FIELD');
+    if (h.userId !== undefined && h.userId !== null && String(h.userId).trim().length > 0) {
+        throw new Error('IMMUTABLE_FIELD');
+    }
+    const out = {};
+    if (h.businessCardImage !== undefined)
+        out.businessCardImage = cleanOptionalText(h.businessCardImage, 500) ?? null;
+    if (h.bannerCardImage !== undefined)
+        out.bannerCardImage = cleanOptionalText(h.bannerCardImage, 500) ?? null;
+    return out;
+}
 /**
  * Update the caller's OWN profile. Email/username can never be changed.
  * - name: saved to users.name always; also mirrored to the linked
@@ -199,6 +231,7 @@ function parseDoctorPayload(input) {
  * - password: requires currentPassword match; newPassword min 6 chars.
  * - doctor: DOCTOR role only — every Doctor column except
  *   email/username/status/id/userId (incl. all *_en mirrors).
+ * - hospital: HOSPITAL role only — businessCardImage + bannerCardImage.
  */
 export async function updateProfileData(caller, input) {
     if (typeof input.email === 'string' && input.email.trim().length > 0) {
@@ -213,6 +246,7 @@ export async function updateProfileData(caller, input) {
     const wantsName = input.name !== undefined;
     const wantsPassword = input.currentPassword !== undefined || input.newPassword !== undefined;
     const wantsDoctor = input.doctor !== undefined && input.doctor !== null;
+    const wantsHospital = input.hospital !== undefined && input.hospital !== null;
     const wantsPicture = input.profilePicture !== undefined;
     let doctorData = {};
     if (wantsDoctor) {
@@ -220,7 +254,13 @@ export async function updateProfileData(caller, input) {
             throw new Error('FORBIDDEN');
         doctorData = parseDoctorPayload(input.doctor);
     }
-    if (!wantsName && !wantsPassword && !wantsPicture && Object.keys(doctorData).length === 0) {
+    let hospitalData = {};
+    if (wantsHospital) {
+        if (caller.role !== 'HOSPITAL')
+            throw new Error('FORBIDDEN');
+        hospitalData = parseHospitalPayload(input.hospital);
+    }
+    if (!wantsName && !wantsPassword && !wantsPicture && Object.keys(doctorData).length === 0 && Object.keys(hospitalData).length === 0) {
         throw new Error('NOTHING_TO_UPDATE');
     }
     let name;
@@ -275,11 +315,22 @@ export async function updateProfileData(caller, input) {
                 await tx.doctor.update({ where: { id: existing.id }, data: data });
             }
         }
-        else if (effectiveUserName !== undefined) {
-            if (caller.role === 'HOSPITAL') {
-                await tx.hospital.updateMany({ where: { userId: caller.userId }, data: { name: effectiveUserName } });
+        else if (caller.role === 'HOSPITAL') {
+            const hData = { ...hospitalData };
+            if (effectiveUserName !== undefined)
+                hData.name = effectiveUserName;
+            if (Object.keys(hData).length > 0) {
+                const existing = await tx.hospital.findFirst({
+                    where: { userId: caller.userId },
+                    select: { id: true },
+                });
+                if (!existing)
+                    throw new Error('NO_HOSPITAL_PROFILE');
+                await tx.hospital.update({ where: { id: existing.id }, data: hData });
             }
-            else if (isAdminRole(caller.role)) {
+        }
+        else if (effectiveUserName !== undefined) {
+            if (isAdminRole(caller.role)) {
                 await tx.superAdminProfile.upsert({
                     where: { userId: caller.userId },
                     create: { userId: caller.userId, name: effectiveUserName },

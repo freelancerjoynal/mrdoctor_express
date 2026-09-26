@@ -264,6 +264,8 @@ async function createDoctorAccountFromData(data: {
   whatsappId?: string | null;
   templateName?: string;
   profilePicture?: string | null;
+  businessCardImage?: string | null;
+  bannerCardImage?: string | null;
   gender?: 'MALE' | 'FEMALE' | null;
   religion?: string | null;
   startedYear?: number | null;
@@ -294,6 +296,8 @@ async function createDoctorAccountFromData(data: {
       whatsappAccessToken: data.whatsappAccessToken ?? undefined,
       whatsappId: data.whatsappId ?? undefined,
       profilePicture: data.profilePicture ?? undefined,
+      businessCardImage: data.businessCardImage ?? undefined,
+      bannerCardImage: data.bannerCardImage ?? undefined,
       gender: (data.gender ?? undefined) as never,
       religion: data.religion ?? undefined,
       startedYear: data.startedYear ?? undefined,
@@ -318,6 +322,8 @@ async function createHospitalAccountFromData(data: {
   // Full Hospital-table mirrors (all optional)
   name_en?: string | null;
   templateName?: string;
+  businessCardImage?: string | null;
+  bannerCardImage?: string | null;
   division_en?: string | null;
   district_en?: string | null;
   thana_en?: string | null;
@@ -346,6 +352,8 @@ async function createHospitalAccountFromData(data: {
       phone: data.phone,
       establishedYear: data.establishedYear ?? undefined,
       status: 'APPROVED',
+      businessCardImage: data.businessCardImage ?? undefined,
+      bannerCardImage: data.bannerCardImage ?? undefined,
       templateName: data.templateName || 'template_a',
     },
   });
@@ -445,7 +453,7 @@ export async function createDoctor(input: {
   name_en?: unknown; degree_en?: unknown; speciality_en?: unknown;
   tagline?: unknown; tagline_en?: unknown; bio?: unknown; bio_en?: unknown;
   whatsappNumber?: unknown; whatsappAccessToken?: unknown; whatsappId?: unknown;
-  templateName?: unknown; profilePicture?: unknown; gender?: unknown;
+  templateName?: unknown; profilePicture?: unknown; businessCardImage?: unknown; bannerCardImage?: unknown; gender?: unknown;
   religion?: unknown; startedYear?: unknown; bmdcNumber?: unknown;
 }) {
   const name = required(input.name, 'INVALID_NAME');
@@ -468,6 +476,8 @@ export async function createDoctor(input: {
   const whatsappId = optional(input.whatsappId, 100);
   const whatsappAccessToken = optional(input.whatsappAccessToken, 1000);
   const profilePicture = optional(input.profilePicture, 500);
+  const businessCardImage = optional(input.businessCardImage, 500);
+  const bannerCardImage = optional(input.bannerCardImage, 500);
   const religion = optional(input.religion, 50);
   const bmdcNumber = optional(input.bmdcNumber, 50);
   const templateName = optional(input.templateName, 50) ?? 'template_a';
@@ -489,6 +499,7 @@ export async function createDoctor(input: {
     name, email, phone, degree, speciality, username, tempPassword,
     name_en, degree_en, speciality_en, tagline, tagline_en, bio, bio_en,
     whatsappNumber, whatsappId, whatsappAccessToken, profilePicture,
+    businessCardImage, bannerCardImage,
     religion, templateName, gender, startedYear, bmdcNumber,
   });
   const emailSent = input.password ? true : await notifyCredentials(email, tempPassword, 'MrDoctor');
@@ -499,7 +510,7 @@ export async function createHospital(input: {
   hospitalName?: unknown; email?: unknown; password?: unknown; phone?: unknown;
   slug?: unknown; division?: unknown; district?: unknown; thana?: unknown; addressLine?: unknown;
   // Full Hospital-table mirrors (all optional)
-  name_en?: unknown; templateName?: unknown;
+  name_en?: unknown; templateName?: unknown; businessCardImage?: unknown; bannerCardImage?: unknown;
   division_en?: unknown; district_en?: unknown; thana_en?: unknown;
   addressLine_en?: unknown; establishedYear?: unknown;
 }) {
@@ -516,6 +527,8 @@ export async function createHospital(input: {
 
   const name_en = optional(input.name_en, 120);
   const templateName = optional(input.templateName, 50) ?? 'template_a';
+  const businessCardImage = optional(input.businessCardImage, 500);
+  const bannerCardImage = optional(input.bannerCardImage, 500);
   const division_en = optional(input.division_en, 120);
   const district_en = optional(input.district_en, 120);
   const thana_en = optional(input.thana_en, 120);
@@ -535,7 +548,7 @@ export async function createHospital(input: {
 
   const { user, hospital } = await createHospitalAccountFromData({
     hospitalName, email, phone, slug, division, district, thana, addressLine, tempPassword,
-    name_en, templateName, division_en, district_en, thana_en, addressLine_en, establishedYear,
+    name_en, templateName, businessCardImage, bannerCardImage, division_en, district_en, thana_en, addressLine_en, establishedYear,
   });
   const emailSent = input.password ? true : await notifyCredentials(email, tempPassword, hospitalName);
   return { user: safeUser(user as unknown as Record<string, unknown>), hospital, tempPassword: input.password ? undefined : tempPassword, emailSent };

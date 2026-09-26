@@ -237,6 +237,8 @@ model Doctor {
   username            String       @unique
   templateName        String       @default("template_a")
   profilePicture      String?
+  businessCardImage   String?
+  bannerCardImage     String?
   gender              Gender?
   religion            String?
   startedYear         Int?
@@ -288,6 +290,8 @@ model Hospital {
   name_en         String?
   slug            String         @unique
   templateName    String         @default("template_a")
+  businessCardImage String?
+  bannerCardImage   String?
   division        String
   division_en     String?
   district        String

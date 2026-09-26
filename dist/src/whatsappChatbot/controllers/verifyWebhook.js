@@ -7,7 +7,6 @@ export const verifyWebhook = (req, res) => {
         return res.sendStatus(400);
     }
     if (mode === "subscribe" && token === env.VERIFY_TOKEN) {
-        console.log("✅ WEBHOOK VERIFIED");
         return res.status(200).send(challenge);
     }
     return res.sendStatus(403);

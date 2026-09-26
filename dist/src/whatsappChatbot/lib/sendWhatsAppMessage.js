@@ -23,6 +23,46 @@ export async function sendWhatsAppMessage(to, message, messageId) {
     }
 }
 /**
+ * Image message by URL (Cloud API `image.link`).
+ * Used for business/banner cards — fails silently (logs only) so the
+ * text flow always continues even when the image URL is bad.
+ */
+export async function sendWhatsAppImage(to, imageUrl, caption, messageId) {
+    const url = (imageUrl || "").trim();
+    if (!url || !/^https?:\/\//i.test(url))
+        return;
+    void sendTypingIndicator(to, messageId);
+    try {
+        await axios.post(`https://graph.facebook.com/v20.0/${env.PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp",
+            to,
+            type: "image",
+            image: {
+                link: url,
+                ...(caption?.trim() ? { caption: caption.trim().slice(0, 1024) } : {}),
+            },
+        }, {
+            headers: {
+                Authorization: `Bearer ${env.ACCESS_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            timeout: 15000,
+        });
+    }
+    catch (error) {
+        console.error("❌ Image Send Error:", error.response?.data || error.message);
+    }
+}
+/**
+ * Small human-like pause between messages (non-blocking sleep — no extra
+ * server pressure, it just keeps the async handler alive a bit longer).
+ * Pair with the typing indicator so the user sees "typing…" before each
+ * message lands.
+ */
+export function chatDelay(ms = 900) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+/**
  * Typing indicator (correct Cloud API form).
  * Marks the inbound message read AND shows "typing…" — dismissed when we
  * respond or after ~25s. Needs the inbound wamid; skipped without one.
@@ -82,6 +122,83 @@ export async function sendInteractiveButtons(to, bodyText, buttons, messageId) {
         console.error("❌ Button Error:", err.response?.data || err.message);
     }
 }
+/**
+ * Reply-buttons under an image header (doctor banner card + Contact button).
+ * Falls back to a text button message when the image URL is missing/bad.
+ */
+export async function sendImageButtons(to, imageUrl, bodyText, buttons, messageId) {
+    const url = (imageUrl || "").trim();
+    if (!url || !/^https?:\/\//i.test(url)) {
+        await sendInteractiveButtons(to, bodyText, buttons, messageId);
+        return;
+    }
+    void sendTypingIndicator(to, messageId);
+    try {
+        const formattedButtons = buttons.slice(0, 3).map((btn) => ({
+            type: "reply",
+            reply: { id: btn.id, title: btn.title.slice(0, 20) },
+        }));
+        await axios.post(`https://graph.facebook.com/v20.0/${env.PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp",
+            to,
+            type: "interactive",
+            interactive: {
+                type: "button",
+                header: { type: "image", image: { link: url } },
+                body: { text: bodyText.slice(0, 1024) },
+                action: { buttons: formattedButtons },
+            },
+        }, {
+            headers: {
+                Authorization: `Bearer ${env.ACCESS_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+        });
+    }
+    catch (err) {
+        console.error("❌ Image Button Error:", err.response?.data || err.message);
+    }
+}
+/**
+ * CTA URL button (opens a link, e.g. payment page).
+ * WhatsApp allows exactly ONE url button per message.
+ * Falls back to a plain text link when the API call fails.
+ */
+export async function sendCtaUrlButton(to, bodyText, buttonText, url, messageId) {
+    const link = (url || "").trim();
+    if (!link || !/^https?:\/\//i.test(link)) {
+        await sendWhatsAppMessage(to, `${bodyText}\n🔗 ${link}`, messageId);
+        return;
+    }
+    void sendTypingIndicator(to, messageId);
+    try {
+        await axios.post(`https://graph.facebook.com/v20.0/${env.PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp",
+            to,
+            type: "interactive",
+            interactive: {
+                type: "cta_url",
+                body: { text: bodyText.slice(0, 1024) },
+                action: {
+                    name: "cta_url",
+                    parameters: {
+                        display_text: buttonText.trim().slice(0, 20),
+                        url: link,
+                    },
+                },
+            },
+        }, {
+            headers: {
+                Authorization: `Bearer ${env.ACCESS_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+        });
+    }
+    catch (err) {
+        console.error("❌ CTA URL Button Error:", err.response?.data || err.message);
+        await sendWhatsAppMessage(to, `${bodyText}\n🔗 ${link}`, messageId);
+    }
+}
 /** Send N buttons in chunks of 3 (first chunk carries bodyText, rest carry continuation text). */
 export async function sendButtonsChunked(to, bodyText, buttons, continuationText = "⬇️ আরও অপশন নিচে:") {
     const chunks = [];
@@ -89,6 +206,64 @@ export async function sendButtonsChunked(to, bodyText, buttons, continuationText
         chunks.push(buttons.slice(i, i + 3));
     for (let i = 0; i < chunks.length; i++) {
         await sendInteractiveButtons(to, i === 0 ? bodyText : continuationText, chunks[i]);
+    }
+}
+/** Row titles are capped at 24 chars by Meta. */
+export function listRowTitle(s, max = 24) {
+    const t = (s || "").trim();
+    return t.length > max ? t.slice(0, max - 1) + "…" : t;
+}
+/**
+ * Interactive list-picker message (WhatsApp "menu" style).
+ * The user taps one button, sees all rows, picks one — the list closes.
+ * Limits: button ≤20 chars, body ≤1024, section title ≤24,
+ * max 10 rows per message, row id ≤200, row title ≤24, description ≤72.
+ */
+export async function sendInteractiveList(to, bodyText, buttonText, sections, options) {
+    void sendTypingIndicator(to, options?.messageId);
+    try {
+        await axios.post(`https://graph.facebook.com/v20.0/${env.PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp",
+            to,
+            type: "interactive",
+            interactive: {
+                type: "list",
+                ...(options?.headerText?.trim()
+                    ? { header: { type: "text", text: options.headerText.trim().slice(0, 60) } }
+                    : {}),
+                body: { text: bodyText.slice(0, 1024) },
+                ...(options?.footerText?.trim()
+                    ? { footer: { text: options.footerText.trim().slice(0, 60) } }
+                    : {}),
+                action: {
+                    button: buttonText.trim().slice(0, 20),
+                    sections: sections.slice(0, 10).map((s) => ({
+                        title: s.title.trim().slice(0, 24),
+                        rows: s.rows.slice(0, 10).map((r) => ({
+                            id: r.id.slice(0, 200),
+                            title: listRowTitle(r.title),
+                            ...(r.description?.trim()
+                                ? { description: r.description.trim().slice(0, 72) }
+                                : {}),
+                        })),
+                    })),
+                },
+            },
+        }, {
+            headers: {
+                Authorization: `Bearer ${env.ACCESS_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+        });
+    }
+    catch (err) {
+        console.error("❌ List Error:", err.response?.data || err.message);
+    }
+}
+/** Send N list rows in chunks of 10 per message (Meta cap). */
+export async function sendListChunked(to, bodyText, buttonText, rows, sectionTitle = "তালিকা", continuationText = "⬇️ আরও অপশন নিচে:") {
+    for (let i = 0; i < rows.length; i += 10) {
+        await sendInteractiveList(to, i === 0 ? bodyText : continuationText, buttonText, [{ title: sectionTitle, rows: rows.slice(i, i + 10) }]);
     }
 }
 //# sourceMappingURL=sendWhatsAppMessage.js.map

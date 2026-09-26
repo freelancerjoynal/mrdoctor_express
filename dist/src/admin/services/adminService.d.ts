@@ -61,6 +61,8 @@ export declare const listDirectory: (filter: DirectoryFilter) => Promise<{
     degree: string;
     speciality: string;
     username: string;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     status: import("../../../generated/prisma/enums.js").DoctorStatus;
     chambers: {
         id: string;
@@ -83,6 +85,8 @@ export declare const getDoctorOverview: (id: string) => Promise<{
         degree: string;
         speciality: string;
         username: string;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         bmdcNumber: string | null;
         status: import("../../../generated/prisma/enums.js").DoctorStatus;
         chambers: {
@@ -120,6 +124,8 @@ export declare const getHospitalOverview: (id: string) => Promise<{
         name: string;
         id: string;
         phone: string | null;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         status: import("../../../generated/prisma/enums.js").HospitalStatus;
         _count: {
             chambers: number;

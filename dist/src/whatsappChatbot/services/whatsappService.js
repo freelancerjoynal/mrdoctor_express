@@ -6,15 +6,19 @@ import { handleGetDoctorFlow } from "../flows/getDoctor/getDoctorFlow.js";
 import { handleGetHospitalFlow } from "../flows/getHospital/getHospitalFlow.js";
 import { findHospitalFlow } from "../flows/findHospital/findHospitalFlow.js";
 import { userPendingDoctorMap } from "../lib/doctorRedirectManager.js";
-import { saveConnectSession, trackFlowStep, clearChatSession } from "../lib/chatSession.js";
+import { saveConnectSession, clearChatSession } from "../lib/chatSession.js";
 import { prisma } from "../../lib/prisma.js";
 export const pendingRecoveryMap = new Map();
 const userSessions = new Map();
-async function saveFindTracking(phoneNumber, flow, step, data) {
-    const label = flow === "FIND_HOSPITAL_FLOW"
-        ? [data?.location, data?.hospitalName, data?.department].filter(Boolean).join(" | ").slice(0, 200) || "hospital search"
-        : [data?.problem, data?.department, data?.location].filter(Boolean).join(" | ").slice(0, 200) || "doctor search";
-    await trackFlowStep(phoneNumber, flow === "FIND_HOSPITAL_FLOW" ? "FIND_HOSPITAL" : "FIND_DOCTOR", flow, step, label, data?.hospitalId || data?.doctorId || null);
+// Chat history policy: ONLY a real doctor connect (GET_DOCTOR_FLOW via
+// username, saved with saveConnectSession) is persisted to DB. FIND/search
+// steps are in-memory only. This helper is a no-op that defensively clears
+// any stale FIND history so a search never leaves DB history behind.
+async function saveFindTracking(phoneNumber, _flow, _step, _data) {
+    void _flow;
+    void _step;
+    void _data;
+    await clearChatSession(phoneNumber).catch(() => { });
 }
 function setSession(phoneNumber, flow, step, data) {
     const prev = userSessions.get(phoneNumber);
@@ -58,7 +62,6 @@ async function handleBackButton(phoneNumber, session) {
     await resendStepPrompt(phoneNumber, { flow: prev.flow, step: prev.step, data: nextData });
 }
 export async function handleIncomingMessage(msg) {
-    console.log("📥 Incoming Message:", JSON.stringify(msg, null, 2));
     const rawText = msg.text ||
         msg.buttonReply?.title ||
         msg.interactive?.button_reply?.title ||
@@ -80,84 +83,40 @@ export async function handleIncomingMessage(msg) {
             step: "WELCOME",
             data: {},
         };
-        // ---------- Recovery ----------
+        // ---------- Recovery (doctor-connect only) ----------
+        // History exists ONLY after a real doctor connect via username
+        // (GET_DOCTOR_FLOW). FIND/search steps are never persisted.
         if (text.includes("হ্যাঁ, যুক্ত হতে চাই") ||
             text.includes("yes_restore") ||
             text.includes("পুনরায় যুক্ত") ||
             text.includes("reconnect")) {
             const savedSession = pendingRecoveryMap.get(phoneNumber);
-            if (savedSession) {
+            if (savedSession?.flow === "GET_DOCTOR_FLOW" && savedSession?.data?.username) {
                 setSession(phoneNumber, savedSession.flow, savedSession.step, savedSession.data);
                 pendingRecoveryMap.delete(phoneNumber);
                 const cb = (f, s, d) => {
                     setSession(phoneNumber, f, s, d);
-                    if (f === "FIND_DOCTOR_FLOW" || f === "FIND_HOSPITAL_FLOW") {
-                        saveFindTracking(phoneNumber, f, s, d);
-                    }
                 };
-                if (savedSession.flow === "GET_DOCTOR_FLOW" && savedSession.data.username) {
-                    await handleGetDoctorFlow(phoneNumber, `dr-${savedSession.data.username}`, msg, savedSession, cb);
-                    return;
-                }
-                else if (savedSession.flow === "GET_HOSPITAL_FLOW") {
-                    await handleGetHospitalFlow(phoneNumber, "hospital_reload", msg, savedSession, cb, () => { });
-                    return;
-                }
-                else if (savedSession.flow === "FIND_DOCTOR_FLOW") {
-                    await findDoctorFlow(phoneNumber, rawText, msg, savedSession, cb, () => {
-                        setSession(phoneNumber, "MAIN_MENU", "WELCOME", {});
-                    });
-                    return;
-                }
-                else if (savedSession.flow === "FIND_HOSPITAL_FLOW") {
-                    await findHospitalFlow(phoneNumber, rawText, msg, savedSession, cb, () => {
-                        setSession(phoneNumber, "MAIN_MENU", "WELCOME", {});
-                    });
-                    return;
-                }
-            }
-            const dbSession = await prisma.chatSession.findUnique({ where: { phoneNumber } });
-            if (dbSession?.targetId) {
-                if (dbSession.targetType === "DOCTOR") {
-                    const doc = await prisma.doctor.findUnique({ where: { id: dbSession.targetId } });
-                    if (doc) {
-                        const restored = {
-                            flow: "GET_DOCTOR_FLOW",
-                            step: "ACTIVE_CHAT",
-                            data: { doctorId: doc.id, username: doc.username, name: doc.name, phone: doc.phone },
-                        };
-                        setSession(phoneNumber, restored.flow, restored.step, restored.data);
-                        await saveConnectSession(phoneNumber, "DOCTOR", doc.id, doc.name, "GET_DOCTOR_FLOW", "ACTIVE_CHAT");
-                        await handleGetDoctorFlow(phoneNumber, `dr-${doc.username}`, msg, restored, (f, s, d) => {
-                            setSession(phoneNumber, f, s, d);
-                        });
-                        return;
-                    }
-                }
-            }
-            if (dbSession && (dbSession.lastFlow === "FIND_DOCTOR_FLOW" || dbSession.lastFlow === "FIND_HOSPITAL_FLOW")) {
-                const restored = {
-                    flow: dbSession.lastFlow,
-                    step: dbSession.lastStep || (dbSession.lastFlow === "FIND_HOSPITAL_FLOW" ? "ASK_AREA" : "ASK_PROBLEM"),
-                    data: {},
-                };
-                setSession(phoneNumber, restored.flow, restored.step, restored.data);
-                pendingRecoveryMap.delete(phoneNumber);
-                const cb = (f, s, d) => {
-                    setSession(phoneNumber, f, s, d);
-                    saveFindTracking(phoneNumber, f, s, d);
-                };
-                if (restored.flow === "FIND_DOCTOR_FLOW") {
-                    await findDoctorFlow(phoneNumber, rawText, msg, restored, cb, () => {
-                        setSession(phoneNumber, "MAIN_MENU", "WELCOME", {});
-                    });
-                }
-                else {
-                    await findHospitalFlow(phoneNumber, rawText, msg, restored, cb, () => {
-                        setSession(phoneNumber, "MAIN_MENU", "WELCOME", {});
-                    });
-                }
+                await handleGetDoctorFlow(phoneNumber, `dr-${savedSession.data.username}`, msg, savedSession, cb);
                 return;
+            }
+            pendingRecoveryMap.delete(phoneNumber);
+            const dbSession = await prisma.chatSession.findUnique({ where: { phoneNumber } });
+            if (dbSession?.targetType === "DOCTOR" && dbSession?.targetId) {
+                const doc = await prisma.doctor.findUnique({ where: { id: dbSession.targetId } });
+                if (doc) {
+                    const restored = {
+                        flow: "GET_DOCTOR_FLOW",
+                        step: "ACTIVE_CHAT",
+                        data: { doctorId: doc.id, username: doc.username, name: doc.name, phone: doc.phone },
+                    };
+                    setSession(phoneNumber, restored.flow, restored.step, restored.data);
+                    await saveConnectSession(phoneNumber, "DOCTOR", doc.id, doc.name, "GET_DOCTOR_FLOW", "ACTIVE_CHAT");
+                    await handleGetDoctorFlow(phoneNumber, `dr-${doc.username}`, msg, restored, (f, s, d) => {
+                        setSession(phoneNumber, f, s, d);
+                    });
+                    return;
+                }
             }
         }
         // ---------- Global Connect buttons (doctor cards from either flow) ----------
@@ -231,8 +190,25 @@ export async function handleIncomingMessage(msg) {
                 }
             }
         }
-        // ---------- Hi / Hello (pending deep-link or recovery prompt) ----------
-        if (text.includes("hi") || text.includes("hello") || text.includes("start")) {
+        // ---------- Greetings (hi / salam / hello...) -> main menu ----------
+        // Pending deep-links and recovery prompts win first; any other
+        // greeting always lands on the main menu, from any step.
+        const isGreeting = text.includes("hi") ||
+            text.includes("hello") ||
+            text.includes("hey") ||
+            text.includes("start") ||
+            text.includes("salam") ||
+            text.includes("salaam") ||
+            text.includes("assalam") ||
+            text.includes("alaikum") ||
+            text.includes("আসসালামু") ||
+            text.includes("আলাইকুম") ||
+            text.includes("সালাম") ||
+            text.includes("আদাব") ||
+            text.includes("adab") ||
+            text.includes("নমস্কার") ||
+            text.includes("nomoshkar");
+        if (isGreeting) {
             const pendingDoctorId = userPendingDoctorMap.get(phoneNumber);
             if (pendingDoctorId) {
                 const doctor = await prisma.doctor.findUnique({ where: { id: pendingDoctorId } });
@@ -255,32 +231,38 @@ export async function handleIncomingMessage(msg) {
                 }
             }
             const dbSession = await prisma.chatSession.findUnique({ where: { phoneNumber } });
-            if (dbSession?.targetName) {
-                let extraData = {};
-                if (dbSession.targetType === "DOCTOR" && dbSession.targetId) {
-                    const doc = await prisma.doctor.findUnique({ where: { id: dbSession.targetId } });
-                    if (doc) {
-                        extraData = { doctorId: doc.id, username: doc.username, name: doc.name, phone: doc.phone };
-                    }
+            // Only a connected doctor (username) is remembered. FIND/search
+            // history is never saved, so there is nothing to resume there.
+            if (dbSession?.targetType === "DOCTOR" && dbSession?.targetId) {
+                const doc = await prisma.doctor.findUnique({ where: { id: dbSession.targetId } });
+                if (doc) {
+                    const restored = {
+                        flow: "GET_DOCTOR_FLOW",
+                        step: "ACTIVE_CHAT",
+                        data: { doctorId: doc.id, username: doc.username, name: doc.name, phone: doc.phone },
+                    };
+                    pendingRecoveryMap.set(phoneNumber, restored);
+                    const recall = `💬 এর আগে আপনি *${doc.name}*-এর সাথে কথা বলছিলেন।\n\n❓ আপনি কি উনার সাথেই পুনরায় যুক্ত হতে চান?`;
+                    await sendInteractiveButtons(phoneNumber, `👋 আসসালামু আলাইকুম / নমস্কার! \n\n🌟 *মিস্টার ডক্টর (Mr. Doctor)*-এর পক্ষ থেকে আপনাকে জানাচ্ছি আন্তরিক শুভেচ্ছা ও স্বাগতম। 🩺✨\n\n───────────────────\n${recall}`, [
+                        { id: "yes_restore", title: "হ্যাঁ, যুক্ত হতে চাই" },
+                        { id: "menu_btn", title: "না, মূল মেনুতে যাই" },
+                    ]);
+                    return;
                 }
-                const restored = {
-                    flow: dbSession.lastFlow || "MAIN_MENU",
-                    step: dbSession.lastStep || "WELCOME",
-                    data: extraData,
-                };
-                pendingRecoveryMap.set(phoneNumber, restored);
-                await sendInteractiveButtons(phoneNumber, `👋 আসসালামু আলাইকুম / নমস্কার! \n\n🌟 *মিস্টার ডক্টর (Mr. Doctor)*-এর পক্ষ থেকে আপনাকে জানাচ্ছি আন্তরিক শুভেচ্ছা ও স্বাগতম। 🩺✨\n\n───────────────────\n💬 এর আগে আপনি *${dbSession.targetName}*-এর সাথে কথা বলছিলেন।\n\n❓ আপনি কি উনার সাথেই পুনরায় যুক্ত হতে চান?`, [
-                    { id: "yes_restore", title: "হ্যাঁ, যুক্ত হতে চাই" },
-                    { id: "menu_btn", title: "না, মূল মেনুতে যাই" },
-                ]);
-                return;
             }
+            // Plain greeting (no pending link / recovery) -> main menu.
+            setSession(phoneNumber, "MAIN_MENU", "ASK_CATEGORY", {});
+            await sendWhatsAppMessage(phoneNumber, "👋 আসসালামু আলাইকুম/নমস্কার!\n\nমিস্টার ডক্টর (Mr. Doctor)-এর পক্ষ থেকে আপনাকে স্বাগতম।");
+            await sendInteractiveButtons(phoneNumber, "নিচের অপশনগুলো থেকে আপনার প্রয়োজনীয় সেবাটি সিলেক্ট করুন:", [
+                { id: "doc_btn", title: "ডাক্তার" },
+                { id: "hosp_btn", title: "হসপিটাল" },
+            ]);
+            return;
         }
         if (text.startsWith("hospital_") || buttonIdNorm.startsWith("hospital_")) {
             const newSession = { flow: "FIND_HOSPITAL_FLOW", step: "ASK_AREA", data: { category: "HOSPITAL" } };
             setSession(phoneNumber, newSession.flow, newSession.step, newSession.data);
-            await saveFindTracking(phoneNumber, "FIND_HOSPITAL_FLOW", "ASK_AREA", newSession.data);
-            await findHospitalFlow(phoneNumber, "hospital", msg, newSession, (f, s, d) => { setSession(phoneNumber, f, s, d); saveFindTracking(phoneNumber, f, s, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
+            await findHospitalFlow(phoneNumber, "hospital", msg, newSession, (f, s, d) => { setSession(phoneNumber, f, s, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
             return;
         }
         // ---------- Main menu ----------
@@ -306,12 +288,12 @@ export async function handleIncomingMessage(msg) {
         if (isAreaClick(rawText, buttonId)) {
             if (session.flow === "FIND_HOSPITAL_FLOW") {
                 const s = { ...session, step: "ASK_AREA" };
-                await findHospitalFlow(phoneNumber, rawText, msg, s, (f, st, d) => { setSession(phoneNumber, f, st, d); saveFindTracking(phoneNumber, f, st, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
+                await findHospitalFlow(phoneNumber, rawText, msg, s, (f, st, d) => { setSession(phoneNumber, f, st, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
                 return;
             }
             if (session.flow === "FIND_DOCTOR_FLOW" || session.flow === "AI_DOCTOR_FLOW") {
-                const s = { ...session, step: "ASK_AREA" };
-                await findDoctorFlow(phoneNumber, rawText, msg, s, (f, st, d) => { setSession(phoneNumber, f, st, d); saveFindTracking(phoneNumber, f, st, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
+                const s = { ...session, step: "ASK_PROBLEM" };
+                await findDoctorFlow(phoneNumber, rawText, msg, s, (f, st, d) => { setSession(phoneNumber, f, st, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
                 return;
             }
         }
@@ -328,17 +310,21 @@ export async function handleIncomingMessage(msg) {
             }
             if (session.step === "ASK_CATEGORY") {
                 if (text.includes("ডাক্তার") || text.includes("doc") || buttonIdNorm === "doc_btn") {
-                    const next = { flow: "FIND_DOCTOR_FLOW", step: "ASK_PROBLEM", data: { category: "DOCTOR" } };
+                    // Existing flow: division -> district -> thana -> category.
+                    // Category list has "🤔 সমস্যা লিখুন" row -> problem ->
+                    // DeepSeek (full list) -> DB by area. No DB history for
+                    // search; only a doctor connect persists.
+                    await clearChatSession(phoneNumber).catch(() => { });
+                    const next = { flow: "FIND_DOCTOR_FLOW", step: "ASK_DIVISION", data: { category: "DOCTOR" } };
                     setSession(phoneNumber, next.flow, next.step, next.data);
-                    await saveFindTracking(phoneNumber, "FIND_DOCTOR_FLOW", "ASK_PROBLEM", next.data);
-                    await findDoctorFlow(phoneNumber, rawText, msg, next, (f, s, d) => { setSession(phoneNumber, f, s, d); saveFindTracking(phoneNumber, f, s, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
+                    await findDoctorFlow(phoneNumber, rawText, msg, next, (f, s, d) => { setSession(phoneNumber, f, s, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
                     return;
                 }
                 else if (text.includes("হসপিটাল") || text.includes("hosp") || buttonIdNorm === "hosp_btn") {
-                    const next = { flow: "FIND_HOSPITAL_FLOW", step: "ASK_AREA", data: { category: "HOSPITAL" } };
+                    await clearChatSession(phoneNumber).catch(() => { });
+                    const next = { flow: "FIND_HOSPITAL_FLOW", step: "ASK_DIVISION", data: { category: "HOSPITAL" } };
                     setSession(phoneNumber, next.flow, next.step, next.data);
-                    await saveFindTracking(phoneNumber, "FIND_HOSPITAL_FLOW", "ASK_AREA", next.data);
-                    await findHospitalFlow(phoneNumber, "hospital", msg, next, (f, s, d) => { setSession(phoneNumber, f, s, d); saveFindTracking(phoneNumber, f, s, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
+                    await findHospitalFlow(phoneNumber, rawText, msg, next, (f, s, d) => { setSession(phoneNumber, f, s, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
                     return;
                 }
                 else {
@@ -348,11 +334,11 @@ export async function handleIncomingMessage(msg) {
             }
         }
         if (session.flow === "FIND_DOCTOR_FLOW" || session.flow === "AI_DOCTOR_FLOW") {
-            await findDoctorFlow(phoneNumber, rawText, msg, session, (f, s, d) => { setSession(phoneNumber, f, s, d); saveFindTracking(phoneNumber, f, s, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
+            await findDoctorFlow(phoneNumber, rawText, msg, session, (f, s, d) => { setSession(phoneNumber, f, s, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
             return;
         }
         if (session.flow === "FIND_HOSPITAL_FLOW") {
-            await findHospitalFlow(phoneNumber, rawText, msg, session, (f, s, d) => { setSession(phoneNumber, f, s, d); saveFindTracking(phoneNumber, f, s, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
+            await findHospitalFlow(phoneNumber, rawText, msg, session, (f, s, d) => { setSession(phoneNumber, f, s, d); }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
             return;
         }
         if (session.flow === "GET_DOCTOR_FLOW") {
@@ -367,9 +353,8 @@ export async function handleIncomingMessage(msg) {
         if (session.flow === "GET_HOSPITAL_FLOW") {
             await handleGetHospitalFlow(phoneNumber, text, msg, session, (f, s, d) => {
                 setSession(phoneNumber, f, s, d);
-                if (d.hospitalId && d.name) {
-                    saveConnectSession(phoneNumber, "HOSPITAL", d.hospitalId, d.name, f, s);
-                }
+                // No DB history for hospital browsing — only a doctor
+                // connect (username) is persisted.
             }, () => { setSession(phoneNumber, "MAIN_MENU", "WELCOME", {}); });
             return;
         }

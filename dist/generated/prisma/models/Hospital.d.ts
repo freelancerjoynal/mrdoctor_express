@@ -28,6 +28,8 @@ export type HospitalMinAggregateOutputType = {
     name_en: string | null;
     slug: string | null;
     templateName: string | null;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     division: string | null;
     division_en: string | null;
     district: string | null;
@@ -50,6 +52,8 @@ export type HospitalMaxAggregateOutputType = {
     name_en: string | null;
     slug: string | null;
     templateName: string | null;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     division: string | null;
     division_en: string | null;
     district: string | null;
@@ -72,6 +76,8 @@ export type HospitalCountAggregateOutputType = {
     name_en: number;
     slug: number;
     templateName: number;
+    businessCardImage: number;
+    bannerCardImage: number;
     division: number;
     division_en: number;
     district: number;
@@ -103,6 +109,8 @@ export type HospitalMinAggregateInputType = {
     name_en?: true;
     slug?: true;
     templateName?: true;
+    businessCardImage?: true;
+    bannerCardImage?: true;
     division?: true;
     division_en?: true;
     district?: true;
@@ -125,6 +133,8 @@ export type HospitalMaxAggregateInputType = {
     name_en?: true;
     slug?: true;
     templateName?: true;
+    businessCardImage?: true;
+    bannerCardImage?: true;
     division?: true;
     division_en?: true;
     district?: true;
@@ -147,6 +157,8 @@ export type HospitalCountAggregateInputType = {
     name_en?: true;
     slug?: true;
     templateName?: true;
+    businessCardImage?: true;
+    bannerCardImage?: true;
     division?: true;
     division_en?: true;
     district?: true;
@@ -246,6 +258,8 @@ export type HospitalGroupByOutputType = {
     name_en: string | null;
     slug: string;
     templateName: string;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     division: string;
     division_en: string | null;
     district: string;
@@ -279,6 +293,8 @@ export type HospitalWhereInput = {
     name_en?: Prisma.StringNullableFilter<"Hospital"> | string | null;
     slug?: Prisma.StringFilter<"Hospital"> | string;
     templateName?: Prisma.StringFilter<"Hospital"> | string;
+    businessCardImage?: Prisma.StringNullableFilter<"Hospital"> | string | null;
+    bannerCardImage?: Prisma.StringNullableFilter<"Hospital"> | string | null;
     division?: Prisma.StringFilter<"Hospital"> | string;
     division_en?: Prisma.StringNullableFilter<"Hospital"> | string | null;
     district?: Prisma.StringFilter<"Hospital"> | string;
@@ -313,6 +329,8 @@ export type HospitalOrderByWithRelationInput = {
     name_en?: Prisma.SortOrderInput | Prisma.SortOrder;
     slug?: Prisma.SortOrder;
     templateName?: Prisma.SortOrder;
+    businessCardImage?: Prisma.SortOrderInput | Prisma.SortOrder;
+    bannerCardImage?: Prisma.SortOrderInput | Prisma.SortOrder;
     division?: Prisma.SortOrder;
     division_en?: Prisma.SortOrderInput | Prisma.SortOrder;
     district?: Prisma.SortOrder;
@@ -350,6 +368,8 @@ export type HospitalWhereUniqueInput = Prisma.AtLeast<{
     name?: Prisma.StringFilter<"Hospital"> | string;
     name_en?: Prisma.StringNullableFilter<"Hospital"> | string | null;
     templateName?: Prisma.StringFilter<"Hospital"> | string;
+    businessCardImage?: Prisma.StringNullableFilter<"Hospital"> | string | null;
+    bannerCardImage?: Prisma.StringNullableFilter<"Hospital"> | string | null;
     division?: Prisma.StringFilter<"Hospital"> | string;
     division_en?: Prisma.StringNullableFilter<"Hospital"> | string | null;
     district?: Prisma.StringFilter<"Hospital"> | string;
@@ -384,6 +404,8 @@ export type HospitalOrderByWithAggregationInput = {
     name_en?: Prisma.SortOrderInput | Prisma.SortOrder;
     slug?: Prisma.SortOrder;
     templateName?: Prisma.SortOrder;
+    businessCardImage?: Prisma.SortOrderInput | Prisma.SortOrder;
+    bannerCardImage?: Prisma.SortOrderInput | Prisma.SortOrder;
     division?: Prisma.SortOrder;
     division_en?: Prisma.SortOrderInput | Prisma.SortOrder;
     district?: Prisma.SortOrder;
@@ -414,6 +436,8 @@ export type HospitalScalarWhereWithAggregatesInput = {
     name_en?: Prisma.StringNullableWithAggregatesFilter<"Hospital"> | string | null;
     slug?: Prisma.StringWithAggregatesFilter<"Hospital"> | string;
     templateName?: Prisma.StringWithAggregatesFilter<"Hospital"> | string;
+    businessCardImage?: Prisma.StringNullableWithAggregatesFilter<"Hospital"> | string | null;
+    bannerCardImage?: Prisma.StringNullableWithAggregatesFilter<"Hospital"> | string | null;
     division?: Prisma.StringWithAggregatesFilter<"Hospital"> | string;
     division_en?: Prisma.StringNullableWithAggregatesFilter<"Hospital"> | string | null;
     district?: Prisma.StringWithAggregatesFilter<"Hospital"> | string;
@@ -435,6 +459,8 @@ export type HospitalCreateInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -469,6 +495,8 @@ export type HospitalUncheckedCreateInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -501,6 +529,8 @@ export type HospitalUpdateInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -535,6 +565,8 @@ export type HospitalUncheckedUpdateInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -568,6 +600,8 @@ export type HospitalCreateManyInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -589,6 +623,8 @@ export type HospitalUpdateManyMutationInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -611,6 +647,8 @@ export type HospitalUncheckedUpdateManyInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -637,6 +675,8 @@ export type HospitalCountOrderByAggregateInput = {
     name_en?: Prisma.SortOrder;
     slug?: Prisma.SortOrder;
     templateName?: Prisma.SortOrder;
+    businessCardImage?: Prisma.SortOrder;
+    bannerCardImage?: Prisma.SortOrder;
     division?: Prisma.SortOrder;
     division_en?: Prisma.SortOrder;
     district?: Prisma.SortOrder;
@@ -663,6 +703,8 @@ export type HospitalMaxOrderByAggregateInput = {
     name_en?: Prisma.SortOrder;
     slug?: Prisma.SortOrder;
     templateName?: Prisma.SortOrder;
+    businessCardImage?: Prisma.SortOrder;
+    bannerCardImage?: Prisma.SortOrder;
     division?: Prisma.SortOrder;
     division_en?: Prisma.SortOrder;
     district?: Prisma.SortOrder;
@@ -685,6 +727,8 @@ export type HospitalMinOrderByAggregateInput = {
     name_en?: Prisma.SortOrder;
     slug?: Prisma.SortOrder;
     templateName?: Prisma.SortOrder;
+    businessCardImage?: Prisma.SortOrder;
+    bannerCardImage?: Prisma.SortOrder;
     division?: Prisma.SortOrder;
     division_en?: Prisma.SortOrder;
     district?: Prisma.SortOrder;
@@ -895,6 +939,8 @@ export type HospitalCreateWithoutUserInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -927,6 +973,8 @@ export type HospitalUncheckedCreateWithoutUserInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -963,6 +1011,8 @@ export type HospitalCreateWithoutStaffMembersInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -996,6 +1046,8 @@ export type HospitalUncheckedCreateWithoutStaffMembersInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1040,6 +1092,8 @@ export type HospitalUpdateWithoutUserInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1072,6 +1126,8 @@ export type HospitalUncheckedUpdateWithoutUserInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1113,6 +1169,8 @@ export type HospitalUpdateWithoutStaffMembersInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1146,6 +1204,8 @@ export type HospitalUncheckedUpdateWithoutStaffMembersInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1177,6 +1237,8 @@ export type HospitalCreateWithoutCreditLedgerInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1210,6 +1272,8 @@ export type HospitalUncheckedCreateWithoutCreditLedgerInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1254,6 +1318,8 @@ export type HospitalUpdateWithoutCreditLedgerInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1287,6 +1353,8 @@ export type HospitalUncheckedUpdateWithoutCreditLedgerInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1318,6 +1386,8 @@ export type HospitalCreateWithoutChambersInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1351,6 +1421,8 @@ export type HospitalUncheckedCreateWithoutChambersInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1395,6 +1467,8 @@ export type HospitalUpdateWithoutChambersInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1428,6 +1502,8 @@ export type HospitalUncheckedUpdateWithoutChambersInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1459,6 +1535,8 @@ export type HospitalCreateWithoutSchedulesInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1492,6 +1570,8 @@ export type HospitalUncheckedCreateWithoutSchedulesInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1536,6 +1616,8 @@ export type HospitalUpdateWithoutSchedulesInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1569,6 +1651,8 @@ export type HospitalUncheckedUpdateWithoutSchedulesInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1600,6 +1684,8 @@ export type HospitalCreateWithoutPendingAppointmentsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1633,6 +1719,8 @@ export type HospitalUncheckedCreateWithoutPendingAppointmentsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1677,6 +1765,8 @@ export type HospitalUpdateWithoutPendingAppointmentsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1710,6 +1800,8 @@ export type HospitalUncheckedUpdateWithoutPendingAppointmentsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1741,6 +1833,8 @@ export type HospitalCreateWithoutConfirmedAppointmentsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1774,6 +1868,8 @@ export type HospitalUncheckedCreateWithoutConfirmedAppointmentsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1818,6 +1914,8 @@ export type HospitalUpdateWithoutConfirmedAppointmentsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1851,6 +1949,8 @@ export type HospitalUncheckedUpdateWithoutConfirmedAppointmentsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1882,6 +1982,8 @@ export type HospitalCreateWithoutServedAppointmentsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1915,6 +2017,8 @@ export type HospitalUncheckedCreateWithoutServedAppointmentsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -1959,6 +2063,8 @@ export type HospitalUpdateWithoutServedAppointmentsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -1992,6 +2098,8 @@ export type HospitalUncheckedUpdateWithoutServedAppointmentsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -2023,6 +2131,8 @@ export type HospitalCreateWithoutOnlineDaysInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -2056,6 +2166,8 @@ export type HospitalUncheckedCreateWithoutOnlineDaysInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -2100,6 +2212,8 @@ export type HospitalUpdateWithoutOnlineDaysInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -2133,6 +2247,8 @@ export type HospitalUncheckedUpdateWithoutOnlineDaysInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -2164,6 +2280,8 @@ export type HospitalCreateWithoutPayoutsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -2197,6 +2315,8 @@ export type HospitalUncheckedCreateWithoutPayoutsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -2241,6 +2361,8 @@ export type HospitalUpdateWithoutPayoutsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -2274,6 +2396,8 @@ export type HospitalUncheckedUpdateWithoutPayoutsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -2305,6 +2429,8 @@ export type HospitalCreateWithoutBlogsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -2338,6 +2464,8 @@ export type HospitalUncheckedCreateWithoutBlogsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -2382,6 +2510,8 @@ export type HospitalUpdateWithoutBlogsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -2415,6 +2545,8 @@ export type HospitalUncheckedUpdateWithoutBlogsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -2446,6 +2578,8 @@ export type HospitalCreateWithoutReviewsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -2479,6 +2613,8 @@ export type HospitalUncheckedCreateWithoutReviewsInput = {
     name_en?: string | null;
     slug: string;
     templateName?: string;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     division: string;
     division_en?: string | null;
     district: string;
@@ -2523,6 +2659,8 @@ export type HospitalUpdateWithoutReviewsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -2556,6 +2694,8 @@ export type HospitalUncheckedUpdateWithoutReviewsInput = {
     name_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     slug?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     division?: Prisma.StringFieldUpdateOperationsInput | string;
     division_en?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     district?: Prisma.StringFieldUpdateOperationsInput | string;
@@ -2692,6 +2832,8 @@ export type HospitalSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
     name_en?: boolean;
     slug?: boolean;
     templateName?: boolean;
+    businessCardImage?: boolean;
+    bannerCardImage?: boolean;
     division?: boolean;
     division_en?: boolean;
     district?: boolean;
@@ -2727,6 +2869,8 @@ export type HospitalSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exte
     name_en?: boolean;
     slug?: boolean;
     templateName?: boolean;
+    businessCardImage?: boolean;
+    bannerCardImage?: boolean;
     division?: boolean;
     division_en?: boolean;
     district?: boolean;
@@ -2750,6 +2894,8 @@ export type HospitalSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
     name_en?: boolean;
     slug?: boolean;
     templateName?: boolean;
+    businessCardImage?: boolean;
+    bannerCardImage?: boolean;
     division?: boolean;
     division_en?: boolean;
     district?: boolean;
@@ -2773,6 +2919,8 @@ export type HospitalSelectScalar = {
     name_en?: boolean;
     slug?: boolean;
     templateName?: boolean;
+    businessCardImage?: boolean;
+    bannerCardImage?: boolean;
     division?: boolean;
     division_en?: boolean;
     district?: boolean;
@@ -2788,7 +2936,7 @@ export type HospitalSelectScalar = {
     createdAt?: boolean;
     updatedAt?: boolean;
 };
-export type HospitalOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "name" | "name_en" | "slug" | "templateName" | "division" | "division_en" | "district" | "district_en" | "thana" | "thana_en" | "addressLine" | "addressLine_en" | "phone" | "establishedYear" | "status" | "creditBalance" | "createdAt" | "updatedAt", ExtArgs["result"]["hospital"]>;
+export type HospitalOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "name" | "name_en" | "slug" | "templateName" | "businessCardImage" | "bannerCardImage" | "division" | "division_en" | "district" | "district_en" | "thana" | "thana_en" | "addressLine" | "addressLine_en" | "phone" | "establishedYear" | "status" | "creditBalance" | "createdAt" | "updatedAt", ExtArgs["result"]["hospital"]>;
 export type HospitalInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
     user?: boolean | Prisma.Hospital$userArgs<ExtArgs>;
     creditLedger?: boolean | Prisma.Hospital$creditLedgerArgs<ExtArgs>;
@@ -2833,6 +2981,8 @@ export type $HospitalPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
         name_en: string | null;
         slug: string;
         templateName: string;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         division: string;
         division_en: string | null;
         district: string;
@@ -3219,6 +3369,8 @@ export interface HospitalFieldRefs {
     readonly name_en: Prisma.FieldRef<"Hospital", 'String'>;
     readonly slug: Prisma.FieldRef<"Hospital", 'String'>;
     readonly templateName: Prisma.FieldRef<"Hospital", 'String'>;
+    readonly businessCardImage: Prisma.FieldRef<"Hospital", 'String'>;
+    readonly bannerCardImage: Prisma.FieldRef<"Hospital", 'String'>;
     readonly division: Prisma.FieldRef<"Hospital", 'String'>;
     readonly division_en: Prisma.FieldRef<"Hospital", 'String'>;
     readonly district: Prisma.FieldRef<"Hospital", 'String'>;

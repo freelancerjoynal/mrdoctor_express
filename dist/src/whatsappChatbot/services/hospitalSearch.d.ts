@@ -5,6 +5,8 @@ export interface HospitalWithDoctors {
     slug: string;
     address: string | null;
     phone: string | null;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     doctorCount: number;
     departments: string[];
     doctors: {

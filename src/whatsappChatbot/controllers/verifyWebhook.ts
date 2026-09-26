@@ -11,7 +11,6 @@ export const verifyWebhook = (req: Request, res: Response) => {
     }
 
     if (mode === "subscribe" && token === env.VERIFY_TOKEN) {
-        console.log("✅ WEBHOOK VERIFIED");
         return res.status(200).send(challenge);
     }
 

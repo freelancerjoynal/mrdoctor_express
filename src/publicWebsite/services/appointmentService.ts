@@ -20,7 +20,7 @@ function isSameLocalDay(a: Date, b: Date): boolean {
 }
 
 /** Force a doctor's live OFF (one write per transition, then reads stay cheap). */
-async function autoStopLiveBoard(doctorId: string, reason: string): Promise<void> {
+async function autoStopLiveBoard(doctorId: string, _reason: string): Promise<void> {
   await prisma.doctor.update({
     where: { id: doctorId },
     data: {
@@ -33,7 +33,6 @@ async function autoStopLiveBoard(doctorId: string, reason: string): Promise<void
     },
   });
   notifyLive(doctorId);
-  console.log(`[SerialLive] public board auto-stop doctor=${doctorId} reason=${reason}`);
 }
 
 export const DAY_BN: Record<string, string> = {

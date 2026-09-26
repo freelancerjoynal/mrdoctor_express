@@ -12,8 +12,7 @@ export const BACK_BUTTON = { id: "back_btn", title: "🔙 পেছনে যা
 //   - Typing "menu" anytime opens the main menu (handled globally).
 //   - Only the FINAL message of a flow uses withNav([]) = Back + Menu buttons.
 //
-/** Appended to prompts so users know to type back (no Back button mid-flow). */
-export const BACK_HINT = "\n\n↩️ পেছনে যেতে back লিখুন";
+export { BACK_HINT } from "./session.js";
 //
 // BACK BEHAVIOUR:
 //   - Every step pushes {flow, step} into data._hist (done in whatsappService).
@@ -26,11 +25,13 @@ export const BACK_HINT = "\n\n↩️ পেছনে যেতে back লিখ
 //   await sendButtonsChunked(phoneNumber, PROMPT, withNav(deptButtons)); // chunked
 // ============================================================================
 import { sendWhatsAppMessage, sendInteractiveButtons, sendButtonsChunked, } from "./sendWhatsAppMessage.js";
-import { shortTitle } from "./session.js";
+import { BACK_HINT, shortTitle } from "./session.js";
 import { FIND_DOCTOR_TEXTS } from "../flows/findDoctor/findDoctorQA.js";
 import { HOSPITAL_TEXTS } from "../flows/findHospital/hospitalQA.js";
 import { DOCTOR_TEXTS, APPOINTMENT_TEXTS, APPT_USE_SENDER_NUMBER_ID, APPT_USE_SENDER_NUMBER_TITLE, getAppointmentDayOptions, buildDayPrompt, buildChamberListText, buildChamberButtons, schedulesForChamber, } from "../flows/getDoctor/doctorQA.js";
 import { getHospitalById, buildHospitalCard } from "../services/hospitalSearch.js";
+import { findDivision, sendDivisionPrompt, sendDistrictPrompt, sendThanaPrompt, resendSpecialityPrompt, buildLocationDoneMessage, LOCATION_TEXTS, } from "./locationSelect.js";
+import { DOC_SCRIPT, docStep3, docGenderButtons, docHistoryButtons, docPaymentButtons, } from "../flows/getDoctor/forDoctorScript.js";
 /** Append Back + Menu to any button list. USE ONLY on a flow's final message. */
 export function withNav(buttons, includeBack = true) {
     return [...buttons, ...(includeBack ? [BACK_BUTTON] : []), MENU_BUTTON];
@@ -57,6 +58,38 @@ export async function resendStepPrompt(phoneNumber, session) {
         // ---------- FIND-HOSPITAL ----------
         if (session.flow === "FIND_HOSPITAL_FLOW") {
             switch (session.step) {
+                case "ASK_DIVISION":
+                    await sendDivisionPrompt(phoneNumber, "HOSPITAL");
+                    return;
+                case "ASK_DISTRICT": {
+                    const division = findDivision(String(data.division || ""));
+                    if (!division) {
+                        await sendDivisionPrompt(phoneNumber, "HOSPITAL");
+                        return;
+                    }
+                    await sendDistrictPrompt(phoneNumber, "HOSPITAL", division);
+                    return;
+                }
+                case "ASK_THANA": {
+                    const division = findDivision(String(data.division || ""));
+                    const district = division?.districts.find((d) => d.name === data.district) || null;
+                    if (!district) {
+                        await sendDivisionPrompt(phoneNumber, "HOSPITAL");
+                        return;
+                    }
+                    await sendThanaPrompt(phoneNumber, district);
+                    return;
+                }
+                case "ASK_SPECIALITY":
+                    await resendSpecialityPrompt(phoneNumber, "HOSPITAL", data);
+                    return;
+                case "ASK_SUGGEST_PROBLEM":
+                    await sendWhatsAppMessage(phoneNumber, LOCATION_TEXTS.SUGGEST_ASK_PROBLEM + BACK_HINT);
+                    return;
+                case "LOCATION_DONE":
+                    await sendWhatsAppMessage(phoneNumber, buildLocationDoneMessage(data));
+                    await sendInteractiveButtons(phoneNumber, "আর কিছু করতে চাইলে নিচে থেকে বেছে নিন:", withNav([]));
+                    return;
                 case "ASK_AREA":
                     await sendWhatsAppMessage(phoneNumber, HOSPITAL_TEXTS.ASK_AREA + BACK_HINT);
                     return;
@@ -97,6 +130,38 @@ export async function resendStepPrompt(phoneNumber, session) {
         // ---------- FIND-DOCTOR ----------
         if (session.flow === "FIND_DOCTOR_FLOW" || session.flow === "AI_DOCTOR_FLOW") {
             switch (session.step) {
+                case "ASK_DIVISION":
+                    await sendDivisionPrompt(phoneNumber, "DOCTOR");
+                    return;
+                case "ASK_DISTRICT": {
+                    const division = findDivision(String(data.division || ""));
+                    if (!division) {
+                        await sendDivisionPrompt(phoneNumber, "DOCTOR");
+                        return;
+                    }
+                    await sendDistrictPrompt(phoneNumber, "DOCTOR", division);
+                    return;
+                }
+                case "ASK_THANA": {
+                    const division = findDivision(String(data.division || ""));
+                    const district = division?.districts.find((d) => d.name === data.district) || null;
+                    if (!district) {
+                        await sendDivisionPrompt(phoneNumber, "DOCTOR");
+                        return;
+                    }
+                    await sendThanaPrompt(phoneNumber, district);
+                    return;
+                }
+                case "ASK_SPECIALITY":
+                    await resendSpecialityPrompt(phoneNumber, "DOCTOR", data);
+                    return;
+                case "ASK_SUGGEST_PROBLEM":
+                    await sendWhatsAppMessage(phoneNumber, LOCATION_TEXTS.SUGGEST_ASK_PROBLEM + BACK_HINT);
+                    return;
+                case "LOCATION_DONE":
+                    await sendWhatsAppMessage(phoneNumber, buildLocationDoneMessage(data));
+                    await sendInteractiveButtons(phoneNumber, "আর কিছু করতে চাইলে নিচে থেকে বেছে নিন:", withNav([]));
+                    return;
                 case "ASK_PROBLEM":
                     await sendWhatsAppMessage(phoneNumber, FIND_DOCTOR_TEXTS.ASK_PROBLEM + BACK_HINT);
                     return;
@@ -117,10 +182,37 @@ export async function resendStepPrompt(phoneNumber, session) {
         // ---------- DIRECT DOCTOR CHAT (incl. appointment intake) ----------
         if (session.flow === "GET_DOCTOR_FLOW") {
             switch (session.step) {
+                case "DOC_ASK_NAME":
+                    await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step2);
+                    return;
+                case "DOC_ASK_GENDER":
+                    await sendInteractiveButtons(phoneNumber, docStep3(String(data.patientName || "")), docGenderButtons());
+                    return;
+                case "DOC_ASK_AGE":
+                    await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step4);
+                    return;
+                case "DOC_ASK_WEIGHT":
+                    await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step5);
+                    return;
+                case "DOC_ASK_HISTORY":
+                    await sendInteractiveButtons(phoneNumber, DOC_SCRIPT.step6.message, docHistoryButtons());
+                    return;
+                case "DOC_ASK_PROBLEM":
+                    await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step7);
+                    return;
+                case "DOC_ASK_PHONE":
+                    await sendInteractiveButtons(phoneNumber, APPOINTMENT_TEXTS.ASK_PHONE(phoneNumber), [
+                        { id: APPT_USE_SENDER_NUMBER_ID, title: APPT_USE_SENDER_NUMBER_TITLE },
+                    ]);
+                    return;
+                case "DOC_ASK_PAYMENT":
+                    await sendInteractiveButtons(phoneNumber, DOC_SCRIPT.step9.message, docPaymentButtons());
+                    return;
                 case "APT_ASK_PROBLEM":
                     await sendWhatsAppMessage(phoneNumber, APPOINTMENT_TEXTS.ASK_PROBLEM + BACK_HINT);
                     return;
-                case "APT_ASK_CHAMBER": {
+                case "APT_ASK_CHAMBER":
+                case "DOC_ASK_CHAMBER": {
                     const chambers = Array.isArray(data.chambersList) ? data.chambersList : [];
                     if (!chambers.length) {
                         await sendWhatsAppMessage(phoneNumber, APPOINTMENT_TEXTS.NO_CHAMBER + BACK_HINT);
@@ -136,7 +228,8 @@ export async function resendStepPrompt(phoneNumber, session) {
                     }
                     return;
                 }
-                case "APT_ASK_DAY": {
+                case "APT_ASK_DAY":
+                case "DOC_ASK_DAY": {
                     const options = getAppointmentDayOptions(schedulesForChamber(data.schedules || [], data.chamberId || ""));
                     if (!options.length) {
                         await sendWhatsAppMessage(phoneNumber, APPOINTMENT_TEXTS.NO_SLOT + BACK_HINT);

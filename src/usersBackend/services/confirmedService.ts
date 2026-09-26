@@ -153,9 +153,6 @@ async function applyDoctorIdFilter(
       const created = await prisma.confirmedAppointment.create({
         data: { ...(rest as object), doctorId, appointmentDate, serial } as never,
       });
-      console.log(
-        `[Confirmed] serial=${serial} doctor=${doctorId} date=${appointmentDate.toISOString().slice(0, 10)} attempt=${attempt}`,
-      );
       return created;
     } catch (error: any) {
       // P2002 = lost the race on @@unique([doctorId, appointmentDate, serial]) — retry.

@@ -50,6 +50,8 @@ function toHospital(h) {
         slug: h.slug,
         address: h.address ?? null,
         phone: h.phone ?? null,
+        businessCardImage: h.businessCardImage ?? null,
+        bannerCardImage: h.bannerCardImage ?? null,
         doctorCount: doctors.length,
         departments,
         doctors,

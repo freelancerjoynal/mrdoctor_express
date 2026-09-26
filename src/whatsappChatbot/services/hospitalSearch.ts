@@ -8,6 +8,8 @@ export interface HospitalWithDoctors {
     slug: string;
     address: string | null;
     phone: string | null;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     doctorCount: number;
     departments: string[];
     doctors: {
@@ -76,6 +78,8 @@ function toHospital(h: any): HospitalWithDoctors {
         slug: h.slug,
         address: h.address ?? null,
         phone: h.phone ?? null,
+        businessCardImage: h.businessCardImage ?? null,
+        bannerCardImage: h.bannerCardImage ?? null,
         doctorCount: doctors.length,
         departments,
         doctors,

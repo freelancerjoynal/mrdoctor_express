@@ -48,7 +48,6 @@ app.use('/api/admin', adminRouter);
 const PORT = 5000;
 
 app.listen(PORT, () => {
-  console.log(`TS Server is running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
 
 // Background sweep: turn off abandoned/empty/rolled-over live serial boards

@@ -55,7 +55,6 @@ export const runSeedAdminUser = async (input: SuperAdminSeedInput) => {
     create: { userId: user.id, name, permissions: [] },
   });
 
-  console.log(`✅ Admin ready [${role}]: ${email} (userId=${user.id})`);
 
   return { user, profile };
 };

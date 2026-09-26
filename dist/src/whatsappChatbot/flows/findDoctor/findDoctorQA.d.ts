@@ -1,5 +1,8 @@
 export declare const FIND_DOCTOR_TEXTS: {
     ASK_PROBLEM: string;
+    AI_THINKING: string;
+    AI_CATEGORY_OK: (department: string) => string;
+    AI_CATEGORY_FAIL: string;
     ASK_AREA: (department: string, why: string) => string;
     ASK_AREA_RETRY: string;
     PROCESSING: string;

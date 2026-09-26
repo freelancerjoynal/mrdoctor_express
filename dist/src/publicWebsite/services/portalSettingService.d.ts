@@ -6,10 +6,10 @@ export declare function getPublicPortalSetting(slug: string): Promise<{
     division: string | null;
     district: string | null;
     thana: string | null;
+    description: string | null;
     heroImage: string | null;
     headline: string | null;
     subheadline: string | null;
-    description: string | null;
     notice: string | null;
     updatedBy: string | null;
 } | null>;

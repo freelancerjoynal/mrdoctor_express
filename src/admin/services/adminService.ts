@@ -175,6 +175,8 @@ export const listDirectory = async (filter: DirectoryFilter) => {
       phone: true,
       status: true,
       profilePicture: true,
+      businessCardImage: true,
+      bannerCardImage: true,
       chambers: {
         select: { id: true, chamberName: true, thana: true, district: true, division: true, hospitalId: true },
       },
@@ -211,6 +213,8 @@ export const getDoctorOverview = async (id: string) => {
       phone: true,
       status: true,
       profilePicture: true,
+      businessCardImage: true,
+      bannerCardImage: true,
       bmdcNumber: true,
       user: { select: { email: true } },
       chambers: {
@@ -273,6 +277,8 @@ export const getHospitalOverview = async (id: string) => {
       addressLine: true,
       phone: true,
       status: true,
+      businessCardImage: true,
+      bannerCardImage: true,
       user: { select: { email: true } },
       _count: { select: { chambers: true } },
     },

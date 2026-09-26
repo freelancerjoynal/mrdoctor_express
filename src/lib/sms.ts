@@ -28,13 +28,6 @@ export async function singleMessage(number: string, message: string) {
       },
     });
 
-    console.log('SMS sent successfully:', {
-      status: response.status,
-      statusText: response.statusText,
-      data: response.data,
-      recipient: number,
-    });
-
     return response.data;
   } catch (error: any) {
     console.error('SMS Gateway Error:', {

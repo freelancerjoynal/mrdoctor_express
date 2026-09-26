@@ -1,7 +1,9 @@
 import {
     sendWhatsAppMessage,
+    sendWhatsAppImage,
     sendInteractiveButtons,
     sendButtonsChunked,
+    sendCtaUrlButton,
     sendTypingIndicator,
 } from "../../lib/sendWhatsAppMessage.js";
 import { BACK_HINT, MENU_BUTTON, withNav } from "../../lib/navButtons.js";
@@ -32,6 +34,23 @@ import {
     type AppointmentChamber,
     type AppointmentDayOption,
 } from "./doctorQA.js";
+import {
+    DOC_SCRIPT,
+    docStep1,
+    docStep3,
+    docGenderButtons,
+    docHistoryButtons,
+    docPaymentButtons,
+    DOC_MALE_ID,
+    DOC_FEMALE_ID,
+    DOC_SEEN_YES_ID,
+    DOC_SEEN_NO_ID,
+    DOC_PAY_YES_ID,
+    DOC_PAY_NO_ID,
+    DUMMY_TERMS_LINK,
+    DUMMY_PAYMENT_LINK,
+    DOC_ONTIME_NOTE,
+} from "./forDoctorScript.js";
 import type { UpdateFn } from "../../lib/session.js";
 
 const DAY_LABEL: Record<string, string> = {
@@ -83,6 +102,27 @@ async function sendDayStep(
     return true;
 }
 
+/** Doctor-script day prompt (for-doctor-only.json step_8) for the selected chamber. */
+async function sendDocDayStep(
+    phoneNumber: string,
+    data: any,
+    go: (step: string, patch: any) => any
+): Promise<boolean> {
+    const options = dayOptionsFor(data);
+    if (!options.length) {
+        go("DOC_NO_SLOT", {});
+        await sendWhatsAppMessage(phoneNumber, APPOINTMENT_TEXTS.NO_SLOT);
+        return false;
+    }
+    const lines = options.map((o) => `📅 ${o.label}`);
+    await sendInteractiveButtons(
+        phoneNumber,
+        `${DOC_SCRIPT.step8}\n\n${lines.join("\n")}`,
+        dayButtons(options)
+    );
+    return true;
+}
+
 /** Persist the intake answers to pendingAppointment (NOT the appointment table). */
 async function savePendingAppointment(phoneNumber: string, data: any) {
     const appointmentDate: Date = data.appointmentDate instanceof Date
@@ -126,8 +166,6 @@ export async function handleGetDoctorFlow(
     if (session.step === "DIRECT_SEARCH" || norm.startsWith("dr-")) {
         const usernameParam = ((session.data?.username || text) as string).trim();
 
-        console.log("🔍 Fetching Doctor by Username:", usernameParam);
-        await sendWhatsAppMessage(phoneNumber, DOCTOR_TEXTS.WAITING_TEXT);
         void sendTypingIndicator(phoneNumber, msg?.messageId);
 
         try {
@@ -183,31 +221,31 @@ export async function handleGetDoctorFlow(
             };
 
             session.flow = "GET_DOCTOR_FLOW";
-            session.step = "APT_ASK_PROBLEM";
+            session.step = "DOC_ASK_NAME";
             session.data = sessionData;
-            if (updateSession) updateSession("GET_DOCTOR_FLOW", "APT_ASK_PROBLEM", sessionData);
+            if (updateSession) updateSession("GET_DOCTOR_FLOW", "DOC_ASK_NAME", sessionData);
             await saveConnectSession(
                 phoneNumber,
                 "DOCTOR",
                 doctor.id,
                 doctor.name,
                 "GET_DOCTOR_FLOW",
-                "APT_ASK_PROBLEM"
+                "DOC_ASK_NAME"
             );
 
-            await sendWhatsAppMessage(phoneNumber, DOCTOR_TEXTS.welcomeMessage(doctor.name));
-
-            // Price is shown only at the end (after all details) — not here.
-            const businessCardText =
-                `🩺 *ডাক্তারের তথ্য ও বিবরণী*\n\n` +
-                `নাম: ${doctor.name}\n` +
-                `🎓 ডিগ্রি: ${doctor.degree || "এমবিবিএস"}\n` +
-                `⭐ বিশেষজ্ঞতা: ${doctor.speciality || "মেডিসিন বিশেষজ্ঞ"}\n` +
-                `🏥 চেম্বার:\n${chambersText || "নির্ধারিত নেই"}\n` +
-                `\nসিরিয়ালের জন্য নিচের তথ্যগুলো দিন।`;
-
-            await sendWhatsAppMessage(phoneNumber, businessCardText);
-            await sendWhatsAppMessage(phoneNumber, APPOINTMENT_TEXTS.ASK_PROBLEM + BACK_HINT);
+            // Doctor-only script (for-doctor-only.json):
+            // connecting -> step_0 banner only -> step_1 greeting -> step_2 ask name.
+            // Sent back-to-back with no artificial delay (each send already
+            // flashes a typing indicator on its way out).
+            await sendWhatsAppMessage(phoneNumber, DOCTOR_TEXTS.WAITING_TEXT);
+            if (doctor.bannerCardImage) {
+                await sendWhatsAppImage(phoneNumber, doctor.bannerCardImage, `🩺 ${doctor.name}`);
+            }
+            await sendWhatsAppMessage(phoneNumber, docStep1(doctor.name));
+            // Back how-to is told ONCE here — every prompt after this stays
+            // clean, but typed back / ↩️ Back button keeps working always.
+            await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.backInfo);
+            await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step2);
         } catch (error) {
             console.error("❌ DB Error:", error);
             await sendWhatsAppMessage(phoneNumber, DOCTOR_TEXTS.DB_ERROR);
@@ -234,6 +272,255 @@ export async function handleGetDoctorFlow(
     };
 
     const rawText = (text || "").trim();
+
+    // ========================================================================
+    // Doctor-only script (for-doctor-only.json): name -> gender -> age ->
+    // weight -> history -> problem -> [chamber] -> day -> payment -> done.
+    // ========================================================================
+
+    // ---------- DOC step_2: name -> gender ----------
+    if (session.step === "DOC_ASK_NAME") {
+        if (rawText.trim().length < 3) {
+            await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step2);
+            return;
+        }
+        const patientName = rawText.trim();
+        go("DOC_ASK_GENDER", { patientName });
+        await sendInteractiveButtons(phoneNumber, docStep3(patientName), docGenderButtons());
+        return;
+    }
+
+    // ---------- DOC step_3: gender -> age ----------
+    if (session.step === "DOC_ASK_GENDER") {
+        const id = buttonNorm;
+        let gender: string | null = null;
+        if (id === DOC_MALE_ID || norm.includes("পুরুষ") || norm.includes("ছেলে") || norm.includes("male")) {
+            gender = "MALE";
+        } else if (id === DOC_FEMALE_ID || norm.includes("নারী") || norm.includes("মেয়ে") || norm.includes("মহিলা") || norm.includes("female")) {
+            gender = "FEMALE";
+        }
+        if (!gender) {
+            await sendInteractiveButtons(
+                phoneNumber,
+                docStep3(String(doctorData.patientName || "")),
+                docGenderButtons()
+            );
+            return;
+        }
+        go("DOC_ASK_AGE", { patientGender: gender });
+        await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step4);
+        return;
+    }
+
+    // ---------- DOC step_4: age -> weight ----------
+    if (session.step === "DOC_ASK_AGE") {
+        const age = parseAge(rawText);
+        if (age === null) {
+            await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step4);
+            return;
+        }
+        go("DOC_ASK_WEIGHT", { patientAge: age });
+        await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step5);
+        return;
+    }
+
+    // ---------- DOC step_5: weight -> history ----------
+    if (session.step === "DOC_ASK_WEIGHT") {
+        const weight = parseWeight(rawText);
+        if (weight === null) {
+            await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step5);
+            return;
+        }
+        go("DOC_ASK_HISTORY", { patientWeight: weight });
+        await sendInteractiveButtons(phoneNumber, DOC_SCRIPT.step6.message, docHistoryButtons());
+        return;
+    }
+
+    // ---------- DOC step_6: history (old/new) -> problem ----------
+    if (session.step === "DOC_ASK_HISTORY") {
+        const id = buttonNorm;
+        let patientType: string | null = null;
+        if (id === DOC_SEEN_YES_ID || norm.includes("আগে") || norm.includes("দেখিয়েছি")) {
+            patientType = "RENEW";
+        } else if (id === DOC_SEEN_NO_ID || norm.includes("প্রথম")) {
+            patientType = "NEW";
+        }
+        if (!patientType) {
+            await sendInteractiveButtons(phoneNumber, DOC_SCRIPT.step6.message, docHistoryButtons());
+            return;
+        }
+        go("DOC_ASK_PROBLEM", { patientType });
+        await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step7);
+        return;
+    }
+
+    // ---------- DOC step_7: problem -> chamber (multi only) / day ----------
+    if (session.step === "DOC_ASK_PROBLEM") {
+        if (rawText.trim().length < 3) {
+            await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step7);
+            return;
+        }
+        const chambers: AppointmentChamber[] = Array.isArray(doctorData.chambersList)
+            ? doctorData.chambersList
+            : [];
+        if (!chambers.length) {
+            go("DOC_NO_CHAMBER", { problem: rawText.trim() });
+            await sendWhatsAppMessage(phoneNumber, APPOINTMENT_TEXTS.NO_CHAMBER);
+            return;
+        }
+        // Single chamber -> auto-select, straight to the day step.
+        if (chambers.length === 1) {
+            const only = chambers[0]!;
+            const next = go("DOC_ASK_DAY", {
+                problem: rawText.trim(),
+                chamberId: only.id,
+                chamberName: [only.name, only.area].filter(Boolean).join(" — "),
+                chamberNewFee: only.newFee,
+                chamberOldFee: only.oldFee,
+            });
+            await sendDocDayStep(phoneNumber, next, go);
+            return;
+        }
+        go("DOC_ASK_CHAMBER", { problem: rawText.trim() });
+        await sendChamberStep(phoneNumber, chambers);
+        return;
+    }
+
+    // ---------- DOC chamber (2+ chambers only) -> day ----------
+    if (session.step === "DOC_ASK_CHAMBER") {
+        const chambers: AppointmentChamber[] = Array.isArray(doctorData.chambersList)
+            ? doctorData.chambersList
+            : [];
+        if (!chambers.length) {
+            go("DOC_NO_CHAMBER", {});
+            await sendWhatsAppMessage(phoneNumber, APPOINTMENT_TEXTS.NO_CHAMBER);
+            return;
+        }
+        const picked = matchChamber(chambers, rawText, buttonId);
+        if (!picked) {
+            await sendChamberStep(phoneNumber, chambers);
+            await sendWhatsAppMessage(phoneNumber, APPOINTMENT_TEXTS.INVALID_CHAMBER);
+            return;
+        }
+        const next = go("DOC_ASK_DAY", {
+            chamberId: picked.id,
+            chamberName: [picked.name, picked.area].filter(Boolean).join(" — "),
+            chamberNewFee: picked.newFee,
+            chamberOldFee: picked.oldFee,
+        });
+        await sendDocDayStep(phoneNumber, next, go);
+        return;
+    }
+
+    // ---------- DOC step_8: day -> ask phone number (saved to pending table next) ----------
+    if (session.step === "DOC_ASK_DAY") {
+        const options = dayOptionsFor(doctorData);
+        if (!options.length) {
+            go("DOC_NO_SLOT", {});
+            await sendWhatsAppMessage(phoneNumber, APPOINTMENT_TEXTS.NO_SLOT + BACK_HINT);
+            return;
+        }
+        const picked =
+            options.find(
+                (o) =>
+                    buttonNorm === o.buttonId.toLowerCase() ||
+                    norm === o.buttonId.toLowerCase() ||
+                    rawText.trim() === o.buttonTitle
+            ) ||
+            options.find((o) =>
+                o.key === "today"
+                    ? rawText.includes(APPT_TODAY_TITLE) || buttonNorm.includes(APPT_TODAY_ID)
+                    : rawText.includes(APPT_TOMORROW_TITLE) || buttonNorm.includes(APPT_TOMORROW_ID)
+            );
+        if (!picked) {
+            await sendDocDayStep(phoneNumber, doctorData, go);
+            return;
+        }
+        go("DOC_ASK_PHONE", {
+            appointmentDate: picked.date,
+            appointmentDay: picked.key,
+            appointmentDayOfWeek: picked.dayOfWeek,
+            dayLabel: picked.label,
+        });
+        await sendInteractiveButtons(phoneNumber, APPOINTMENT_TEXTS.ASK_PHONE(phoneNumber), [
+            { id: APPT_USE_SENDER_NUMBER_ID, title: APPT_USE_SENDER_NUMBER_TITLE },
+        ]);
+        return;
+    }
+
+    // ---------- DOC phone -> save pending_appointments -> payment question ----------
+    if (session.step === "DOC_ASK_PHONE") {
+        let contactPhone: string | null = null;
+        if (buttonNorm === APPT_USE_SENDER_NUMBER_ID || rawText.trim() === APPT_USE_SENDER_NUMBER_TITLE) {
+            contactPhone = phoneNumber;
+        } else {
+            contactPhone = parsePhone(rawText);
+        }
+        if (!contactPhone) {
+            await sendInteractiveButtons(phoneNumber, APPOINTMENT_TEXTS.INVALID_PHONE, [
+                { id: APPT_USE_SENDER_NUMBER_ID, title: APPT_USE_SENDER_NUMBER_TITLE },
+            ]);
+            return;
+        }
+        const finalData = go("DOC_ASK_PAYMENT", { contactPhone });
+        try {
+            await savePendingAppointment(phoneNumber, finalData);
+        } catch (error) {
+            console.error("❌ PendingAppointment save error:", error);
+            await sendWhatsAppMessage(phoneNumber, DOCTOR_TEXTS.DB_ERROR);
+            go("DOC_ASK_PHONE", {});
+            return;
+        }
+        await sendInteractiveButtons(phoneNumber, DOC_SCRIPT.step9.message, docPaymentButtons());
+        return;
+    }
+
+    // ---------- DOC step_9: payment yes/no -> close ----------
+    if (session.step === "DOC_ASK_PAYMENT") {
+        const id = buttonNorm;
+        const yes = id === DOC_PAY_YES_ID || norm.includes("হ্যাঁ");
+        const no = id === DOC_PAY_NO_ID || norm.includes("না");
+        if (yes) {
+            go("DOC_DONE", { payChoice: "YES" });
+            // Fee depends on chamber + old/new patient type (step_6).
+            const newFee = Number(doctorData.chamberNewFee) || 0;
+            const oldFee = Number(doctorData.chamberOldFee) || 0;
+            const isRenew = String(doctorData.patientType || "") === "RENEW";
+            const fee = isRenew ? oldFee || newFee : newFee || oldFee;
+            const feeLabel = isRenew ? "পুরনো রোগী" : "নতুন রোগী";
+            const chamberName = String(doctorData.chamberName || "চেম্বার");
+            const patientName = String(doctorData.patientName || "রোগী");
+            const doctorName = String(doctorData.name || "ডাক্তার");
+            const dayLabel = String(doctorData.dayLabel || "");
+            const contactPhone = String(doctorData.contactPhone || phoneNumber);
+            const feeText = fee > 0
+                ? `${fee} টাকা (${feeLabel})`
+                : buildFeeLine({ newFee, oldFee });
+            await sendWhatsAppMessage(phoneNumber, `${DOC_SCRIPT.step10yes1}\n${DUMMY_TERMS_LINK}`);
+            // Confirmation message with serial name + fee, payment opens via button.
+            const confirmMsg =
+                `✅ বুকিং কনফার্ম, ${patientName}! 🎉\n\n` +
+                `👤 রোগী: ${patientName}\n` +
+                `🩺 ডাক্তার: ${doctorName}\n` +
+                `🏥 চেম্বার: ${chamberName}\n` +
+                (dayLabel ? `📅 ${dayLabel}\n` : "") +
+                `💰 ভিজিট ফি: ${feeText}\n` +
+                `📞 ফোন: ${contactPhone}\n\n` +
+                `পেমেন্ট সম্পন্ন করুন — পেমেন্ট কনফার্ম হলে আপনার সিরিয়াল নম্বর এখানেই জানিয়ে দেওয়া হবে।`;
+            await sendCtaUrlButton(phoneNumber, confirmMsg, "💳 পেমেন্ট করুন", DUMMY_PAYMENT_LINK);
+            await sendWhatsAppMessage(phoneNumber, DOC_ONTIME_NOTE);
+            await sendInteractiveButtons(phoneNumber, "ধন্যবাদ! ☺️", withNav([]));
+            return;
+        }
+        if (no) {
+            go("DOC_DONE", { payChoice: "NO" });
+            await sendWhatsAppMessage(phoneNumber, DOC_SCRIPT.step10no);
+            await sendInteractiveButtons(phoneNumber, "ধন্যবাদ! ☺️", withNav([]));
+            return;
+        }
+        await sendInteractiveButtons(phoneNumber, DOC_SCRIPT.step9.message, docPaymentButtons());
+        return;
+    }
 
     // ---------- STEP 1: problem (saved to memory) -> chamber select ----------
     if (session.step === "APT_ASK_PROBLEM") {

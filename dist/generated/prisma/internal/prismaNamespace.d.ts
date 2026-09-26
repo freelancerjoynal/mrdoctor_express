@@ -2018,6 +2018,8 @@ export declare const DoctorScalarFieldEnum: {
     readonly username: "username";
     readonly templateName: "templateName";
     readonly profilePicture: "profilePicture";
+    readonly businessCardImage: "businessCardImage";
+    readonly bannerCardImage: "bannerCardImage";
     readonly gender: "gender";
     readonly religion: "religion";
     readonly startedYear: "startedYear";
@@ -2041,6 +2043,8 @@ export declare const HospitalScalarFieldEnum: {
     readonly name_en: "name_en";
     readonly slug: "slug";
     readonly templateName: "templateName";
+    readonly businessCardImage: "businessCardImage";
+    readonly bannerCardImage: "bannerCardImage";
     readonly division: "division";
     readonly division_en: "division_en";
     readonly district: "district";

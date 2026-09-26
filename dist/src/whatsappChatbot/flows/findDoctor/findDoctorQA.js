@@ -1,7 +1,8 @@
 // ============================================================================
 // findDoctorQA.ts — texts for the FIND-DOCTOR flow
-// Flow: problem -> AI suggests department + why -> ask area ->
-// DB Chamber search by area -> random 5 doctors -> Connect -> doctor bot.
+// Flow: problem -> DeepSeek picks category from FULL master list ->
+// division -> district -> thana -> DB fetch by (category + area) ->
+// no-doctor ? try different location + availability lists -> Connect.
 // ============================================================================
 //
 // THIS FILE HAS 2 SECTIONS:
@@ -19,8 +20,14 @@
 // SECTION 1: flow prompts (used by findDoctorFlow.ts — do not rename keys)
 // ----------------------------------------------------------------------------
 export const FIND_DOCTOR_TEXTS = {
-    // Q: flow asks — what is the patient's problem?
-    ASK_PROBLEM: "রোগীর কী সমস্যা বা কী লক্ষণ দেখা যাচ্ছে বিস্তারিত লিখুন:",
+    // Q: flow asks — what is the patient's problem? (FIRST step: AI triage before location)
+    ASK_PROBLEM: "🤔 কোন ডাক্তার দেখাবেন বুঝতে পারছেন না? আপনার সমস্যাটি সংক্ষেপে লিখুন (যেমন: ৩ দিন ধরে জ্বর ও কাশি) — আমরা সঠিক বিভাগ সাজেস্ট করছি।\n\n↩️ পেছনে যেতে back লিখুন",
+    // A: while DeepSeek picks the category from the full master list.
+    AI_THINKING: "🤔 একটু ভাবছি, আপনার জন্য সঠিক বিভাগ খুঁজছি…",
+    // A: AI picked a category (shown before the division picker).
+    AI_CATEGORY_OK: (department) => `✅ আপনার সমস্যা অনুযায়ী *${department}* বিভাগের ডাক্তার দেখানো হচ্ছে।\n\nএখন এলাকা বেছে নিন 👇`,
+    // A: AI could not classify — user picks manually later.
+    AI_CATEGORY_FAIL: "😔 সমস্যাটি ঠিক বুঝতে পারিনি। এলাকা বেছে নিন — পরে তালিকা থেকে বিভাগ বেছে নিতে পারবেন 👇",
     // Q: flow asks — which area? (after AI suggests a department)
     ASK_AREA: (department, why) => `🩺 *সম্ভাব্য বিভাগ: ${department}*\n${why}\n\n───────────────────\n📍 *আপনি কোন এলাকায় ডাক্তার খুঁজছেন?*\n\n👇 সবচেয়ে ভালো উপায় — মোবাইলের লোকেশন পাঠান:\n1️⃣ চ্যাটে 📎 (Attach / ➕) বাটনে চাপ দিন\n2️⃣ Location বেছে নিন\n3️⃣ Send your current location পাঠান\n→ তাহলে আপনার কাছের এলাকা (যেমন: জলঢাকা, ডোমার, নীলফামারী) সাজেস্ট করবো।\n\nঅথবা এলাকার নাম লিখুন (যেমন: নীলফামারী সদর, সৈয়দপুর, ডোমার)।`,
     // Q: flow re-asks the area (user sent something unusable).
@@ -36,7 +43,7 @@ export const FIND_DOCTOR_TEXTS = {
     // A: header above the GPS-based nearby-area suggestion buttons.
     NEARBY_HEADER: (detected) => `📍 আপনার অবস্থান পেয়েছি! সবচেয়ে কাছের এলাকা: *${detected}*\n\nনিচে থেকে আপনার এলাকা বেছে নিন 👇\n(অথবা এলাকার নাম লিখে পাঠান)`,
     // A: shown when no doctor is found for the area.
-    NO_AREA_DOCTOR: (location) => `❌ দুঃখিত, "${location}" এলাকায় কোনো ডাক্তার পাওয়া যায়নি।\n\nঅন্য এলাকার নাম লিখুন অথবা নিচের 🏠 মূল মেনু বাটনে চাপ দিন।`,
+    NO_AREA_DOCTOR: (location) => `❌ দুঃখিত, "${location}" এলাকায় কোনো ডাক্তার পাওয়া যায়নি। অন্য লোকেশন চেষ্টা করুন অথবা নিচের 🏠 মূল মেনু বাটনে চাপ দিন।`,
     // A: header above the 5 doctor cards.
     AREA_RESULT_HEADER: (location, department) => `✅ "${location}" এলাকায় *${department}* বিভাগের জন্য বাছাইকৃত ৫ জন ডাক্তার:\n`,
     // Q: flow asks — press Connect on a doctor.

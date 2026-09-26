@@ -127,7 +127,6 @@ async function applyDoctorIdFilter(caller, owned, doctorId) {
             const created = await prisma.confirmedAppointment.create({
                 data: { ...rest, doctorId, appointmentDate, serial },
             });
-            console.log(`[Confirmed] serial=${serial} doctor=${doctorId} date=${appointmentDate.toISOString().slice(0, 10)} attempt=${attempt}`);
             return created;
         }
         catch (error) {

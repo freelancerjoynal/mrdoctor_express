@@ -8,7 +8,10 @@
 // chamber from another thana can never leak into this portal — not in the
 // UI, not in popups, not even in the serialized payload.
 import { prisma } from '../../lib/prisma.js';
+import { DOCTOR_SPECIALITIES } from '../../lib/doctorSpeciality.js';
 import { getPublicDoctors, getPublicHospitals } from './directoryService.js';
+/** Master speciality list — portal tiles only ever show these. */
+const MASTER_SPECIALITIES = new Set(DOCTOR_SPECIALITIES.map((s) => s.specialty_bn));
 function chamberMatch(filters) {
     const { division, district, thana } = filters;
     if (!division && !district && !thana)
@@ -34,7 +37,9 @@ export async function getThanaPortal(filters) {
     const location = chamberMatch(loc);
     if (location)
         doctorWhere.chambers = location;
-    // Categories = distinct specialities of doctors with a chamber here.
+    // Categories = master-list specialities of doctors with a chamber here.
+    // A tile appears only when at least one chamber exists for that speciality
+    // in this thana; legacy free-text values never become tiles.
     // (groupBy has no limit issue — every category shows up even past page 1.)
     const groups = await prisma.doctor.groupBy({
         by: ['speciality'],
@@ -42,6 +47,7 @@ export async function getThanaPortal(filters) {
         _count: { speciality: true },
     });
     const categories = groups
+        .filter((g) => MASTER_SPECIALITIES.has(g.speciality))
         .map((g) => ({
         speciality: g.speciality,
         doctors: g._count.speciality,

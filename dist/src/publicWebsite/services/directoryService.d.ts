@@ -37,6 +37,8 @@ export declare function getPublicDoctors(filters: DoctorFilters): Promise<{
         tagline: string | null;
         bio: string | null;
         username: string;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         gender: import("../../../generated/prisma/enums.js").Gender | null;
         startedYear: number | null;
         bmdcNumber: string | null;
@@ -117,6 +119,8 @@ export declare function getPublicDoctorByUsername(username: string): Promise<{
     tagline: string | null;
     bio: string | null;
     username: string;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     gender: import("../../../generated/prisma/enums.js").Gender | null;
     startedYear: number | null;
     bmdcNumber: string | null;
@@ -183,6 +187,8 @@ export declare function getPublicHospitals(filters: HospitalFilters): Promise<{
         address: string | null;
         name: string;
         phone: string | null;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         chambers: {
             id: string;
             doctor: {
@@ -192,6 +198,8 @@ export declare function getPublicHospitals(filters: HospitalFilters): Promise<{
                 speciality: string;
                 tagline: string | null;
                 username: string;
+                businessCardImage: string | null;
+                bannerCardImage: string | null;
                 gender: import("../../../generated/prisma/enums.js").Gender | null;
             } | null;
             division: string | null;
@@ -243,6 +251,8 @@ export declare function getPublicHospitalBySlug(slug: string): Promise<{
     address: string | null;
     name: string;
     phone: string | null;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     chambers: {
         id: string;
         doctor: {
@@ -252,6 +262,8 @@ export declare function getPublicHospitalBySlug(slug: string): Promise<{
             speciality: string;
             tagline: string | null;
             username: string;
+            businessCardImage: string | null;
+            bannerCardImage: string | null;
             gender: import("../../../generated/prisma/enums.js").Gender | null;
         } | null;
         division: string | null;
@@ -298,6 +310,8 @@ export declare function getPublicChambers(filters: ChamberFilters): Promise<{
             speciality: string;
             tagline: string | null;
             username: string;
+            businessCardImage: string | null;
+            bannerCardImage: string | null;
             gender: import("../../../generated/prisma/enums.js").Gender | null;
         } | null;
         hospital: {
@@ -328,6 +342,8 @@ export declare function getPublicChamberById(id: string): Promise<{
         speciality: string;
         tagline: string | null;
         username: string;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         gender: import("../../../generated/prisma/enums.js").Gender | null;
     } | null;
     hospital: {

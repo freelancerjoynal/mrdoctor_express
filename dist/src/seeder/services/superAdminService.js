@@ -40,7 +40,6 @@ export const runSeedAdminUser = async (input) => {
         update: { name },
         create: { userId: user.id, name, permissions: [] },
     });
-    console.log(`✅ Admin ready [${role}]: ${email} (userId=${user.id})`);
     return { user, profile };
 };
 /** Backwards-compatible alias — seeds a SUPER_ADMIN (CLI default). */

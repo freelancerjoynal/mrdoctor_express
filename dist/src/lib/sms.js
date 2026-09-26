@@ -23,12 +23,6 @@ export async function singleMessage(number, message) {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
         });
-        console.log('SMS sent successfully:', {
-            status: response.status,
-            statusText: response.statusText,
-            data: response.data,
-            recipient: number,
-        });
         return response.data;
     }
     catch (error) {

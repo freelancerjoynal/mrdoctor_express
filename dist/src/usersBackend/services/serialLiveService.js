@@ -75,7 +75,7 @@ function hardStopReason(queueLength, liveUpdatedAt) {
     return null;
 }
 /** Force a doctor's live OFF (best-effort notify so TVs/dashboards flip). */
-async function autoStopLive(doctorId, reason) {
+async function autoStopLive(doctorId, _reason) {
     await prisma.doctor.update({
         where: { id: doctorId },
         data: {
@@ -88,7 +88,6 @@ async function autoStopLive(doctorId, reason) {
         },
     });
     notifyLive(doctorId);
-    console.log(`[SerialLive] auto-stop doctor=${doctorId} reason=${reason}`);
 }
 async function resolveOwnDoctorId(caller) {
     if (caller.role === 'DOCTOR') {
@@ -345,8 +344,6 @@ export async function sweepStaleLives() {
             console.error('[SerialLive] sweep failed for doctor=', d.id, error);
         }
     }
-    if (stopped > 0)
-        console.log(`[SerialLive] sweep stopped ${stopped} stale live(s)`);
     return stopped;
 }
 /**

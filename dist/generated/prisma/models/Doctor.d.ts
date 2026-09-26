@@ -44,6 +44,8 @@ export type DoctorMinAggregateOutputType = {
     username: string | null;
     templateName: string | null;
     profilePicture: string | null;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     gender: $Enums.Gender | null;
     religion: string | null;
     startedYear: number | null;
@@ -79,6 +81,8 @@ export type DoctorMaxAggregateOutputType = {
     username: string | null;
     templateName: string | null;
     profilePicture: string | null;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     gender: $Enums.Gender | null;
     religion: string | null;
     startedYear: number | null;
@@ -114,6 +118,8 @@ export type DoctorCountAggregateOutputType = {
     username: number;
     templateName: number;
     profilePicture: number;
+    businessCardImage: number;
+    bannerCardImage: number;
     gender: number;
     religion: number;
     startedYear: number;
@@ -161,6 +167,8 @@ export type DoctorMinAggregateInputType = {
     username?: true;
     templateName?: true;
     profilePicture?: true;
+    businessCardImage?: true;
+    bannerCardImage?: true;
     gender?: true;
     religion?: true;
     startedYear?: true;
@@ -196,6 +204,8 @@ export type DoctorMaxAggregateInputType = {
     username?: true;
     templateName?: true;
     profilePicture?: true;
+    businessCardImage?: true;
+    bannerCardImage?: true;
     gender?: true;
     religion?: true;
     startedYear?: true;
@@ -231,6 +241,8 @@ export type DoctorCountAggregateInputType = {
     username?: true;
     templateName?: true;
     profilePicture?: true;
+    businessCardImage?: true;
+    bannerCardImage?: true;
     gender?: true;
     religion?: true;
     startedYear?: true;
@@ -344,6 +356,8 @@ export type DoctorGroupByOutputType = {
     username: string;
     templateName: string;
     profilePicture: string | null;
+    businessCardImage: string | null;
+    bannerCardImage: string | null;
     gender: $Enums.Gender | null;
     religion: string | null;
     startedYear: number | null;
@@ -391,6 +405,8 @@ export type DoctorWhereInput = {
     username?: Prisma.StringFilter<"Doctor"> | string;
     templateName?: Prisma.StringFilter<"Doctor"> | string;
     profilePicture?: Prisma.StringNullableFilter<"Doctor"> | string | null;
+    businessCardImage?: Prisma.StringNullableFilter<"Doctor"> | string | null;
+    bannerCardImage?: Prisma.StringNullableFilter<"Doctor"> | string | null;
     gender?: Prisma.EnumGenderNullableFilter<"Doctor"> | $Enums.Gender | null;
     religion?: Prisma.StringNullableFilter<"Doctor"> | string | null;
     startedYear?: Prisma.IntNullableFilter<"Doctor"> | number | null;
@@ -437,6 +453,8 @@ export type DoctorOrderByWithRelationInput = {
     username?: Prisma.SortOrder;
     templateName?: Prisma.SortOrder;
     profilePicture?: Prisma.SortOrderInput | Prisma.SortOrder;
+    businessCardImage?: Prisma.SortOrderInput | Prisma.SortOrder;
+    bannerCardImage?: Prisma.SortOrderInput | Prisma.SortOrder;
     gender?: Prisma.SortOrderInput | Prisma.SortOrder;
     religion?: Prisma.SortOrderInput | Prisma.SortOrder;
     startedYear?: Prisma.SortOrderInput | Prisma.SortOrder;
@@ -486,6 +504,8 @@ export type DoctorWhereUniqueInput = Prisma.AtLeast<{
     whatsappId?: Prisma.StringNullableFilter<"Doctor"> | string | null;
     templateName?: Prisma.StringFilter<"Doctor"> | string;
     profilePicture?: Prisma.StringNullableFilter<"Doctor"> | string | null;
+    businessCardImage?: Prisma.StringNullableFilter<"Doctor"> | string | null;
+    bannerCardImage?: Prisma.StringNullableFilter<"Doctor"> | string | null;
     gender?: Prisma.EnumGenderNullableFilter<"Doctor"> | $Enums.Gender | null;
     religion?: Prisma.StringNullableFilter<"Doctor"> | string | null;
     startedYear?: Prisma.IntNullableFilter<"Doctor"> | number | null;
@@ -532,6 +552,8 @@ export type DoctorOrderByWithAggregationInput = {
     username?: Prisma.SortOrder;
     templateName?: Prisma.SortOrder;
     profilePicture?: Prisma.SortOrderInput | Prisma.SortOrder;
+    businessCardImage?: Prisma.SortOrderInput | Prisma.SortOrder;
+    bannerCardImage?: Prisma.SortOrderInput | Prisma.SortOrder;
     gender?: Prisma.SortOrderInput | Prisma.SortOrder;
     religion?: Prisma.SortOrderInput | Prisma.SortOrder;
     startedYear?: Prisma.SortOrderInput | Prisma.SortOrder;
@@ -576,6 +598,8 @@ export type DoctorScalarWhereWithAggregatesInput = {
     username?: Prisma.StringWithAggregatesFilter<"Doctor"> | string;
     templateName?: Prisma.StringWithAggregatesFilter<"Doctor"> | string;
     profilePicture?: Prisma.StringNullableWithAggregatesFilter<"Doctor"> | string | null;
+    businessCardImage?: Prisma.StringNullableWithAggregatesFilter<"Doctor"> | string | null;
+    bannerCardImage?: Prisma.StringNullableWithAggregatesFilter<"Doctor"> | string | null;
     gender?: Prisma.EnumGenderNullableWithAggregatesFilter<"Doctor"> | $Enums.Gender | null;
     religion?: Prisma.StringNullableWithAggregatesFilter<"Doctor"> | string | null;
     startedYear?: Prisma.IntNullableWithAggregatesFilter<"Doctor"> | number | null;
@@ -611,6 +635,8 @@ export type DoctorCreateInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -657,6 +683,8 @@ export type DoctorUncheckedCreateInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -701,6 +729,8 @@ export type DoctorUpdateInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -747,6 +777,8 @@ export type DoctorUncheckedUpdateInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -792,6 +824,8 @@ export type DoctorCreateManyInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -827,6 +861,8 @@ export type DoctorUpdateManyMutationInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -863,6 +899,8 @@ export type DoctorUncheckedUpdateManyInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -903,6 +941,8 @@ export type DoctorCountOrderByAggregateInput = {
     username?: Prisma.SortOrder;
     templateName?: Prisma.SortOrder;
     profilePicture?: Prisma.SortOrder;
+    businessCardImage?: Prisma.SortOrder;
+    bannerCardImage?: Prisma.SortOrder;
     gender?: Prisma.SortOrder;
     religion?: Prisma.SortOrder;
     startedYear?: Prisma.SortOrder;
@@ -944,6 +984,8 @@ export type DoctorMaxOrderByAggregateInput = {
     username?: Prisma.SortOrder;
     templateName?: Prisma.SortOrder;
     profilePicture?: Prisma.SortOrder;
+    businessCardImage?: Prisma.SortOrder;
+    bannerCardImage?: Prisma.SortOrder;
     gender?: Prisma.SortOrder;
     religion?: Prisma.SortOrder;
     startedYear?: Prisma.SortOrder;
@@ -979,6 +1021,8 @@ export type DoctorMinOrderByAggregateInput = {
     username?: Prisma.SortOrder;
     templateName?: Prisma.SortOrder;
     profilePicture?: Prisma.SortOrder;
+    businessCardImage?: Prisma.SortOrder;
+    bannerCardImage?: Prisma.SortOrder;
     gender?: Prisma.SortOrder;
     religion?: Prisma.SortOrder;
     startedYear?: Prisma.SortOrder;
@@ -1188,6 +1232,8 @@ export type DoctorCreateWithoutUserInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -1232,6 +1278,8 @@ export type DoctorUncheckedCreateWithoutUserInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -1280,6 +1328,8 @@ export type DoctorCreateWithoutStaffMembersInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -1325,6 +1375,8 @@ export type DoctorUncheckedCreateWithoutStaffMembersInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -1381,6 +1433,8 @@ export type DoctorUpdateWithoutUserInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -1425,6 +1479,8 @@ export type DoctorUncheckedUpdateWithoutUserInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -1478,6 +1534,8 @@ export type DoctorUpdateWithoutStaffMembersInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -1523,6 +1581,8 @@ export type DoctorUncheckedUpdateWithoutStaffMembersInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -1566,6 +1626,8 @@ export type DoctorCreateWithoutCreditLedgerInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -1611,6 +1673,8 @@ export type DoctorUncheckedCreateWithoutCreditLedgerInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -1667,6 +1731,8 @@ export type DoctorUpdateWithoutCreditLedgerInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -1712,6 +1778,8 @@ export type DoctorUncheckedUpdateWithoutCreditLedgerInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -1755,6 +1823,8 @@ export type DoctorCreateWithoutChambersInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -1800,6 +1870,8 @@ export type DoctorUncheckedCreateWithoutChambersInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -1856,6 +1928,8 @@ export type DoctorUpdateWithoutChambersInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -1901,6 +1975,8 @@ export type DoctorUncheckedUpdateWithoutChambersInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -1944,6 +2020,8 @@ export type DoctorCreateWithoutSchedulesInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -1989,6 +2067,8 @@ export type DoctorUncheckedCreateWithoutSchedulesInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2045,6 +2125,8 @@ export type DoctorUpdateWithoutSchedulesInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -2090,6 +2172,8 @@ export type DoctorUncheckedUpdateWithoutSchedulesInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -2133,6 +2217,8 @@ export type DoctorCreateWithoutPendingAppointmentsInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2178,6 +2264,8 @@ export type DoctorUncheckedCreateWithoutPendingAppointmentsInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2234,6 +2322,8 @@ export type DoctorUpdateWithoutPendingAppointmentsInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -2279,6 +2369,8 @@ export type DoctorUncheckedUpdateWithoutPendingAppointmentsInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -2322,6 +2414,8 @@ export type DoctorCreateWithoutConfirmedAppointmentsInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2367,6 +2461,8 @@ export type DoctorUncheckedCreateWithoutConfirmedAppointmentsInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2423,6 +2519,8 @@ export type DoctorUpdateWithoutConfirmedAppointmentsInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -2468,6 +2566,8 @@ export type DoctorUncheckedUpdateWithoutConfirmedAppointmentsInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -2511,6 +2611,8 @@ export type DoctorCreateWithoutInformationInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2556,6 +2658,8 @@ export type DoctorUncheckedCreateWithoutInformationInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2612,6 +2716,8 @@ export type DoctorUpdateWithoutInformationInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -2657,6 +2763,8 @@ export type DoctorUncheckedUpdateWithoutInformationInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -2700,6 +2808,8 @@ export type DoctorCreateWithoutBlogsInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2745,6 +2855,8 @@ export type DoctorUncheckedCreateWithoutBlogsInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2801,6 +2913,8 @@ export type DoctorUpdateWithoutBlogsInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -2846,6 +2960,8 @@ export type DoctorUncheckedUpdateWithoutBlogsInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -2889,6 +3005,8 @@ export type DoctorCreateWithoutReviewsInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2934,6 +3052,8 @@ export type DoctorUncheckedCreateWithoutReviewsInput = {
     username: string;
     templateName?: string;
     profilePicture?: string | null;
+    businessCardImage?: string | null;
+    bannerCardImage?: string | null;
     gender?: $Enums.Gender | null;
     religion?: string | null;
     startedYear?: number | null;
@@ -2990,6 +3110,8 @@ export type DoctorUpdateWithoutReviewsInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -3035,6 +3157,8 @@ export type DoctorUncheckedUpdateWithoutReviewsInput = {
     username?: Prisma.StringFieldUpdateOperationsInput | string;
     templateName?: Prisma.StringFieldUpdateOperationsInput | string;
     profilePicture?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    businessCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
+    bannerCardImage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     gender?: Prisma.NullableEnumGenderFieldUpdateOperationsInput | $Enums.Gender | null;
     religion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null;
     startedYear?: Prisma.NullableIntFieldUpdateOperationsInput | number | null;
@@ -3159,6 +3283,8 @@ export type DoctorSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     username?: boolean;
     templateName?: boolean;
     profilePicture?: boolean;
+    businessCardImage?: boolean;
+    bannerCardImage?: boolean;
     gender?: boolean;
     religion?: boolean;
     startedYear?: boolean;
@@ -3206,6 +3332,8 @@ export type DoctorSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
     username?: boolean;
     templateName?: boolean;
     profilePicture?: boolean;
+    businessCardImage?: boolean;
+    bannerCardImage?: boolean;
     gender?: boolean;
     religion?: boolean;
     startedYear?: boolean;
@@ -3243,6 +3371,8 @@ export type DoctorSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
     username?: boolean;
     templateName?: boolean;
     profilePicture?: boolean;
+    businessCardImage?: boolean;
+    bannerCardImage?: boolean;
     gender?: boolean;
     religion?: boolean;
     startedYear?: boolean;
@@ -3280,6 +3410,8 @@ export type DoctorSelectScalar = {
     username?: boolean;
     templateName?: boolean;
     profilePicture?: boolean;
+    businessCardImage?: boolean;
+    bannerCardImage?: boolean;
     gender?: boolean;
     religion?: boolean;
     startedYear?: boolean;
@@ -3295,7 +3427,7 @@ export type DoctorSelectScalar = {
     createdAt?: boolean;
     updatedAt?: boolean;
 };
-export type DoctorOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "name" | "name_en" | "degree" | "degree_en" | "speciality" | "speciality_en" | "tagline" | "tagline_en" | "bio" | "bio_en" | "phone" | "whatsappNumber" | "whatsappAccessToken" | "whatsappId" | "email" | "username" | "templateName" | "profilePicture" | "gender" | "religion" | "startedYear" | "bmdcNumber" | "status" | "serialLive" | "liveCurrentSerial" | "liveUpdatedAt" | "liveSkippedAt" | "liveBreakReason" | "liveBreakUntil" | "creditBalance" | "createdAt" | "updatedAt", ExtArgs["result"]["doctor"]>;
+export type DoctorOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "name" | "name_en" | "degree" | "degree_en" | "speciality" | "speciality_en" | "tagline" | "tagline_en" | "bio" | "bio_en" | "phone" | "whatsappNumber" | "whatsappAccessToken" | "whatsappId" | "email" | "username" | "templateName" | "profilePicture" | "businessCardImage" | "bannerCardImage" | "gender" | "religion" | "startedYear" | "bmdcNumber" | "status" | "serialLive" | "liveCurrentSerial" | "liveUpdatedAt" | "liveSkippedAt" | "liveBreakReason" | "liveBreakUntil" | "creditBalance" | "createdAt" | "updatedAt", ExtArgs["result"]["doctor"]>;
 export type DoctorInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
     user?: boolean | Prisma.Doctor$userArgs<ExtArgs>;
     creditLedger?: boolean | Prisma.Doctor$creditLedgerArgs<ExtArgs>;
@@ -3350,6 +3482,8 @@ export type $DoctorPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
         username: string;
         templateName: string;
         profilePicture: string | null;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         gender: $Enums.Gender | null;
         religion: string | null;
         startedYear: number | null;
@@ -3748,6 +3882,8 @@ export interface DoctorFieldRefs {
     readonly username: Prisma.FieldRef<"Doctor", 'String'>;
     readonly templateName: Prisma.FieldRef<"Doctor", 'String'>;
     readonly profilePicture: Prisma.FieldRef<"Doctor", 'String'>;
+    readonly businessCardImage: Prisma.FieldRef<"Doctor", 'String'>;
+    readonly bannerCardImage: Prisma.FieldRef<"Doctor", 'String'>;
     readonly gender: Prisma.FieldRef<"Doctor", 'Gender'>;
     readonly religion: Prisma.FieldRef<"Doctor", 'String'>;
     readonly startedYear: Prisma.FieldRef<"Doctor", 'Int'>;

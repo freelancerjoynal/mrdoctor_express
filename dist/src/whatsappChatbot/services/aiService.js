@@ -24,6 +24,112 @@ export async function getOpenAIResponse(prompt) {
     }
 }
 /**
+ * Accurate triage: pick ONE category from the FULL master speciality list
+ * using DeepSeek, BEFORE any location filtering. The caller then fetches
+ * the DB by (category + area). This fixes the old inaccurate behaviour
+ * where the AI was forced to choose only from the tiny available list of
+ * one thana (e.g. sneezing -> wrongly mapped to Physical Medicine).
+ */
+export async function suggestCategoryFromFullList(problem, masterList) {
+    const cleanList = [...new Map((masterList || []).map((s) => [s.bn, s])).values()].slice(0, 60);
+    if (!cleanList.length)
+        return null;
+    const cleanProblem = (problem || "").trim().replace(/\s+/g, " ").slice(0, 300);
+    if (cleanProblem.length < 3)
+        return null;
+    const prompt = `You are a Bangladesh medical symptom triage classifier.\n` +
+        `Rules (follow strictly):\n` +
+        `- Fever, cold, cough, sneezing, runny nose, headache, weakness, acidity, stomach pain, diarrhea, vomiting, flu -> the General Medicine entry (মেডিসিন বিশেষজ্ঞ).\n` +
+        `- Pick a specialized entry ONLY when symptoms clearly match it: chest pain/pressure -> Cardiology, skin rash/itch/allergy -> Dermatology, pregnancy/menstrual/delivery -> Gynecology, child/baby patient -> Pediatrics, tooth pain -> Dentistry, eye problem -> Ophthalmology, ear/nose/throat pain -> ENT, bone/joint fracture -> Orthopedic, kidney/urine -> Nephrology/Urology, diabetes/thyroid -> Diabetes & Hormone, mental stress/sleep -> Psychiatry, breathing/asthma -> Pulmonology/Chest, back/body pain lasting weeks -> Physical Medicine.\n` +
+        `- If unsure, pick the General Medicine entry.\n` +
+        `- Never invent a name. Reply with ONE exact Bengali name from the allowed list.\n` +
+        `Patient problem: ${cleanProblem}\n` +
+        `Allowed specialities:\n${cleanList.map((s) => `- ${s.bn}`).join("\n")}\n` +
+        `Reply with JSON ONLY, no other text: {"speciality":"<one exact name from the allowed list>"}`;
+    try {
+        const completion = await openai.chat.completions.create({
+            model: "deepseek-chat",
+            temperature: 0,
+            max_tokens: 150,
+            messages: [
+                { role: "system", content: "You are a medical triage classifier. Reply with JSON only." },
+                { role: "user", content: prompt },
+            ],
+        });
+        const reply = completion.choices[0]?.message?.content || "";
+        const start = reply.indexOf("{");
+        const end = reply.lastIndexOf("}");
+        if (start !== -1 && end !== -1 && end > start) {
+            const obj = JSON.parse(reply.slice(start, end + 1));
+            const pick = typeof obj.speciality === "string" ? obj.speciality.trim() : "";
+            if (!pick)
+                return null;
+            const exact = cleanList.find((s) => s.bn === pick);
+            if (exact)
+                return { bn: exact.bn, en: exact.en };
+            const fuzzy = cleanList.find((s) => pick.includes(s.bn) || s.bn.includes(pick));
+            if (fuzzy)
+                return { bn: fuzzy.bn, en: fuzzy.en };
+        }
+    }
+    catch (e) {
+        console.error("❌ suggestCategoryFromFullList error:", e);
+    }
+    return null;
+}
+/**
+ * Token-lean triage: pick ONE speciality from the already-filtered
+ * available list (chambers in this thana) for the patient's problem.
+ * Only the bare minimum goes to the API — problem capped at 300 chars,
+ * location label, and the short allowed-name list. No schedules, chambers,
+ * history, or full 50-item master list. Returns the exact allowed Bengali
+ * name, or null when the reply is unusable.
+ */
+export async function suggestAvailableSpeciality(problem, locationLabel, allowed) {
+    const cleanList = [...new Set((allowed || []).map((s) => (s || "").trim()).filter(Boolean))].slice(0, 50);
+    if (!cleanList.length)
+        return null;
+    const cleanProblem = (problem || "").trim().replace(/\s+/g, " ").slice(0, 300);
+    if (cleanProblem.length < 3)
+        return null;
+    const prompt = `Rules:\n` +
+        `- Common problems (fever, cold, cough, sneezing, headache, weakness, stomach pain, diarrhea) go to the general-medicine entry in the allowed list.\n` +
+        `- Pick a specialized entry only when symptoms clearly match it (chest pain -> cardiology entry, skin rash -> dermatology entry, pregnancy -> gynecology entry, child patient -> pediatrics entry).\n` +
+        `- If unsure, pick the general-medicine entry.\n` +
+        `Location: ${locationLabel}\n` +
+        `Patient problem: ${cleanProblem}\n` +
+        `Allowed specialities:\n${cleanList.map((s) => `- ${s}`).join("\n")}\n` +
+        `Reply with JSON ONLY, no other text: {"speciality":"<one exact name from the allowed list>"}`;
+    try {
+        const completion = await openai.chat.completions.create({
+            model: "deepseek-chat",
+            temperature: 0,
+            max_tokens: 150,
+            messages: [
+                { role: "system", content: "You are a medical triage classifier. Reply with JSON only." },
+                { role: "user", content: prompt },
+            ],
+        });
+        const reply = completion.choices[0]?.message?.content || "";
+        const start = reply.indexOf("{");
+        const end = reply.lastIndexOf("}");
+        if (start !== -1 && end !== -1 && end > start) {
+            const obj = JSON.parse(reply.slice(start, end + 1));
+            const pick = typeof obj.speciality === "string" ? obj.speciality.trim() : "";
+            if (pick && cleanList.includes(pick))
+                return pick;
+            // Tolerate close variants (extra spaces / suffixes).
+            const hit = cleanList.find((s) => pick.includes(s) || s.includes(pick));
+            if (pick && hit)
+                return hit;
+        }
+    }
+    catch (e) {
+        console.error("❌ suggestAvailableSpeciality error:", e);
+    }
+    return null;
+}
+/**
  * Step 1 of doctor search: given the patient's problem (Bengali/English),
  * suggest which department/speciality of doctor they need + 1-2 line reason.
  * Returns JSON-parsed result with safe fallback.

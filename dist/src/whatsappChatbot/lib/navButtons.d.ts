@@ -6,8 +6,7 @@ export declare const BACK_BUTTON: {
     id: string;
     title: string;
 };
-/** Appended to prompts so users know to type back (no Back button mid-flow). */
-export declare const BACK_HINT = "\n\n\u21A9\uFE0F \u09AA\u09C7\u099B\u09A8\u09C7 \u09AF\u09C7\u09A4\u09C7 back \u09B2\u09BF\u0996\u09C1\u09A8";
+export { BACK_HINT } from "./session.js";
 import { type ButtonItem } from "./sendWhatsAppMessage.js";
 /** Append Back + Menu to any button list. USE ONLY on a flow's final message. */
 export declare function withNav(buttons: ButtonItem[], includeBack?: boolean): ButtonItem[];

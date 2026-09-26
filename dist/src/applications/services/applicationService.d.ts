@@ -135,6 +135,8 @@ export declare function createDoctor(input: {
     whatsappId?: unknown;
     templateName?: unknown;
     profilePicture?: unknown;
+    businessCardImage?: unknown;
+    bannerCardImage?: unknown;
     gender?: unknown;
     religion?: unknown;
     startedYear?: unknown;
@@ -166,6 +168,8 @@ export declare function createDoctor(input: {
         whatsappId: string | null;
         username: string;
         templateName: string;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         gender: import("../../../generated/prisma/enums.js").Gender | null;
         religion: string | null;
         startedYear: number | null;
@@ -194,6 +198,8 @@ export declare function createHospital(input: {
     addressLine?: unknown;
     name_en?: unknown;
     templateName?: unknown;
+    businessCardImage?: unknown;
+    bannerCardImage?: unknown;
     division_en?: unknown;
     district_en?: unknown;
     thana_en?: unknown;
@@ -212,6 +218,8 @@ export declare function createHospital(input: {
         updatedAt: Date;
         name_en: string | null;
         templateName: string;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         status: import("../../../generated/prisma/enums.js").HospitalStatus;
         creditBalance: number;
         slug: string;

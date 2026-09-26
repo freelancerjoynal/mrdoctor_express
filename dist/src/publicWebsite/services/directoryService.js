@@ -33,6 +33,8 @@ const PUBLIC_DOCTOR_SELECT = {
     startedYear: true,
     bmdcNumber: true,
     profilePicture: true,
+    businessCardImage: true,
+    bannerCardImage: true,
     gender: true,
     information: {
         select: {
@@ -110,6 +112,8 @@ const NESTED_DOCTOR_SELECT = {
     speciality: true,
     tagline: true,
     profilePicture: true,
+    businessCardImage: true,
+    bannerCardImage: true,
     gender: true,
 };
 // Public hospital card: identity + contact + associated chambers/doctors.
@@ -122,6 +126,8 @@ const PUBLIC_HOSPITAL_SELECT = {
     addressLine: true,
     phone: true,
     establishedYear: true,
+    businessCardImage: true,
+    bannerCardImage: true,
     chambers: {
         select: {
             id: true,

@@ -19,6 +19,8 @@ export declare function getThanaPortal(filters: PortalFilters): Promise<{
             address: string | null;
             name: string;
             phone: string | null;
+            businessCardImage: string | null;
+            bannerCardImage: string | null;
             chambers: {
                 id: string;
                 doctor: {
@@ -28,6 +30,8 @@ export declare function getThanaPortal(filters: PortalFilters): Promise<{
                     speciality: string;
                     tagline: string | null;
                     username: string;
+                    businessCardImage: string | null;
+                    bannerCardImage: string | null;
                     gender: import("../../../generated/prisma/enums.js").Gender | null;
                 } | null;
                 division: string | null;

@@ -52,6 +52,8 @@ export declare function shuffle<T>(arr: T[]): T[];
 export declare function isEntryWord(text: string): boolean;
 export declare function isValidProblem(text: string): boolean;
 export declare function isValidLocation(text: string): boolean;
+/** Appended to prompts so users know to type back (no Back button mid-flow). */
+export declare const BACK_HINT = "\n\n\u21A9\uFE0F \u09AA\u09C7\u099B\u09A8\u09C7 \u09AF\u09C7\u09A4\u09C7 back \u09B2\u09BF\u0996\u09C1\u09A8";
 /** WhatsApp button titles are capped at 20 chars by Meta. */
 export declare function shortTitle(s: string, max?: number): string;
 /** Slug-ish short id for buttons (uuid-safe fallback = index based). */

@@ -272,7 +272,6 @@ function buildDoctors(): DoctorSeed[] {
 // 🎯 MAIN SERVICE
 // ================================================================
 export const runSeedAll = async () => {
-  console.log('🌱 ===== SEED START =====');
 
   const summary = {
     hospitals: 0,
@@ -287,7 +286,6 @@ export const runSeedAll = async () => {
   // ----------------------------------------------------------
   // 1. HOSPITALS (Linked with User)
   // ----------------------------------------------------------
-  console.log('🏥 Seeding hospitals...');
   const hospitalMap = new Map<
     string,
     {
@@ -359,12 +357,10 @@ export const runSeedAll = async () => {
     });
   }
   summary.hospitals = hospitalMap.size;
-  console.log(`   ✅ ${summary.hospitals} hospitals ready`);
 
   // ----------------------------------------------------------
   // 2. DOCTORS (Linked with User)
   // ----------------------------------------------------------
-  console.log('👨‍⚕️  Seeding doctors...');
   const doctorSeeds = buildDoctors();
   const doctorMap = new Map<
     string,
@@ -435,12 +431,10 @@ export const runSeedAll = async () => {
     });
   }
   summary.doctors = doctorMap.size;
-  console.log(`   ✅ ${summary.doctors} doctors ready`);
 
   // ----------------------------------------------------------
   // 3. CHAMBERS
   // ----------------------------------------------------------
-  console.log('🚪 Seeding chambers with fees...');
   const chamberMap = new Map<string, string>();
   const chamberNamePool = [
     'চেম্বার',
@@ -510,12 +504,10 @@ export const runSeedAll = async () => {
       summary.chambers++;
     }
   }
-  console.log(`   ✅ ${summary.chambers} chambers ready (with fees)`);
 
   // ----------------------------------------------------------
   // 4. SCHEDULES
   // ----------------------------------------------------------
-  console.log('📅 Seeding schedules...');
   let scheduleCounter = 0;
 
   for (const info of doctorMap.values()) {
@@ -553,12 +545,10 @@ export const runSeedAll = async () => {
     }
     scheduleCounter++;
   }
-  console.log(`   ✅ ${summary.schedules} schedules ready`);
 
   // ----------------------------------------------------------
   // 5. DEMO CHAT SESSIONS
   // ----------------------------------------------------------
-  console.log('💬 Seeding chat sessions...');
   const doctorArr = Array.from(doctorMap.values());
   const firstDoc = doctorArr[0]!;
   const secondDoc = doctorArr[1] ?? firstDoc;
@@ -588,12 +578,10 @@ export const runSeedAll = async () => {
     },
   });
   summary.chatSessions = 2;
-  console.log(`   ✅ ${summary.chatSessions} chat sessions ready`);
 
   // ----------------------------------------------------------
   // 6. DOCTOR INFORMATIONS (expertise + timeline per doctor)
   // ----------------------------------------------------------
-  console.log('📋 Seeding doctor informations...');
   let infoCount = 0;
   const allDoctors = await prisma.doctor.findMany({
     select: {
@@ -654,12 +642,10 @@ export const runSeedAll = async () => {
     infoIndex++;
   }
   (summary as Record<string, number>).doctorInformations = infoCount;
-  console.log(`   ✅ ${infoCount} doctor informations ready`);
 
   // ----------------------------------------------------------
   // 7. BLOGS (doctors, hospitals & super-admin)
   // ----------------------------------------------------------
-  console.log('📝 Seeding blogs...');
   let blogCount = 0;
   for (const seed of BLOG_SEEDS) {
     let doctorId: string | null = null;
@@ -726,12 +712,10 @@ export const runSeedAll = async () => {
     blogCount++;
   }
   (summary as Record<string, number>).blogs = blogCount;
-  console.log(`   ✅ ${blogCount} blogs ready`);
 
   // ----------------------------------------------------------
   // 8. DOCTOR POOL BLOGS (3 per doctor → every profile is dynamic)
   // ----------------------------------------------------------
-  console.log('📝 Seeding per-doctor pool blogs...');
   let poolCount = 0;
   let poolIndex = 0;
   for (const d of allDoctors) {
@@ -777,12 +761,10 @@ export const runSeedAll = async () => {
   }
   (summary as Record<string, number>).blogs =
     ((summary as Record<string, number>).blogs ?? 0) + poolCount;
-  console.log(`   ✅ ${poolCount} pool blogs ready`);
 
   // ----------------------------------------------------------
   // 8b. HOSPITAL POOL BLOGS (2 per hospital portal)
   // ----------------------------------------------------------
-  console.log('📝 Seeding per-hospital pool blogs...');
   const seederHospitals = await prisma.hospital.findMany({
     select: { id: true, slug: true, name: true },
     orderBy: { slug: 'asc' },
@@ -829,12 +811,10 @@ export const runSeedAll = async () => {
   }
   (summary as Record<string, number>).blogs =
     ((summary as Record<string, number>).blogs ?? 0) + hospPoolCount;
-  console.log(`   ✅ ${hospPoolCount} hospital pool blogs ready`);
 
   // ----------------------------------------------------------
   // 9. REVIEWS (dummy patient feedback for doctors + hospitals)
   // ----------------------------------------------------------
-  console.log('⭐ Seeding reviews...');
   let reviewCount = 0;
   let reviewIndex = 0;
   for (const d of allDoctors) {
@@ -879,9 +859,7 @@ export const runSeedAll = async () => {
     hospReviewIndex++;
   }
   (summary as Record<string, number>).reviews = reviewCount;
-  console.log(`   ✅ ${reviewCount} reviews ready`);
 
-  console.log('✅ ===== SEED DONE =====\n');
 
   return { summary };
 };

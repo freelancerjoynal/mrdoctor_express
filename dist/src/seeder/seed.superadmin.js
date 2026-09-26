@@ -15,7 +15,6 @@ const rawRole = (process.argv[5] || process.env.SUPER_ADMIN_ROLE || 'SUPER_ADMIN
 const role = rawRole === 'ADMIN_MANAGER' ? 'ADMIN_MANAGER' : 'SUPER_ADMIN';
 try {
     await runSeedAdminUser({ email, password, name, role });
-    console.log(`✅ ===== ${role} SEED DONE =====`);
 }
 catch (error) {
     console.error('❌ ERROR seeding super admin:', error.message || error);

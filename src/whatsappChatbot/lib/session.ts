@@ -111,6 +111,9 @@ export function isValidLocation(text: string): boolean {
     return (text || "").trim().length >= 2;
 }
 
+/** Appended to prompts so users know to type back (no Back button mid-flow). */
+export const BACK_HINT = "\n\n↩️ পেছনে যেতে back লিখুন";
+
 /** WhatsApp button titles are capped at 20 chars by Meta. */
 export function shortTitle(s: string, max = 20): string {
     const t = (s || "").trim();

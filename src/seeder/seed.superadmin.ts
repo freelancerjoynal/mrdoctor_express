@@ -17,7 +17,6 @@ const role: AdminSeedRole = rawRole === 'ADMIN_MANAGER' ? 'ADMIN_MANAGER' : 'SUP
 
 try {
   await runSeedAdminUser({ email, password, name, role });
-  console.log(`✅ ===== ${role} SEED DONE =====`);
 } catch (error: any) {
   console.error('❌ ERROR seeding super admin:', error.message || error);
   process.exitCode = 1;

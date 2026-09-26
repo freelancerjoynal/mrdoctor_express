@@ -36,6 +36,8 @@ export declare function getProfileData(caller: ProfileCaller, targetUserId?: str
         whatsappId: string | null;
         username: string;
         templateName: string;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         gender: import("../../../generated/prisma/enums.js").Gender | null;
         religion: string | null;
         startedYear: number | null;
@@ -58,6 +60,8 @@ export declare function getProfileData(caller: ProfileCaller, targetUserId?: str
         updatedAt: Date;
         name_en: string | null;
         templateName: string;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         status: import("../../../generated/prisma/enums.js").HospitalStatus;
         creditBalance: number;
         slug: string;
@@ -114,6 +118,8 @@ export interface DoctorProfileUpdateInput {
     whatsappId?: unknown;
     templateName?: unknown;
     profilePicture?: unknown;
+    businessCardImage?: unknown;
+    bannerCardImage?: unknown;
     gender?: unknown;
     religion?: unknown;
     startedYear?: unknown;
@@ -121,6 +127,17 @@ export interface DoctorProfileUpdateInput {
     /** Immutable — accepted only to reject explicitly. */
     email?: unknown;
     username?: unknown;
+    status?: unknown;
+    id?: unknown;
+    userId?: unknown;
+}
+export interface HospitalProfileUpdateInput {
+    businessCardImage?: unknown;
+    bannerCardImage?: unknown;
+    /** Immutable — accepted only to reject explicitly. */
+    name?: unknown;
+    slug?: unknown;
+    email?: unknown;
     status?: unknown;
     id?: unknown;
     userId?: unknown;
@@ -139,6 +156,8 @@ export interface UpdateProfileInput {
     status?: unknown;
     /** Doctor's own editable fields (DOCTOR role only). Email/username excluded. */
     doctor?: unknown;
+    /** Hospital's own editable card images (HOSPITAL role only). */
+    hospital?: unknown;
 }
 /**
  * Update the caller's OWN profile. Email/username can never be changed.
@@ -147,6 +166,7 @@ export interface UpdateProfileInput {
  * - password: requires currentPassword match; newPassword min 6 chars.
  * - doctor: DOCTOR role only — every Doctor column except
  *   email/username/status/id/userId (incl. all *_en mirrors).
+ * - hospital: HOSPITAL role only — businessCardImage + bannerCardImage.
  */
 export declare function updateProfileData(caller: ProfileCaller, input: UpdateProfileInput): Promise<{
     name: string | null;
@@ -181,6 +201,8 @@ export declare function updateProfileData(caller: ProfileCaller, input: UpdatePr
         whatsappId: string | null;
         username: string;
         templateName: string;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         gender: import("../../../generated/prisma/enums.js").Gender | null;
         religion: string | null;
         startedYear: number | null;
@@ -203,6 +225,8 @@ export declare function updateProfileData(caller: ProfileCaller, input: UpdatePr
         updatedAt: Date;
         name_en: string | null;
         templateName: string;
+        businessCardImage: string | null;
+        bannerCardImage: string | null;
         status: import("../../../generated/prisma/enums.js").HospitalStatus;
         creditBalance: number;
         slug: string;
