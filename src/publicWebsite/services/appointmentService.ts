@@ -117,6 +117,7 @@ export interface CreateAppointmentInput {
   patientAge?: number | string;
   patientWeight?: number | string;
   patientArea?: string;
+  comment?: string;
 }
 
 /** Booking options for the form: chambers + schedules + next running days. */
@@ -365,7 +366,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
     select: {
       id: true,
       name: true,
-      chambers: { select: { id: true, chamberName: true, addressLine: true, thana: true, district: true, hospitalId: true, hospital: { select: { id: true, slug: true, name: true } } } },
+      chambers: { select: { id: true, chamberName: true, addressLine: true, thana: true, district: true, division: true, hospitalId: true, hospital: { select: { id: true, slug: true, name: true } } } },
       schedules: { select: { dayOfWeek: true, chamberId: true } },
     },
   });
@@ -459,6 +460,10 @@ export async function createAppointment(input: CreateAppointmentInput) {
   const hospitalId = chamber?.hospitalId ?? null;
   const hospitalName = chamber?.hospital?.name ?? null;
   const dayLabel = buildDayLabel(appointmentDate);
+  const comment =
+    typeof input.comment === 'string' && input.comment.trim()
+      ? input.comment.trim().slice(0, 500)
+      : null;
 
   // Online bookings are FREE — credits apply to offline bookings only,
   // so no wallet touch here.
@@ -479,6 +484,10 @@ export async function createAppointment(input: CreateAppointmentInput) {
       patientAge,
       patientWeight,
       patientArea,
+      division: chamber?.division || null,
+      district: chamber?.district || null,
+      thana: chamber?.thana || null,
+      comment,
       contactPhone,
       source: 'website',
       status: 'PENDING',

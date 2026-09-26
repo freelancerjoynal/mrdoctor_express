@@ -447,6 +447,14 @@ model PendingAppointment {
   patientArea   String? // user's area
   contactPhone  String // typed number or sender number via button
 
+  // Accurate chamber location (division > district > thana), filled from the
+  // selected chamber — never free-typed. All nullable for old rows.
+  division String?
+  district String?
+  thana    String?
+  // Operator note (nullable, reserved for now).
+  comment String?
+
   source String @default("whatsapp") // whatsapp | website
   status String @default("PENDING")
 

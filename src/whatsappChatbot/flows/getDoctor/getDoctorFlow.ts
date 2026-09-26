@@ -128,21 +128,58 @@ async function savePendingAppointment(phoneNumber: string, data: any) {
     const appointmentDate: Date = data.appointmentDate instanceof Date
         ? data.appointmentDate
         : new Date(data.appointmentDate);
+    // Accurate chamber location (division > district > thana) + hospital —
+    // read from the chamber row itself, never free-typed.
+    let chamberLoc: { division: string | null; district: string | null; thana: string | null } = {
+        division: null,
+        district: null,
+        thana: null,
+    };
+    let hospitalId: string | null = null;
+    let hospitalName: string | null = null;
+    if (data.chamberId) {
+        const ch = await prisma.chamber.findUnique({
+            where: { id: String(data.chamberId) },
+            select: {
+                division: true,
+                district: true,
+                thana: true,
+                hospitalId: true,
+                hospital: { select: { name: true } },
+            },
+        }).catch(() => null);
+        if (ch) {
+            chamberLoc = {
+                division: ch.division || null,
+                district: ch.district || null,
+                thana: ch.thana || null,
+            };
+            hospitalId = ch.hospitalId || null;
+            hospitalName = ch.hospital?.name || null;
+        }
+    }
     // Online bookings are FREE — credits apply to offline bookings only.
     const created = await prisma.pendingAppointment.create({
         data: {
             phoneNumber,
             doctorId: data.doctorId,
             doctorName: data.name || null,
+            hospitalId,
+            hospitalName,
             problem: data.problem,
             appointmentDate,
             dayLabel: data.dayLabel || null,
             chamberId: data.chamberId || null,
             chamberName: data.chamberName || null,
             patientName: data.patientName,
+            patientType: data.patientType === "RENEW" ? "RENEW" : "NEW",
             patientAge: data.patientAge ?? null,
             patientWeight: data.patientWeight ?? null,
             patientArea: data.patientArea || null,
+            division: chamberLoc.division,
+            district: chamberLoc.district,
+            thana: chamberLoc.thana,
+            comment: null,
             contactPhone: data.contactPhone,
             status: "PENDING",
         },
